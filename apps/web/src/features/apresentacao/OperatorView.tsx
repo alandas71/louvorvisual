@@ -635,7 +635,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
 function PublicPreview({ frame, rotation }: { frame: OutputFrame; rotation: 0 | 90 | 180 | 270 }) {
   return (
     <div className="aspect-video w-full overflow-hidden rounded-lg border border-border" data-testid="public-preview" data-occurrence-id={frame.occurrenceId}>
-      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} />
+      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} transitionKey={`${frame.occurrenceId}:${frame.cover ? 'abertura' : 'letra'}`} />
     </div>
   );
 }

@@ -202,7 +202,7 @@ function PublicOutput({ sessionId }: { sessionId: string }) {
       {/* Sem dados ou com a sessão encerrada, a saída fica preta. */}
       {armed && live && !interactive && (
         <div className="h-full w-full cursor-none">
-          <SlideView fit="fill" text={visual.frame.slide.text} style={visual.frame.slide.style} fontId={visual.frame.slide.fontId} visualMode={visual.frame.visualMode} rotation={visual.rotation} cover={visual.frame.cover} />
+          <SlideView fit="fill" text={visual.frame.slide.text} style={visual.frame.slide.style} fontId={visual.frame.slide.fontId} visualMode={visual.frame.visualMode} rotation={visual.rotation} cover={visual.frame.cover} transitionKey={`${visual.frame.occurrenceId}:${visual.frame.cover ? 'abertura' : 'letra'}`} />
         </div>
       )}
       {interactive && <InteractiveStage frame={visual.frame} rotation={visual.rotation} controls={visual.controls} dispatch={dispatch} onHideOutputControls={() => chooseControls(false)} />}

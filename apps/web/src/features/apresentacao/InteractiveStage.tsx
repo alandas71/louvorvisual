@@ -109,7 +109,7 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
   return (
     <div ref={root} className={cn('relative h-full w-full overflow-hidden', !visible && 'cursor-none')} data-testid="interactive-stage" data-controls-visible={visible}>
-      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} />
+      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} transitionKey={`${frame.occurrenceId}:${frame.cover ? 'abertura' : 'letra'}`} />
 
       <div data-stage-ui className={cn(corner, 'left-4 top-4')} data-corner="top-left">
         <CornerButton label={menuOpen ? 'Fechar ajustes' : 'Abrir ajustes'} testId="corner-menu" pressed={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
