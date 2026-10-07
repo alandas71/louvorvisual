@@ -7,7 +7,7 @@ interface LabelProps extends React.ComponentProps<'label'> {
 
 export function Label({ children, required, className, ...props }: LabelProps) {
   return (
-    <label className={cn('mb-1 block text-xs font-semibold uppercase text-muted', className)} {...props}>
+    <label className={cn('mb-1.5 block text-[13px] font-semibold text-muted', className)} {...props}>
       {children}
       {required && (
         <span aria-hidden="true" className="ml-0.5 text-danger">

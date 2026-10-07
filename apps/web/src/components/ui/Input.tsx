@@ -20,7 +20,7 @@ export function Input({ error, icon, className, 'aria-describedby': describedBy,
           {...props}
         />
         {icon && (
-          <div aria-hidden="true" className="pointer-events-none absolute left-3.5 top-3 text-muted">
+          <div aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
             {icon}
           </div>
         )}

@@ -69,4 +69,11 @@ describe('salvar ajustes no arranjo', () => {
     expect(result.changed).toBe(false);
     expect(result.arrangement).toBe(arrangement);
   });
+
+  it('salva o ensaio assistido como padrão de avanço automático', () => {
+    const { arrangement } = timedSong([null, null]);
+    const result = mergeOverridesIntoArrangement(arrangement, emptyOverrides().current, arrangement, { setDefaultModeAutomatic: true });
+    expect(result.arrangement.defaultMode).toBe('automatic');
+    expect(result.applied).toContainEqual({ target: 'arrangement', field: 'defaultMode' });
+  });
 });

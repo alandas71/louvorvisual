@@ -13,8 +13,13 @@ await sharp(svg, { density: 300 }).resize(192, 192).png().toFile(out('icon-192.p
 await sharp(svg, { density: 300 }).resize(512, 512).png().toFile(out('icon-512.png'));
 // Maskable: o desenho ocupa a zona segura central, sobre fundo sem cantos.
 const inner = await sharp(svg, { density: 300 }).resize(360, 360).png().toBuffer();
-await sharp({ create: { width: 512, height: 512, channels: 4, background: '#111827' } })
+await sharp({ create: { width: 512, height: 512, channels: 4, background: '#0a0c11' } })
   .composite([{ input: inner, gravity: 'center' }])
   .png()
   .toFile(out('icon-maskable-512.png'));
+// iOS não usa o manifesto: o ícone da tela de início vem deste arquivo, sem transparência.
+await sharp({ create: { width: 180, height: 180, channels: 4, background: '#0a0c11' } })
+  .composite([{ input: await sharp(svg, { density: 300 }).resize(180, 180).png().toBuffer(), gravity: 'center' }])
+  .png()
+  .toFile(out('apple-touch-icon.png'));
 console.log('Ícones gerados em public/icons.');

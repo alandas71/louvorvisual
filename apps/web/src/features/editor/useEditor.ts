@@ -29,6 +29,7 @@ import {
   type SectionKind,
   type Song,
   type SongSection,
+  type SlideOccurrence,
   type Uuid,
 } from '@louvorvisual/domain';
 import { measureSlideFit, type ArrangementVisual } from '@louvorvisual/presentation';
@@ -64,6 +65,7 @@ export type EditorState =
   | { status: 'ready'; song: Song; arrangement: Arrangement; arrangements: Loaded['arrangements']; canUndo: boolean; canRedo: boolean };
 
 type SongFields = Partial<Pick<Song, 'title' | 'artist' | 'authors' | 'musicalKey' | 'tags' | 'notes' | 'rawLyrics'>>;
+type SyncedLyricsImport = { rawLyrics: string; lines: { startMs: number; text: string }[]; durationMs: number | null };
 
 function structureOf(arrangement: Arrangement): ArrangementStructure {
   const { occurrences, audioBindings, selectedAudioBindingId } = arrangement;
@@ -247,6 +249,35 @@ export function useEditor(session: LocalSession, songId: Uuid, arrangementId: Uu
     move: (id: Uuid, toIndex: number) => applyEdit((structure) => moveOccurrence(structure, id, toIndex)),
     remove: (ids: Uuid[]) => applyEdit((structure) => removeOccurrences(structure, ids)),
     setDuration: (ids: Uuid[], durationMs: number | null) => applyEdit((structure) => setOccurrenceDuration(structure, ids, durationMs)),
+    /** Importa uma letra LRC sem alterar o arquivo de áudio do arranjo. */
+    importSyncedLyrics: (incoming: SyncedLyricsImport) => {
+      const previous = current.current;
+      if (!previous || incoming.lines.length === 0) return;
+      const context = session.context();
+      const parsed = reparseLyrics(incoming.rawLyrics, previous.song.sections, newId);
+      const occurrences: SlideOccurrence[] = incoming.lines.map((line, index) => {
+        const next = incoming.lines[index + 1];
+        const endMs = next?.startMs ?? incoming.durationMs;
+        const duration = endMs === null || endMs === undefined ? null : Math.max(500, Math.min(600_000, endMs - line.startMs));
+        return {
+          id: newId(),
+          sourceSectionId: null,
+          label: 'Letra sincronizada',
+          text: line.text,
+          order: index,
+          durationMs: duration,
+          visualKind: 'lyrics',
+          visualOverrides: null,
+        };
+      });
+      const audio = reconcileAudioBindings({ occurrences, audioBindings: previous.arrangement.audioBindings, selectedAudioBindingId: previous.arrangement.selectedAudioBindingId });
+      const song = touch({ ...previous.song, rawLyrics: incoming.rawLyrics, sections: parsed.sections }, context);
+      const arrangement = touch({ ...previous.arrangement, ...audio.structure }, context);
+      const snapshot = { sections: song.sections, structure: audio.structure };
+      const history = pushHistory(previous.history, snapshot);
+      setNotice(audio.unlinked.length > 0 ? { kind: 'review', codes: ['audio-unlinked'] } : null);
+      commit({ ...previous, song, arrangement, history }, { immediate: true });
+    },
     /** Associações de áudio (arquivo, política, volume, ponto de partida, faixa ativa). */
     updateAudio: (change: (structure: ArrangementStructure) => ArrangementStructure) =>
       applyEdit((structure) => ({ ok: true, structure: change(structure), review: [], issues: [], createdIds: [] })),

@@ -68,8 +68,8 @@ export function PackageImport({ session, onImported }: { session: LocalSession; 
   const busy = stage.step === 'checking' || stage.step === 'applying';
 
   return (
-    <section aria-labelledby="importar-pacote" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-4" data-testid="package-import" data-step={stage.step}>
-      <h2 id="importar-pacote" className="text-lg font-semibold">
+    <section aria-labelledby="importar-pacote" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-5" data-testid="package-import" data-step={stage.step}>
+      <h2 id="importar-pacote" className="text-lg font-bold">
         Importar pacote
       </h2>
       <div className="flex flex-wrap items-center gap-3">

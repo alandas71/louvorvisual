@@ -3,7 +3,7 @@
 import { BUNDLED_FONTS, FONT_SIZE_PX, FONT_WEIGHTS, TEXT_ALIGNS, THEME_PRESETS, type TextAlign } from '@louvorvisual/domain';
 import { fontStack, ROTATIONS, type AdjustScope, type ControlsState, type OperatorCommand } from '@louvorvisual/presentation';
 import { useState, type ReactNode } from 'react';
-import { buttonClass } from '@/components/ui/buttonStyles';
+import { buttonClass, pressedClass } from '@/components/ui/buttonStyles';
 import { cn } from '@/lib/utils';
 import { TimerField } from '../editor/TimerField';
 
@@ -29,7 +29,7 @@ function Section({ title, scope, children }: { title: string; scope?: ReactNode;
   return (
     <section className="flex flex-col gap-2 border-t border-border pt-3 first:border-t-0 first:pt-0" aria-label={title}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 className="text-sm font-bold">{title}</h3>
         {scope}
       </div>
       {children}
@@ -51,7 +51,7 @@ function ScopePicker({ name, value, onChange }: { name: string; value: AdjustSco
   );
 }
 
-const pill = (active: boolean) => cn(buttonClass('secondary', 'sm'), active && 'border-accent text-accent');
+const pill = (active: boolean) => cn(buttonClass('secondary', 'sm'), active && pressedClass);
 
 /**
  * Ajustes ao vivo (planejamento/20). Só envia comandos: quem executa é o motor
@@ -75,8 +75,8 @@ export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHi
                 data-theme={preset.presetId}
                 onClick={() => dispatch({ type: 'adjust', scope: themeScope, patch: { themePresetId: preset.presetId } })}
                 className={cn(
-                  'w-full rounded-lg border px-2 py-1.5 text-left text-xs font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-                  appearance.themePresetId === preset.presetId ? 'border-accent' : 'border-border-strong',
+                  'w-full cursor-pointer rounded-lg border-2 px-2.5 py-2 text-left text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                  appearance.themePresetId === preset.presetId ? 'border-accent' : 'border-transparent hover:border-border-strong',
                 )}
                 style={{ backgroundColor: preset.style.palette.backgroundColor, color: preset.style.palette.textColor }}
               >

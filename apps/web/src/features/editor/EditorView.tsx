@@ -1,5 +1,6 @@
 'use client';
 
+import { Loading } from '@/components/ui/PageHeader';
 import {
   applyThemeToArrangement,
   ASPECT_RATIOS,
@@ -20,14 +21,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { noticeClass, pillClass } from '@/components/ui/PageHeader';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
+import { cn } from '@/lib/utils';
 import { listThemes, LocalSaveError, useLocalSession, type LocalSession } from '@/local';
 import { AudioSection } from './AudioSection';
 import { EditorSyncNotice } from './EditorSyncNotice';
 import { EDIT_ERROR_TEXT, EDIT_REVIEW_TEXT, SECTION_KIND_LABEL } from './messages';
 import { OccurrenceCard } from './OccurrenceCard';
+import { parseSyncedLyrics, searchLrclib, type LrclibTrack } from './lrclib';
 import type { SaveStatus } from './saver';
 import { useEditor, type EditorActions } from './useEditor';
 import { resolveArrangementVisual } from './visual';
@@ -39,7 +43,7 @@ export function EditorView() {
   const [reloads, setReloads] = useState(0);
   const songId = query.get('song');
   if (!songId) return <Missing />;
-  if (local.status === 'loading') return <p role="status">Abrindo o louvor…</p>;
+  if (local.status === 'loading') return <Loading>Abrindo o louvor…</Loading>;
   if (local.status === 'error') return <p role="alert">{local.message}</p>;
   // A chave recria o editor ao trocar de louvor ou de arranjo.
   return <Editor key={`${songId}:${query.get('arranjo') ?? ''}:${reloads}`} session={local.session} songId={songId} arrangementId={query.get('arranjo')} onReload={() => setReloads((count) => count + 1)} />;
@@ -48,7 +52,7 @@ export function EditorView() {
 function Missing() {
   return (
     <div className="flex flex-col gap-3">
-      <h1 className="text-2xl font-bold">Louvor não encontrado</h1>
+      <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Louvor não encontrado</h1>
       <p className="text-muted">Ele não existe neste dispositivo ou foi excluído.</p>
       <BackToLibrary />
     </div>
@@ -59,7 +63,7 @@ function BackToLibrary({ onBefore }: { onBefore?: () => Promise<void> }) {
   return (
     <button
       type="button"
-      className={buttonClass('secondary', 'sm', 'self-start')}
+      className={buttonClass('ghost', 'sm', '-ml-2 self-start')}
       onClick={() => void (onBefore?.() ?? Promise.resolve()).then(() => setLocalQuery({ view: 'biblioteca', song: null, arranjo: null }))}
     >
       ← Biblioteca
@@ -71,8 +75,8 @@ function SaveIndicator({ status, onRetry, onCopy }: { status: SaveStatus; onRetr
   if (status.state === 'error') {
     const message = status.error instanceof LocalSaveError ? status.error.message : 'Não foi possível gravar neste dispositivo.';
     return (
-      <div role="alert" data-testid="save-status" data-state="error" className="flex flex-wrap items-center gap-2 text-sm text-danger">
-        <span>⚠ Não salvo. {message} O conteúdo continua aberto nesta tela.</span>
+      <div role="alert" data-testid="save-status" data-state="error" className={noticeClass('danger', 'flex w-full flex-wrap items-center gap-2')}>
+        <span className="min-w-0 flex-1 basis-64">⚠ Não salvo. {message} O conteúdo continua aberto nesta tela.</span>
         <button type="button" className={buttonClass('secondary', 'sm')} onClick={onRetry}>
           Tentar novamente
         </button>
@@ -83,7 +87,7 @@ function SaveIndicator({ status, onRetry, onCopy }: { status: SaveStatus; onRetr
     );
   }
   return (
-    <p role="status" data-testid="save-status" data-state={status.state} className="text-sm text-muted">
+    <p role="status" data-testid="save-status" data-state={status.state} className={pillClass(status.state === 'saving' ? 'accent' : 'success')}>
       {status.state === 'saving' ? 'Salvando…' : '✓ Salvo neste dispositivo'}
     </p>
   );
@@ -107,7 +111,7 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  if (state.status === 'loading') return <p role="status">Abrindo o louvor…</p>;
+  if (state.status === 'loading') return <Loading>Abrindo o louvor…</Loading>;
   if (state.status === 'missing') return <Missing />;
   const { song, arrangement } = state;
 
@@ -122,21 +126,28 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
   }
 
   return (
-    <div className="flex flex-col gap-8" data-testid="editor" data-song-id={song.id} data-arrangement-id={arrangement.id}>
-      <header className="flex flex-col gap-2">
+    <div className="flex flex-col gap-6 lg:gap-8" data-testid="editor" data-song-id={song.id} data-arrangement-id={arrangement.id}>
+      <header className="z-20 -mx-4 flex flex-col gap-2 border-b border-border bg-surface/90 px-4 pb-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:sticky lg:top-0 lg:-mx-10 lg:-mt-10 lg:px-10 lg:pt-5">
         <BackToLibrary onBefore={actions.flush} />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold">{song.title}</h1>
+          <div className="min-w-0 flex-1 basis-60">
+            <h1 className="truncate text-2xl font-bold leading-tight md:text-[1.75rem]">{song.title}</h1>
+            <p className="mt-0.5 truncate text-sm text-muted">
+              {song.artist ?? 'Sem artista'} · {arrangement.name}
+            </p>
+          </div>
           <button
             type="button"
-            className={buttonClass('primary')}
+            className={buttonClass('primary', 'md', 'max-sm:flex-1')}
             disabled={occurrences.length === 0}
             onClick={() => void actions.flush().then(() => setLocalQuery({ view: 'apresentar', song: song.id, arranjo: arrangement.id }))}
           >
             ▶ Apresentar
           </button>
         </div>
-        <SaveIndicator status={saveStatus} onRetry={actions.retrySave} onCopy={copyContent} />
+        <div className="flex flex-wrap items-center gap-2">
+          <SaveIndicator status={saveStatus} onRetry={actions.retrySave} onCopy={copyContent} />
+        </div>
         <EditorSyncNotice session={session} songId={song.id} arrangementId={arrangement.id} onBeforeReload={actions.flush} onReload={onReload} />
       </header>
 
@@ -144,20 +155,20 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
       <LyricsPanel song={song} actions={actions} currentSlides={occurrences.length} />
       <SectionsPanel sections={song.sections} actions={actions} />
 
-      <section aria-labelledby="arranjo" className="flex flex-col gap-4">
-        <h2 id="arranjo" className="text-lg font-semibold">
+      <section aria-labelledby="arranjo" className="flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+        <h2 id="arranjo" className="text-lg font-bold">
           Arranjo e slides
         </h2>
         <ArrangementFields state={state} actions={actions} session={session} />
 
-        <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Edição dos slides">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4" role="toolbar" aria-label="Edição dos slides">
           <button type="button" className={buttonClass('secondary', 'sm')} disabled={!state.canUndo} onClick={actions.undo}>
             ↶ Desfazer
           </button>
           <button type="button" className={buttonClass('secondary', 'sm')} disabled={!state.canRedo} onClick={actions.redo}>
             ↷ Refazer
           </button>
-          <span className="text-sm text-muted" data-testid="occurrence-count">
+          <span className={pillClass('neutral', 'ml-auto')} data-testid="occurrence-count">
             {occurrences.length} {occurrences.length === 1 ? 'slide' : 'slides'}
           </span>
         </div>
@@ -175,7 +186,7 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
         )}
 
         {notice && (
-          <div role="alert" data-testid="editor-notice" data-kind={notice.kind} className="flex items-start justify-between gap-3 rounded-lg border border-border-strong p-3 text-sm">
+          <div role="alert" data-testid="editor-notice" data-kind={notice.kind} className={noticeClass(notice.kind === 'error' ? 'danger' : 'accent', 'flex items-start justify-between gap-3 text-foreground')}>
             <div>
               {notice.kind === 'error' ? (
                 <p>{EDIT_ERROR_TEXT[notice.code]}</p>
@@ -190,9 +201,9 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
         )}
 
         {occurrences.length === 0 ? (
-          <p className="text-muted">Este arranjo não tem slides. Escreva a letra e use &ldquo;Regenerar slides&rdquo;.</p>
+          <p className="rounded-2xl border border-dashed border-border-strong px-6 py-10 text-center text-sm text-muted">Este arranjo não tem slides. Escreva a letra e use &ldquo;Regenerar slides&rdquo;.</p>
         ) : (
-          <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Slides do arranjo">
+          <ol className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Slides do arranjo">
             {occurrences.map((occurrence, index) => (
               <OccurrenceCard
                 key={occurrence.id}
@@ -220,8 +231,8 @@ function SelectionBar(props: { count: number; onMerge: () => void; onRepeat: () 
   const [seconds, setSeconds] = useState('8');
   const durationMs = parseTimerSeconds(seconds);
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded-lg border border-accent p-3 text-sm" role="group" aria-label="Ações para os slides selecionados" data-testid="selection-bar">
-      <span className="font-semibold">
+    <div className="sticky bottom-20 z-10 flex flex-wrap items-end gap-2 rounded-2xl border border-accent bg-surface-overlay p-3 text-sm shadow-pop lg:bottom-4" role="group" aria-label="Ações para os slides selecionados" data-testid="selection-bar">
+      <span className="self-center font-bold text-accent">
         {props.count} {props.count === 1 ? 'selecionado' : 'selecionados'}
       </span>
       <button type="button" className={buttonClass('secondary', 'sm')} disabled={props.count < 2} onClick={props.onMerge}>
@@ -256,8 +267,8 @@ function SongFields({ song, actions }: { song: ReadyState['song']; actions: Edit
   const [tags, setTags] = useState(song.tags.join(', '));
 
   return (
-    <section aria-labelledby="dados" className="grid gap-4 md:grid-cols-2">
-      <h2 id="dados" className="text-lg font-semibold md:col-span-2">
+    <section aria-labelledby="dados" className="grid gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6 md:grid-cols-2">
+      <h2 id="dados" className="text-lg font-bold md:col-span-2">
         Dados do louvor
       </h2>
       <div>
@@ -316,16 +327,18 @@ function SongFields({ song, actions }: { song: ReadyState['song']; actions: Edit
 function LyricsPanel({ song, actions, currentSlides }: { song: ReadyState['song']; actions: EditorActions; currentSlides: number }) {
   const [preview, setPreview] = useState<ReturnType<EditorActions['previewRegeneration']>>(null);
   return (
-    <section aria-labelledby="letra-original" className="flex flex-col gap-3">
-      <h2 id="letra-original" className="text-lg font-semibold">
+    <section aria-labelledby="letra-original" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+      <h2 id="letra-original" className="text-lg font-bold">
         Letra original
       </h2>
+      <LrclibImport song={song} actions={actions} onApplied={() => setPreview(null)} />
       <div>
         <Label htmlFor="ed-letra">Letra</Label>
         <Textarea
           id="ed-letra"
           rows={10}
           spellCheck={false}
+          className="font-mono text-[13px] leading-relaxed"
           value={song.rawLyrics}
           aria-describedby="ed-letra-ajuda"
           onChange={(event) => {
@@ -342,7 +355,7 @@ function LyricsPanel({ song, actions, currentSlides }: { song: ReadyState['song'
           Regenerar slides a partir da letra…
         </button>
       ) : (
-        <div role="alertdialog" aria-label="Confirmar regeneração dos slides" className="flex flex-col gap-2 rounded-lg border border-border-strong p-3 text-sm" data-testid="regenerate-preview">
+        <div role="alertdialog" aria-label="Confirmar regeneração dos slides" className={noticeClass('accent', 'flex flex-col gap-2 text-foreground')} data-testid="regenerate-preview">
           <p>
             A nova sugestão tem {preview.parsed.sections.length} {preview.parsed.sections.length === 1 ? 'seção' : 'seções'} e {preview.occurrences.length}{' '}
             {preview.occurrences.length === 1 ? 'slide' : 'slides'}; hoje são {song.sections.length} e {currentSlides}.
@@ -372,11 +385,86 @@ function LyricsPanel({ song, actions, currentSlides }: { song: ReadyState['song'
   );
 }
 
+function LrclibImport({ song, actions, onApplied }: { song: ReadyState['song']; actions: EditorActions; onApplied: () => void }) {
+  const [title, setTitle] = useState(song.title);
+  const [artist, setArtist] = useState(song.artist ?? '');
+  const [results, setResults] = useState<LrclibTrack[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function search() {
+    if (!title.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResults(await searchLrclib(title, artist));
+    } catch (reason) {
+      setResults(null);
+      setError(reason instanceof Error ? reason.message : 'Não foi possível consultar a LRCLIB.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function apply(track: LrclibTrack) {
+    if (!track.syncedLyrics) return;
+    const lines = parseSyncedLyrics(track.syncedLyrics);
+    if (lines.length === 0) {
+      setError('A letra encontrada não tem marcações de tempo que possam ser usadas.');
+      return;
+    }
+    actions.importSyncedLyrics({ rawLyrics: lines.map((line) => line.text).join('\n'), lines, durationMs: Number.isFinite(track.duration) ? Math.round(track.duration * 1000) : null });
+    onApplied();
+    setResults(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent/5 p-3" data-testid="lrclib-import">
+      <div>
+        <h3 className="font-semibold">Buscar letra sincronizada (LRCLIB)</h3>
+        <p className="text-xs text-muted">Importe os versos com seus tempos, confira na apresentação e salve o padrão ao final.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="lrclib-title">Música</Label>
+          <Input id="lrclib-title" value={title} onChange={(event) => setTitle(event.target.value)} />
+        </div>
+        <div>
+          <Label htmlFor="lrclib-artist">Artista</Label>
+          <Input id="lrclib-artist" value={artist} onChange={(event) => setArtist(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void search()} />
+        </div>
+      </div>
+      <button type="button" className={buttonClass('secondary', 'sm', 'self-start')} disabled={busy || title.trim() === ''} onClick={() => void search()}>
+        {busy ? 'Buscando…' : 'Buscar na LRCLIB'}
+      </button>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {results?.length === 0 && <p className="text-sm text-muted">Nenhuma música encontrada.</p>}
+      {results && results.length > 0 && (
+        <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto" aria-label="Resultados da LRCLIB">
+          {results.map((track) => {
+            const lines = track.syncedLyrics ? parseSyncedLyrics(track.syncedLyrics).length : 0;
+            return (
+              <li key={track.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-raised p-2 text-sm">
+                <span className="min-w-0 flex-1"><strong>{track.trackName}</strong> · {track.artistName}{track.albumName ? ` · ${track.albumName}` : ''}</span>
+                {lines > 0 ? (
+                  <button type="button" className={buttonClass('primary', 'sm')} onClick={() => apply(track)}>Aplicar {lines} linhas</button>
+                ) : (
+                  <span className="text-xs text-muted">Sem tempo por linha</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function SectionsPanel({ sections, actions }: { sections: ReadyState['song']['sections']; actions: EditorActions }) {
   const ordered = useMemo(() => [...sections].sort((a, b) => a.order - b.order), [sections]);
   return (
-    <section aria-labelledby="secoes" className="flex flex-col gap-3">
-      <h2 id="secoes" className="text-lg font-semibold">
+    <section aria-labelledby="secoes" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+      <h2 id="secoes" className="text-lg font-bold">
         Seções sugeridas
       </h2>
       {ordered.length === 0 ? (
@@ -386,7 +474,7 @@ function SectionsPanel({ sections, actions }: { sections: ReadyState['song']['se
           {ordered.map((section) => {
             const uncertain = section.detection === 'suggested';
             return (
-              <li key={section.id} data-testid="section" data-section-id={section.id} data-kind={section.kind} data-detection={section.detection} className="grid gap-2 rounded-lg border border-border bg-surface-raised p-3 md:grid-cols-[10rem_12rem_1fr]">
+              <li key={section.id} data-testid="section" data-section-id={section.id} data-kind={section.kind} data-detection={section.detection} className={cn('grid items-center gap-3 rounded-xl border bg-surface-overlay/50 p-3 md:grid-cols-[10rem_12rem_1fr]', uncertain ? 'border-accent/60' : 'border-border')}>
                 <div>
                   <Label htmlFor={`sec-rotulo-${section.id}`}>Rótulo</Label>
                   <Input id={`sec-rotulo-${section.id}`} value={section.label} onChange={(event) => actions.updateSection(section.id, { label: event.target.value })} className="px-2 py-1.5" />
@@ -402,7 +490,7 @@ function SectionsPanel({ sections, actions }: { sections: ReadyState['song']['se
                   </Select>
                 </div>
                 <div className="min-w-0 text-sm">
-                  <p className={uncertain ? 'font-semibold' : 'text-muted'} data-testid="section-detection">
+                  <p className={uncertain ? 'font-semibold text-accent' : 'text-xs font-semibold text-muted'} data-testid="section-detection">
                     {section.detection === 'explicit' && 'Marcador da letra'}
                     {section.detection === 'manual' && 'Revisado por você'}
                     {uncertain && '? Sugestão incerta — confira o tipo'}
@@ -564,7 +652,7 @@ function ArrangementFields({ state, actions, session }: { state: ReadyState; act
         </Select>
       </div>
       {(visual.themeUnavailable || visual.fontUnavailable) && (
-        <p role="alert" className="text-sm text-danger md:col-span-2" data-testid="visual-unavailable">
+        <p role="alert" className={noticeClass('danger', 'md:col-span-2')} data-testid="visual-unavailable">
           {visual.themeUnavailable && 'O tema gravado neste arranjo não está disponível aqui; a prévia usa Preto acessível. '}
           {visual.fontUnavailable && 'A fonte gravada não faz parte deste aplicativo; a prévia usa Inter.'}
         </p>

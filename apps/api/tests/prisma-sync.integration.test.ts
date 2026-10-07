@@ -17,7 +17,7 @@ function createSong(entityId: string, opId: string, title: string) {
   };
 }
 
-maybeDescribe('Prisma + SQL Server: revisão, opId e cursor', () => {
+maybeDescribe('Prisma + MySQL: revisão, opId e cursor', () => {
   const store = new PrismaSyncStore(prisma);
   beforeAll(async () => {
     await prisma.$connect();

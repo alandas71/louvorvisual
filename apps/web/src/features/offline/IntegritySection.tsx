@@ -78,8 +78,8 @@ export function IntegritySection({ buttonClassName }: { buttonClassName: string 
   const media = report?.problems.filter((problem): problem is MediaProblem => problem.kind === 'media') ?? [];
 
   return (
-    <section aria-labelledby="conferencia" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5" data-testid="integrity">
-      <h2 id="conferencia" className="text-lg font-semibold">
+    <section aria-labelledby="conferencia" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6" data-testid="integrity">
+      <h2 id="conferencia" className="text-lg font-bold">
         Conferência dos dados
       </h2>
       <p className="text-sm text-muted">Verifica se os documentos gravados estão legíveis e se os áudios usados pelos louvores estão inteiros. A conferência não altera nada.</p>

@@ -1,7 +1,9 @@
 'use client';
 
+import { EmptyState, Loading, noticeClass, pillClass } from '@/components/ui/PageHeader';
 import { useCallback, useEffect, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
+import { ClockIcon, TrashIcon } from '@/components/ui/icons';
 import { setLocalQuery } from '@/lib/localQuery';
 import { listHistory, listTrash, RecoveryError, restoreFromTrash, restoreRevision, TRASH_RETENTION_DAYS, useLocalSession, type HistoryEntry, type LocalSession, type RevisionReason, type TrashItem } from '@/local';
 import { LIBRARY_CHANGED_EVENT } from '@/sync/engine';
@@ -25,7 +27,7 @@ const REASON_TEXT: Record<RevisionReason, string> = {
 
 export function TrashView() {
   const local = useLocalSession();
-  if (local.status === 'loading') return <p role="status">Abrindo a lixeira…</p>;
+  if (local.status === 'loading') return <Loading>Abrindo a lixeira…</Loading>;
   if (local.status === 'error') return <p role="alert">{local.message}</p>;
   return <Trash session={local.session} />;
 }
@@ -84,35 +86,35 @@ function Trash({ session }: { session: LocalSession }) {
   return (
     <div className="flex flex-col gap-8" data-testid="trash">
       <header>
-        <h1 className="text-2xl font-bold">Lixeira e histórico</h1>
-        <p className="mt-1 text-muted">
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Lixeira e histórico</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
           O que foi excluído e as versões anteriores guardadas neste dispositivo. Nada aqui depende de conexão.
           {session.team ? ' Restaurar é publicado para a equipe como qualquer alteração.' : ''}
         </p>
       </header>
 
       {message && (
-        <p role={message.kind === 'error' ? 'alert' : 'status'} className={message.kind === 'error' ? 'text-sm text-danger' : 'text-sm'} data-testid="trash-message" data-kind={message.kind}>
+        <p role={message.kind === 'error' ? 'alert' : 'status'} className={message.kind === 'error' ? noticeClass('danger') : noticeClass('success', 'text-foreground')} data-testid="trash-message" data-kind={message.kind}>
           {message.text}
         </p>
       )}
 
       <section aria-labelledby="lixeira" className="flex flex-col gap-3">
-        <h2 id="lixeira" className="text-lg font-semibold">
+        <h2 id="lixeira" className="text-lg font-bold">
           Lixeira
         </h2>
         {trash === null ? (
-          <p role="status">Carregando…</p>
+          <Loading>Carregando…</Loading>
         ) : trash.length === 0 ? (
-          <p className="text-muted" data-testid="trash-empty">
+          <EmptyState icon={<TrashIcon size={26} />} className="py-8" data-testid="trash-empty">
             Nada na lixeira.
-          </p>
+          </EmptyState>
         ) : (
           <ul className="flex flex-col gap-2" aria-label="Itens excluídos">
             {trash.map((item) => {
               const days = Math.floor((loadedAt - Date.parse(item.deletedAt)) / DAY_MS);
               return (
-                <li key={`${item.entityType}:${item.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-raised p-4" data-testid="trash-item" data-type={item.entityType} data-id={item.id}>
+                <li key={`${item.entityType}:${item.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card" data-testid="trash-item" data-type={item.entityType} data-id={item.id}>
                   <div className="min-w-0">
                     <p className="font-semibold">{item.title}</p>
                     <p className="text-sm text-muted">
@@ -141,22 +143,22 @@ function Trash({ session }: { session: LocalSession }) {
       </section>
 
       <section aria-labelledby="historico" className="flex flex-col gap-3">
-        <h2 id="historico" className="text-lg font-semibold">
+        <h2 id="historico" className="text-lg font-bold">
           Versões anteriores
         </h2>
         <p className="text-sm text-muted">
           Uma cópia é guardada antes de excluir, de regenerar os slides, de resolver um conflito e, ao editar, no máximo a cada dez minutos por documento.
         </p>
         {history === null ? (
-          <p role="status">Carregando…</p>
+          <Loading>Carregando…</Loading>
         ) : history.length === 0 ? (
-          <p className="text-muted" data-testid="history-empty">
+          <EmptyState icon={<ClockIcon size={26} />} className="py-8" data-testid="history-empty">
             Nenhuma versão anterior guardada.
-          </p>
+          </EmptyState>
         ) : (
           <ul className="flex flex-col gap-2" aria-label="Versões anteriores">
             {history.map((entry) => (
-              <li key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-raised p-4" data-testid="history-item" data-type={entry.entityType} data-reason={entry.reason} data-current={entry.current}>
+              <li key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card" data-testid="history-item" data-type={entry.entityType} data-reason={entry.reason} data-current={entry.current}>
                 <div className="min-w-0">
                   <p className="font-semibold">
                     {entry.title}
@@ -167,7 +169,7 @@ function Trash({ session }: { session: LocalSession }) {
                   </p>
                 </div>
                 {entry.current ? (
-                  <span className="text-sm text-muted">É a versão em uso</span>
+                  <span className={pillClass('success')}>É a versão em uso</span>
                 ) : (
                   <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Restaurar a versão de ${entry.title} de ${dateFormat.format(new Date(entry.createdAt))}`} onClick={() => void restoreEntry(entry)}>
                     Restaurar esta versão

@@ -85,7 +85,7 @@ function CustomThemesReady({ session }: { session: LocalSession }) {
   return (
     <section aria-labelledby="temas-personalizados" className="flex flex-col gap-4" data-testid="custom-themes">
       <div>
-        <h2 id="temas-personalizados" className="text-lg font-semibold">
+        <h2 id="temas-personalizados" className="text-lg font-bold">
           Temas personalizados
         </h2>
         <p className="mt-1 text-sm text-muted">
@@ -222,7 +222,7 @@ function ThemeForm({ theme, session, onSaved, onDeleted }: { theme: Theme; sessi
 
   return (
     <form
-      className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-4"
+      className="flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-card"
       aria-label={`Editar o tema ${theme.name}`}
       data-testid="custom-theme-form"
       onSubmit={(event) => {

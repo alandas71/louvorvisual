@@ -9,7 +9,7 @@ import { readVisualSelection, SAMPLE_SLIDE_TEXT } from '../shell/selection';
 import { CustomThemes } from './CustomThemes';
 
 const optionClass =
-  'rounded-lg border p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'relative cursor-pointer rounded-2xl border-2 p-4 text-left transition-[border-color,transform] duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export function ThemesView() {
   const query = useLocalQuery();
@@ -18,22 +18,22 @@ export function ThemesView() {
   return (
     <div className="flex flex-col gap-8">
       <header>
-        <h1 className="text-2xl font-bold">Temas e fontes</h1>
-        <p className="mt-1 text-muted">
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Temas e fontes</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
           Oito temas escuros e oito famílias de fontes acompanham o aplicativo e funcionam sem conexão. A escolha abaixo
           vale só para esta prévia; o tema e a fonte de cada louvor são escolhidos no editor ou ao vivo, na apresentação.
         </p>
       </header>
 
-      <section aria-labelledby="previa" className="flex flex-col gap-3">
-        <h2 id="previa" className="text-lg font-semibold">
+      <section aria-labelledby="previa" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+        <h2 id="previa" className="text-lg font-bold">
           Prévia
         </h2>
         <SlideView
           text={SAMPLE_SLIDE_TEXT}
           style={{ ...selection.preset.style, fontWeight: selection.fontWeight }}
           fontId={selection.fontId}
-          className="w-full max-w-2xl rounded-lg border border-border"
+          className="w-full max-w-3xl overflow-hidden rounded-2xl border border-border shadow-pop"
         />
         <p className="text-sm text-muted">
           É o mesmo desenho usado na projeção. Para projetar, abra um louvor na biblioteca e use &ldquo;Apresentar&rdquo;.
@@ -41,7 +41,7 @@ export function ThemesView() {
       </section>
 
       <section aria-labelledby="temas" className="flex flex-col gap-3">
-        <h2 id="temas" className="text-lg font-semibold">
+        <h2 id="temas" className="text-lg font-bold">
           Temas
         </h2>
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -53,7 +53,7 @@ export function ThemesView() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setLocalQuery({ tema: preset.presetId })}
-                  className={cn(optionClass, 'w-full', selected ? 'border-accent' : 'border-border-strong')}
+                  className={cn(optionClass, 'flex aspect-video w-full flex-col justify-end', selected ? 'border-accent' : 'border-transparent hover:border-border-strong')}
                   style={{ backgroundColor: preset.style.palette.backgroundColor, color: preset.style.palette.textColor }}
                 >
                   <span className="block text-base font-bold" style={{ fontFamily: fontStack(preset.initialFontId) }}>
@@ -72,7 +72,7 @@ export function ThemesView() {
       <CustomThemes />
 
       <section aria-labelledby="fontes" className="flex flex-col gap-3">
-        <h2 id="fontes" className="text-lg font-semibold">
+        <h2 id="fontes" className="text-lg font-bold">
           Fontes
         </h2>
         <ul className="grid gap-3 md:grid-cols-2">
@@ -84,9 +84,9 @@ export function ThemesView() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setLocalQuery({ fonte: font.fontId })}
-                  className={cn(optionClass, 'w-full bg-surface-raised', selected ? 'border-accent' : 'border-border-strong')}
+                  className={cn(optionClass, 'w-full bg-surface-raised', selected ? 'border-accent' : 'border-border hover:border-border-strong')}
                 >
-                  <span className="block text-xs text-muted">{font.family}</span>
+                  <span className="mb-1 block text-xs font-semibold text-muted">{font.family}</span>
                   {FONT_WEIGHTS.map((weight) => (
                     <span key={weight} className="block text-xl" style={{ fontFamily: fontStack(font.fontId), fontWeight: weight }}>
                       Coração, louvação, fé e canção

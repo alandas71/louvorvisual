@@ -1,12 +1,15 @@
 'use client';
 
+import { EmptyState, Loading, noticeClass, PageHeader, pillClass, rowClass } from '@/components/ui/PageHeader';
 import { addSetlistItem, createSetlist, moveSetlistItem, removeSetlistItem, touch, type Setlist, type SetlistItem, type Uuid } from '@louvorvisual/domain';
 import { useCallback, useEffect, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
+import { PlusIcon, SetlistIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
 import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
+import { cn } from '@/lib/utils';
 import {
   entityStateKey,
   deleteSetlist,
@@ -43,6 +46,11 @@ const STATE_TEXT: Record<OfflinePackageState, string> = {
   failed: '⚠ Não está pronto: a última preparação encontrou problemas.',
 };
 
+const STATE_TONE = { notPrepared: 'neutral', preparing: 'accent', ready: 'success', stale: 'accent', failed: 'danger' } as const satisfies Record<OfflinePackageState, string>;
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+const STATE_SHORT: Record<OfflinePackageState, string> = { notPrepared: 'Não preparado', preparing: 'Preparando…', ready: 'Pronto offline', stale: 'Desatualizado', failed: 'Com problemas' };
+
 const PROBLEM_TEXT: Record<PackageProblem['code'], (problem: PackageProblem) => string> = {
   empty: () => 'O repertório não tem louvores.',
   'arrangement-missing': () => 'Um item aponta para um arranjo que não existe mais na biblioteca. Remova o item.',
@@ -77,7 +85,7 @@ async function verifyFontFile(file: string, sha256: string): Promise<boolean> {
 export function SetlistsView() {
   const local = useLocalSession();
   const setlistId = useLocalQuery().get('repertorio');
-  if (local.status === 'loading') return <p role="status">Abrindo os repertórios…</p>;
+  if (local.status === 'loading') return <Loading>Abrindo os repertórios…</Loading>;
   if (local.status === 'error') return <p role="alert">{local.message}</p>;
   return setlistId ? <SetlistDetail key={setlistId} session={local.session} setlistId={setlistId} /> : <SetlistList session={local.session} />;
 }
@@ -114,13 +122,10 @@ function SetlistList({ session }: { session: LocalSession }) {
 
   return (
     <div className="flex flex-col gap-6" data-testid="setlists">
-      <header>
-        <h1 className="text-2xl font-bold">Repertórios</h1>
-        <p className="mt-1 text-muted">Louvores na ordem do culto. Prepare o repertório para conferir que tudo o que ele usa está neste dispositivo.</p>
-      </header>
+      <PageHeader title="Repertórios" description="Louvores na ordem do culto. Prepare o repertório para conferir que tudo o que ele usa está neste dispositivo." />
 
       <form
-        className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface-raised p-4"
+        className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-5"
         onSubmit={(event) => {
           event.preventDefault();
           void create();
@@ -136,7 +141,8 @@ function SetlistList({ session }: { session: LocalSession }) {
           <Label htmlFor="rep-data">Data do culto</Label>
           <Input id="rep-data" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
-        <button type="submit" className={buttonClass('primary')} disabled={title.trim() === ''}>
+        <button type="submit" className={buttonClass('primary', 'md', 'max-sm:w-full')} disabled={title.trim() === ''}>
+          <PlusIcon />
           Criar repertório
         </button>
         {error && (
@@ -149,19 +155,29 @@ function SetlistList({ session }: { session: LocalSession }) {
       <PackageImport session={session} onImported={() => setImported((count) => count + 1)} />
 
       {rows === null ? (
-        <p role="status">Carregando…</p>
+        <Loading>Carregando…</Loading>
       ) : rows.length === 0 ? (
-        <p className="text-muted" data-testid="setlists-empty">
+        <EmptyState icon={<SetlistIcon size={26} />} data-testid="setlists-empty">
           Nenhum repertório ainda.
-        </p>
+        </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-2" aria-label="Repertórios">
+        <ul className="flex flex-col gap-3" aria-label="Repertórios">
           {rows.map(({ setlist, status }) => (
-            <li key={setlist.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-raised p-4" data-testid="setlist-row">
-              <div className="min-w-0">
+            <li key={setlist.id} className={cn(rowClass, 'flex flex-wrap items-center gap-x-4 gap-y-3 p-4')} data-testid="setlist-row">
+              <span aria-hidden="true" className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-accent/10 text-accent">
+                {setlist.serviceDate ? (
+                  <>
+                    <span className="text-base font-bold leading-none tabular-nums">{setlist.serviceDate.slice(8, 10)}</span>
+                    <span className="text-[10px] font-bold uppercase leading-tight">{MONTHS[Number(setlist.serviceDate.slice(5, 7)) - 1]}</span>
+                  </>
+                ) : (
+                  <SetlistIcon size={22} />
+                )}
+              </span>
+              <div className="min-w-0 flex-1 basis-48">
                 <a
                   href={`/app?view=repertorios&repertorio=${setlist.id}`}
-                  className="font-semibold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="rounded text-base font-bold underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   onClick={(event) => {
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
                     event.preventDefault();
@@ -175,7 +191,7 @@ function SetlistList({ session }: { session: LocalSession }) {
                   {setlist.items.length === 1 ? 'louvor' : 'louvores'}
                 </p>
               </div>
-              <span className="text-sm" data-state={status.state}>
+              <span className={pillClass(STATE_TONE[status.state])} data-state={status.state}>
                 {STATE_TEXT[status.state]}
               </span>
             </li>
@@ -232,11 +248,11 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
     if (version > 0) void load().then(setLoaded);
   }, [load, version]);
 
-  if (loaded === 'loading') return <p role="status">Abrindo o repertório…</p>;
+  if (loaded === 'loading') return <Loading>Abrindo o repertório…</Loading>;
   if (loaded === 'missing') {
     return (
       <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-bold">Repertório não encontrado</h1>
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Repertório não encontrado</h1>
         <BackToList />
       </div>
     );
@@ -278,33 +294,36 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
 
   return (
     <div className="flex flex-col gap-6" data-testid="setlist" data-setlist-id={setlist.id}>
-      <header className="flex flex-col gap-2">
-        <BackToList />
-        <h1 className="text-2xl font-bold">{setlist.title}</h1>
-        <p className="text-sm text-muted">
-          {setlist.serviceDate ? `Culto em ${new Date(`${setlist.serviceDate}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Sem data definida'} · {entries.length}{' '}
-          {entries.length === 1 ? 'louvor' : 'louvores'}
-        </p>
-      </header>
+      <PageHeader
+        before={<BackToList />}
+        title={setlist.title}
+        description={
+          <>
+            {setlist.serviceDate ? `Culto em ${new Date(`${setlist.serviceDate}T12:00:00`).toLocaleDateString('pt-BR')}` : 'Sem data definida'} · {entries.length}{' '}
+            {entries.length === 1 ? 'louvor' : 'louvores'}
+          </>
+        }
+        actions={<span className={pillClass(STATE_TONE[state])}>{STATE_SHORT[state]}</span>}
+      />
 
       {error && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className={noticeClass('danger')}>
           {error}
         </p>
       )}
 
-      <section aria-labelledby="ordem" className="flex flex-col gap-3">
-        <h2 id="ordem" className="text-lg font-semibold">
+      <section aria-labelledby="ordem" className="flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+        <h2 id="ordem" className="text-lg font-bold">
           Ordem do culto
         </h2>
         {entries.length === 0 ? (
-          <p className="text-muted">Nenhum louvor neste repertório. Escolha um abaixo.</p>
+          <p className="rounded-xl border border-dashed border-border-strong px-4 py-8 text-center text-sm text-muted">Nenhum louvor neste repertório. Escolha um abaixo.</p>
         ) : (
           <ol className="flex flex-col gap-2" aria-label="Louvores do repertório">
             {entries.map((entry, index) => (
-              <li key={entry.item.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-raised p-3" data-testid="setlist-item" data-item-id={entry.item.id}>
-                <span className="w-6 text-right tabular-nums text-muted">{index + 1}</span>
-                <span className="min-w-0 flex-1">
+              <li key={entry.item.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-overlay/50 p-3 transition-colors hover:border-border-strong" data-testid="setlist-item" data-item-id={entry.item.id}>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-sm font-bold tabular-nums text-accent">{index + 1}</span>
+                <span className="min-w-0 flex-1 basis-40">
                   {entry.song && entry.arrangement ? (
                     <>
                       <span className="font-semibold">{entry.song.title}</span>
@@ -318,10 +337,10 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
                     <span className="text-danger">Louvor removido da biblioteca</span>
                   )}
                 </span>
-                <button type="button" className={buttonClass('secondary', 'sm')} disabled={index === 0} aria-label={`Subir o louvor ${index + 1}`} onClick={() => void saveItems(moveSetlistItem(setlist.items, entry.item.id, index - 1))}>
+                <button type="button" className={buttonClass('ghost', 'sm', 'px-2.5')} disabled={index === 0} aria-label={`Subir o louvor ${index + 1}`} onClick={() => void saveItems(moveSetlistItem(setlist.items, entry.item.id, index - 1))}>
                   ↑
                 </button>
-                <button type="button" className={buttonClass('secondary', 'sm')} disabled={index === entries.length - 1} aria-label={`Descer o louvor ${index + 1}`} onClick={() => void saveItems(moveSetlistItem(setlist.items, entry.item.id, index + 1))}>
+                <button type="button" className={buttonClass('ghost', 'sm', 'px-2.5')} disabled={index === entries.length - 1} aria-label={`Descer o louvor ${index + 1}`} onClick={() => void saveItems(moveSetlistItem(setlist.items, entry.item.id, index + 1))}>
                   ↓
                 </button>
                 {entry.song && entry.arrangement && (
@@ -334,7 +353,7 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
                     ▶ Apresentar
                   </button>
                 )}
-                <button type="button" className={buttonClass('danger', 'sm')} aria-label={`Remover o louvor ${index + 1} do repertório`} onClick={() => void saveItems(removeSetlistItem(setlist.items, entry.item.id))}>
+                <button type="button" className={buttonClass('ghost', 'sm', 'hover:text-danger')} aria-label={`Remover o louvor ${index + 1} do repertório`} onClick={() => void saveItems(removeSetlistItem(setlist.items, entry.item.id))}>
                   Remover
                 </button>
               </li>
@@ -343,7 +362,7 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
         )}
 
         <form
-          className="flex flex-wrap items-end gap-2"
+          className="flex flex-wrap items-end gap-2 border-t border-border pt-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (adding === '') return;
@@ -371,11 +390,11 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
         {choices.length === 0 && <p className="text-sm text-muted">A biblioteca está vazia: cadastre um louvor primeiro.</p>}
       </section>
 
-      <section aria-labelledby="preparo-offline" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5">
-        <h2 id="preparo-offline" className="text-lg font-semibold">
+      <section aria-labelledby="preparo-offline" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+        <h2 id="preparo-offline" className="text-lg font-bold">
           Uso offline
         </h2>
-        <p role="status" data-testid="package-state" data-state={state} data-usable-copy={status.usableCopy} className={state === 'failed' ? 'font-semibold text-danger' : state === 'ready' ? 'font-semibold' : undefined}>
+        <p role="status" data-testid="package-state" data-state={state} data-usable-copy={status.usableCopy} className={noticeClass(STATE_TONE[state], 'font-semibold')}>
           {STATE_TEXT[state]}
           {status.preparedAt && state !== 'preparing' && ` Última preparação concluída em ${new Date(status.preparedAt).toLocaleString('pt-BR')}.`}
         </p>
@@ -440,8 +459,8 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
 
       <section className="flex flex-col gap-2">
         {confirmDelete ? (
-          <div role="alertdialog" aria-label="Confirmar exclusão do repertório" className="flex flex-wrap items-center gap-3 text-sm">
-            <p className="min-w-0 flex-1">O repertório vai para a lixeira e pode ser restaurado. Os louvores e os áudios continuam na biblioteca.</p>
+          <div role="alertdialog" aria-label="Confirmar exclusão do repertório" className={noticeClass('danger', 'flex flex-wrap items-center gap-3')}>
+            <p className="min-w-0 flex-1 basis-64 text-foreground">O repertório vai para a lixeira e pode ser restaurado. Os louvores e os áudios continuam na biblioteca.</p>
             <button type="button" className={buttonClass('danger', 'sm')} onClick={() => void deleteSetlist(session.db, setlist.id, session.context()).then(() => setLocalQuery({ view: 'repertorios', repertorio: null }))}>
               Excluir repertório
             </button>
@@ -461,7 +480,7 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
 
 function BackToList() {
   return (
-    <button type="button" className={buttonClass('secondary', 'sm', 'self-start')} onClick={() => setLocalQuery({ view: 'repertorios', repertorio: null })}>
+    <button type="button" className={buttonClass('ghost', 'sm', '-ml-2 self-start')} onClick={() => setLocalQuery({ view: 'repertorios', repertorio: null })}>
       ← Repertórios
     </button>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import { Loading } from '@/components/ui/PageHeader';
 import { TransportError } from '@louvorvisual/sync';
 import { useCallback, useEffect, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
@@ -14,7 +15,7 @@ import { buildPendingExport, downloadJson } from '@/sync/exportPending';
 import { useSyncEngine, useSyncStatus } from '@/sync/hooks';
 import { activateProfile, activateTeamProfile, listTeamProfiles, removeTeamProfile, type AccountWorkspace, type TeamProfile, type TeamRole } from '@/sync/profiles';
 
-const sectionClass = 'flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5';
+const sectionClass = 'flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6';
 const ROLE_TEXT: Record<TeamRole, string> = { operator: 'Operador', editor: 'Editor', admin: 'Administrador' };
 
 type Account = { state: 'loading' } | { state: 'unreachable' } | { state: 'signed-out' } | { state: 'signed-in'; me: Me };
@@ -41,7 +42,7 @@ async function loadAccount(): Promise<{ profiles: TeamProfile[]; account: Accoun
 
 export function AccountView() {
   const current = useSyncEngine();
-  if (!current) return <p role="status">Abrindo os dados deste dispositivo…</p>;
+  if (!current) return <Loading>Abrindo os dados deste dispositivo…</Loading>;
   return <Account session={current.session} engine={current.engine} />;
 }
 
@@ -66,12 +67,12 @@ function Account({ session, engine }: { session: LocalSession; engine: SyncEngin
   return (
     <div className="flex flex-col gap-8" data-testid="account-view">
       <header>
-        <h1 className="text-2xl font-bold">Conta e equipe</h1>
-        <p className="mt-1 text-muted">Entrar, escolher a equipe e gerenciar os perfis guardados neste dispositivo. Tudo aqui precisa de conexão; a biblioteca aberta continua funcionando sem ela.</p>
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Conta e equipe</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">Entrar, escolher a equipe e gerenciar os perfis guardados neste dispositivo. Tudo aqui precisa de conexão; a biblioteca aberta continua funcionando sem ela.</p>
       </header>
 
       <section aria-labelledby="perfil-em-uso" className={sectionClass}>
-        <h2 id="perfil-em-uso" className="text-lg font-semibold">
+        <h2 id="perfil-em-uso" className="text-lg font-bold">
           Perfil em uso neste dispositivo
         </h2>
         <p data-testid="active-profile" data-kind={team ? 'team' : 'personal'} data-profile-id={session.profile.profileId} data-workspace-id={session.profile.workspaceId} data-user-id={session.profile.userId} data-role={team?.role}>
@@ -131,7 +132,7 @@ function SignIn({ session, onDone }: { session: LocalSession; onDone: () => Prom
 
   return (
     <section aria-labelledby="entrar" className={sectionClass}>
-      <h2 id="entrar" className="text-lg font-semibold">
+      <h2 id="entrar" className="text-lg font-bold">
         {mode === 'login' ? 'Entrar' : 'Criar conta'}
       </h2>
       <p data-testid="account-state" data-state="signed-out" className="text-sm text-muted">
@@ -219,7 +220,7 @@ function SignedIn({ session, engine, me, pending, onChange }: SignedInProps) {
   return (
     <>
       <section aria-labelledby="conta" className={sectionClass}>
-        <h2 id="conta" className="text-lg font-semibold">
+        <h2 id="conta" className="text-lg font-bold">
           Conta conectada
         </h2>
         <p data-testid="account-state" data-state="signed-in" data-user-id={me.user.id}>
@@ -264,7 +265,7 @@ function SignedIn({ session, engine, me, pending, onChange }: SignedInProps) {
       </section>
 
       <section aria-labelledby="equipes" className={sectionClass}>
-        <h2 id="equipes" className="text-lg font-semibold">
+        <h2 id="equipes" className="text-lg font-bold">
           Equipes desta conta
         </h2>
         {me.workspaces.length === 0 ? (
@@ -368,12 +369,12 @@ function Members({ team, me }: { team: TeamProfile; me: Me }) {
 
   return (
     <section aria-labelledby="membros" className={sectionClass} data-testid="members">
-      <h2 id="membros" className="text-lg font-semibold">
+      <h2 id="membros" className="text-lg font-bold">
         Membros de {team.workspaceName}
       </h2>
       <p className="text-sm text-muted">Mudança de papel e revogação valem no servidor na hora. Um dispositivo desconectado só fica sabendo quando reconectar, e o que ele já baixou não é apagado à distância.</p>
       {members === null ? (
-        <p role="status">Carregando membros…</p>
+        <Loading>Carregando membros…</Loading>
       ) : (
         <ul className="flex flex-col gap-2">
           {members.map((member) => (
@@ -475,7 +476,7 @@ function Profiles({ session, profiles, onChange }: { session: LocalSession; prof
 
   return (
     <section aria-labelledby="perfis" className={sectionClass} data-testid="profiles">
-      <h2 id="perfis" className="text-lg font-semibold">
+      <h2 id="perfis" className="text-lg font-bold">
         Perfis guardados neste dispositivo
       </h2>
       <p className="text-sm text-muted">Cada perfil tem biblioteca, áudio, fila de envio e conflitos próprios. Trocar de perfil não mistura nada. Os dados ficam no navegador, sem criptografia: quem usa este usuário do computador pode abri-los.</p>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { buttonClass as sharedButtonClass } from '@/components/ui/buttonStyles';
+import { noticeClass } from '@/components/ui/PageHeader';
 import { applyUpdate, checkForUpdate, useOfflineState, type OfflineState } from '@/pwa/serviceWorker';
 import { checkFontPack, type FontFaceCheck } from './fontCheck';
 import { IntegritySection } from './IntegritySection';
@@ -21,8 +23,7 @@ const BLOCKED_TEXT = {
   'not-waiting': 'Não há versão nova aguardando.',
 } as const;
 
-const buttonClass =
-  'rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60';
+const buttonClass = sharedButtonClass('secondary');
 
 export function OfflineView() {
   const offline = useOfflineState();
@@ -51,17 +52,17 @@ export function OfflineView() {
   return (
     <div className="flex flex-col gap-8">
       <header>
-        <h1 className="text-2xl font-bold">Disponível offline</h1>
-        <p className="mt-1 text-muted">
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Disponível offline</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
           Situação do aplicativo e dos dados neste dispositivo: código, temas, fontes e louvores gravados.
         </p>
       </header>
 
-      <section aria-labelledby="aplicativo" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5">
-        <h2 id="aplicativo" className="text-lg font-semibold">
+      <section aria-labelledby="aplicativo" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+        <h2 id="aplicativo" className="text-lg font-bold">
           Aplicativo
         </h2>
-        <p role="status" data-testid="offline-phase" data-phase={offline.phase}>
+        <p role="status" data-testid="offline-phase" data-phase={offline.phase} className={noticeClass(offline.phase === 'ready' ? 'success' : offline.phase === 'failed' ? 'danger' : 'neutral', 'font-semibold')}>
           {PHASE_TEXT[offline.phase]}
         </p>
         {offline.error && <p className="text-sm text-danger">{offline.error}</p>}
@@ -72,14 +73,14 @@ export function OfflineView() {
           </p>
         )}
         {offline.updateWaiting && (
-          <p className="text-sm" data-testid="update-waiting">
+          <p className={noticeClass('accent', 'text-foreground')} data-testid="update-waiting">
             Uma versão nova foi baixada. Ela só entra em uso quando você atualizar, fora de uma apresentação; depois disso, os dados deste dispositivo são
             atualizados para o formato novo sem apagar nada.
           </p>
         )}
         <div className="flex flex-wrap gap-3">
           {offline.updateWaiting && (
-            <button type="button" className={buttonClass} onClick={() => void onUpdate()}>
+            <button type="button" className={sharedButtonClass('primary')} onClick={() => void onUpdate()}>
               Atualizar agora
             </button>
           )}
@@ -90,7 +91,7 @@ export function OfflineView() {
           )}
         </div>
         {message && (
-          <p role="alert" className="text-sm text-danger" data-testid="update-blocked">
+          <p role="alert" className={noticeClass('danger')} data-testid="update-blocked">
             {message}
           </p>
         )}
@@ -100,8 +101,8 @@ export function OfflineView() {
 
       <IntegritySection buttonClassName={buttonClass} />
 
-      <section aria-labelledby="fontes-pacote" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5">
-        <h2 id="fontes-pacote" className="text-lg font-semibold">
+      <section aria-labelledby="fontes-pacote" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+        <h2 id="fontes-pacote" className="text-lg font-bold">
           Pacote de fontes
         </h2>
         <p role="status" data-testid="font-summary" data-ok={fonts ? fontsOk : undefined} data-total={fonts?.length}>
@@ -114,7 +115,7 @@ export function OfflineView() {
         {fonts && (
           <ul className="grid gap-x-6 gap-y-1 text-sm md:grid-cols-2">
             {fonts.map((font) => (
-              <li key={font.file} className="flex justify-between gap-4" data-testid="font-check" data-file={font.file}>
+              <li key={font.file} className="flex justify-between gap-4 border-b border-border py-1.5" data-testid="font-check" data-file={font.file}>
                 <span>
                   {font.family} {font.weight === 400 ? 'regular' : 'negrito'}
                 </span>

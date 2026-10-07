@@ -14,10 +14,13 @@ import {
 } from '@louvorvisual/domain';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
+import { SparkIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { cardClass, Loading, noticeClass, PageHeader } from '@/components/ui/PageHeader';
 import { Textarea } from '@/components/ui/Textarea';
 import { setLocalQuery } from '@/lib/localQuery';
+import { cn } from '@/lib/utils';
 import { listSongIndex, saveDocuments, useLocalSession, type LocalSession, type SongIndexRow } from '@/local';
 
 const SPLIT = { maxLines: maxLinesForStyle(themePreset(DEFAULT_THEME_PRESET_ID).style) };
@@ -32,7 +35,7 @@ function preview(rawLyrics: string) {
 
 export function NewSongView() {
   const local = useLocalSession();
-  if (local.status === 'loading') return <p role="status">Abrindo os dados deste dispositivo…</p>;
+  if (local.status === 'loading') return <Loading>Abrindo os dados deste dispositivo…</Loading>;
   if (local.status === 'error') return <p role="alert">{local.message}</p>;
   return <NewSongForm session={local.session} />;
 }
@@ -79,101 +82,120 @@ function NewSongForm({ session }: { session: LocalSession }) {
     }
   }
 
+  const sections = suggestion.parsed.sections.length;
+
   return (
-    <form onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5" noValidate>
-      <header>
-        <h1 className="text-2xl font-bold">Novo louvor</h1>
-        <p className="mt-1 text-muted">
-          Cole a letra como ela é. O aplicativo guarda o texto original e sugere seções e slides, que você revisa em seguida.
-        </p>
-      </header>
+    <form onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-6" noValidate>
+      <PageHeader
+        title="Novo louvor"
+        description="Cole a letra como ela é. O aplicativo guarda o texto original e sugere seções e slides, que você revisa em seguida."
+      />
 
-      <div>
-        <Label htmlFor="titulo" required>
-          Título
-        </Label>
-        <Input
-          id="titulo"
-          // A tela é aberta para digitar o título: o foco já começa nele.
-          autoFocus
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          required
-          autoComplete="off"
-          error={submitted && issues.includes('title-required') ? 'Informe o título.' : undefined}
-        />
-        {similar.length > 0 && (
-          <p className="mt-2 text-sm" data-testid="similar-songs">
-            Este louvor parece já existir:{' '}
-            {similar.map((row, index) => (
-              <span key={row.id}>
-                {index > 0 && ', '}
-                <a className="text-accent underline underline-offset-4" href={`/app?view=editor&song=${row.id}`}>
-                  abrir &ldquo;{row.title}&rdquo;
-                </a>
-              </span>
-            ))}
-            . Você também pode salvar este como um novo.
-          </p>
-        )}
-      </div>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className={cn(cardClass, 'flex flex-col gap-5 p-4 sm:p-6')}>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="titulo" required>
+                Título
+              </Label>
+              <Input
+                id="titulo"
+                // A tela é aberta para digitar o título: o foco já começa nele.
+                autoFocus
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required
+                autoComplete="off"
+                error={submitted && issues.includes('title-required') ? 'Informe o título.' : undefined}
+              />
+            </div>
+            <div>
+              <Label htmlFor="artista">Artista</Label>
+              <Input id="artista" value={artist} onChange={(event) => setArtist(event.target.value)} autoComplete="off" />
+            </div>
+          </div>
+          {similar.length > 0 && (
+            <p className={noticeClass('accent', 'text-foreground')} data-testid="similar-songs">
+              Este louvor parece já existir:{' '}
+              {similar.map((row, index) => (
+                <span key={row.id}>
+                  {index > 0 && ', '}
+                  <a className="font-semibold text-accent underline underline-offset-4" href={`/app?view=editor&song=${row.id}`}>
+                    abrir &ldquo;{row.title}&rdquo;
+                  </a>
+                </span>
+              ))}
+              . Você também pode salvar este como um novo.
+            </p>
+          )}
 
-      <div>
-        <Label htmlFor="artista">Artista</Label>
-        <Input id="artista" value={artist} onChange={(event) => setArtist(event.target.value)} autoComplete="off" />
-      </div>
+          <div>
+            <Label htmlFor="letra">Letra</Label>
+            <Textarea
+              id="letra"
+              value={rawLyrics}
+              onChange={(event) => setRawLyrics(event.target.value)}
+              rows={14}
+              spellCheck={false}
+              aria-describedby="letra-ajuda"
+              placeholder={'[Estrofe 1]\n…\n\n[Refrão]\n…'}
+              className="min-h-64 font-mono text-[13px] leading-relaxed"
+              error={issues.includes('lyrics-too-long') ? `A letra passa de ${MAX_LYRICS_CHARS.toLocaleString('pt-BR')} caracteres.` : undefined}
+            />
+            <p id="letra-ajuda" className="mt-2 text-xs leading-relaxed text-muted">
+              Separe as partes com uma linha vazia. Marcadores em linha própria ajudam: [Estrofe 1], [Refrão], [Ponte],
+              [Introdução], [Instrumental]. &ldquo;[Refrão 2x]&rdquo; repete a parte.
+            </p>
+          </div>
+        </div>
 
-      <div>
-        <Label htmlFor="letra">Letra</Label>
-        <Textarea
-          id="letra"
-          value={rawLyrics}
-          onChange={(event) => setRawLyrics(event.target.value)}
-          rows={14}
-          spellCheck={false}
-          aria-describedby="letra-ajuda"
-          placeholder={'[Estrofe 1]\n…\n\n[Refrão]\n…'}
-          error={issues.includes('lyrics-too-long') ? `A letra passa de ${MAX_LYRICS_CHARS.toLocaleString('pt-BR')} caracteres.` : undefined}
-        />
-        <p id="letra-ajuda" className="mt-1 text-xs text-muted">
-          Separe as partes com uma linha vazia. Marcadores em linha própria ajudam: [Estrofe 1], [Refrão], [Ponte],
-          [Introdução], [Instrumental]. &ldquo;[Refrão 2x]&rdquo; repete a parte.
-        </p>
-      </div>
+        <div className="flex flex-col gap-4 lg:sticky lg:top-6">
+          <section aria-labelledby="sugestao" className={cn(cardClass, 'flex flex-col gap-3 p-5 text-sm')}>
+            <h2 id="sugestao" className="flex items-center gap-2 text-base font-bold">
+              <SparkIcon className="text-accent" />
+              Sugestão
+            </h2>
+            <div aria-hidden="true" className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-surface-overlay p-3">
+                <p className="text-2xl font-bold tabular-nums">{sections}</p>
+                <p className="text-xs text-muted">{sections === 1 ? 'seção' : 'seções'}</p>
+              </div>
+              <div className="rounded-xl bg-surface-overlay p-3">
+                <p className="text-2xl font-bold tabular-nums">{suggestion.slides}</p>
+                <p className="text-xs text-muted">{suggestion.slides === 1 ? 'slide' : 'slides'}</p>
+              </div>
+            </div>
+            <p role="status" className="text-muted" data-testid="suggestion-summary" data-sections={sections} data-slides={suggestion.slides}>
+              {sections === 0
+                ? 'Sem letra: o louvor será criado sem slides.'
+                : `${sections} ${sections === 1 ? 'seção' : 'seções'} e ${suggestion.slides} ${suggestion.slides === 1 ? 'slide' : 'slides'}.`}
+            </p>
+            {suggestion.parsed.warnings.length > 0 && (
+              <ul className="list-disc space-y-1 pl-5 text-muted" aria-label="Pontos para revisar">
+                {suggestion.parsed.warnings.map((warning, index) => (
+                  <li key={index}>
+                    Linha {warning.line}: {warning.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-      <section aria-labelledby="sugestao" className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
-        <h2 id="sugestao" className="font-semibold">
-          Sugestão
-        </h2>
-        <p role="status" data-testid="suggestion-summary" data-sections={suggestion.parsed.sections.length} data-slides={suggestion.slides}>
-          {suggestion.parsed.sections.length === 0
-            ? 'Sem letra: o louvor será criado sem slides.'
-            : `${suggestion.parsed.sections.length} ${suggestion.parsed.sections.length === 1 ? 'seção' : 'seções'} e ${suggestion.slides} ${suggestion.slides === 1 ? 'slide' : 'slides'}.`}
-        </p>
-        {suggestion.parsed.warnings.length > 0 && (
-          <ul className="mt-2 list-disc pl-5 text-muted" aria-label="Pontos para revisar">
-            {suggestion.parsed.warnings.map((warning, index) => (
-              <li key={index}>
-                Linha {warning.line}: {warning.message}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          {error && (
+            <p role="alert" className={noticeClass('danger')}>
+              {error} A letra continua neste formulário; copie-a se for fechar a página.
+            </p>
+          )}
 
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error} A letra continua neste formulário; copie-a se for fechar a página.
-        </p>
-      )}
-
-      <div className="flex gap-3">
-        <button type="submit" className={buttonClass('primary')} disabled={saving}>
-          {saving ? 'Salvando…' : 'Salvar e revisar slides'}
-        </button>
-        <button type="button" className={buttonClass()} onClick={() => setLocalQuery({ view: 'biblioteca' })}>
-          Cancelar
-        </button>
+          <div className="flex flex-wrap gap-3 lg:flex-col">
+            <button type="submit" className={buttonClass('primary', 'lg', 'max-lg:flex-1')} disabled={saving}>
+              {saving ? 'Salvando…' : 'Salvar e revisar slides'}
+            </button>
+            <button type="button" className={buttonClass('ghost', 'lg')} onClick={() => setLocalQuery({ view: 'biblioteca' })}>
+              Cancelar
+            </button>
+          </div>
+        </div>
       </div>
     </form>
   );

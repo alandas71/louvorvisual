@@ -40,6 +40,7 @@ export const SAVE_FIELD_TEXT: Record<SaveField['field'], string> = {
   lineHeight: 'entrelinha',
   text: 'texto',
   durationMs: 'tempo',
+  defaultMode: 'modo automático',
 };
 
 export function formatSeconds(ms: number): string {

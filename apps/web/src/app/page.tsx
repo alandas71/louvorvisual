@@ -1,7 +1,16 @@
+import { ChevronRightIcon, LibraryIcon, OfflineIcon, ProjectorIcon, ShieldIcon, SparkIcon } from '@/components/ui/icons';
 import { SkipToContent } from '@/components/ui/SkipToContent';
+import { BrandMark } from '@/features/shell/BrandMark';
 
-const linkClass =
-  'rounded-lg border border-border-strong px-5 py-3 text-sm font-semibold hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+const entryClass =
+  'group flex items-center gap-4 rounded-2xl border p-5 transition-[border-color,background-color,transform] duration-150 active:scale-[0.99] ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+
+const FEATURES = [
+  { Icon: SparkIcon, title: 'Da letra ao slide', text: 'Cole a letra como ela é. As seções e os slides são sugeridos e você revisa cada um.' },
+  { Icon: OfflineIcon, title: 'Funciona sem internet', text: 'Louvores, temas, fontes e áudios ficam neste dispositivo. O culto não depende do Wi-Fi.' },
+  { Icon: ShieldIcon, title: 'Seguro ao vivo', text: 'O público só vê o slide. Ajustes, notas e o próximo slide ficam no painel do operador.' },
+] as const;
 
 // As entradas são documentos independentes guardados para uso offline. Links
 // comuns carregam o documento inteiro; a navegação do Next pediria dados ao
@@ -10,18 +19,75 @@ export default function HomePage() {
   return (
     <>
       <SkipToContent />
-      <main id="main-content" className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center gap-6 px-6 py-16">
-        <h1 className="text-3xl font-bold">LouvorVisual</h1>
-        <p className="text-muted">Prepare letras, gere slides e apresente louvores mesmo sem conexão.</p>
-        <nav aria-label="Entradas do aplicativo" className="flex flex-wrap gap-3">
-          <a href="/app" className={linkClass}>
-            Abrir o aplicativo
-          </a>
-          <a href="/projecao" className={linkClass}>
-            Abrir a projeção
-          </a>
-        </nav>
-      </main>
+      <div className="lv-stage flex min-h-dvh flex-col overflow-x-clip">
+        <main id="main-content" className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-12 px-5 py-12 sm:px-8 lg:py-20">
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-16">
+            <div className="flex flex-col gap-6">
+              <p className="flex items-center gap-3 text-base font-bold tracking-tight">
+                <BrandMark size={40} />
+                LouvorVisual
+              </p>
+              <h1 className="text-4xl font-bold leading-[1.08] sm:text-5xl">
+                A letra certa na tela, <span className="text-accent">na hora certa.</span>
+              </h1>
+              <p className="max-w-xl text-lg leading-relaxed text-muted">Prepare letras, gere slides e apresente louvores mesmo sem conexão.</p>
+              <nav aria-label="Entradas do aplicativo" className="grid max-w-xl gap-3">
+                <a href="/app" className={`${entryClass} border-accent bg-accent text-accent-ink shadow-glow hover:bg-accent-strong`}>
+                  <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-ink/10">
+                    <LibraryIcon size={22} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-bold">Abrir o aplicativo</span>
+                    <span className="block text-sm">Biblioteca, repertórios e operador</span>
+                  </span>
+                  <ChevronRightIcon className="shrink-0 transition-transform group-hover:translate-x-1" />
+                </a>
+                <a href="/projecao" className={`${entryClass} border-border-strong bg-surface-raised hover:border-muted`}>
+                  <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-overlay text-accent">
+                    <ProjectorIcon size={22} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-bold">Abrir a projeção</span>
+                    <span className="block text-sm text-muted">A janela que o público vê</span>
+                  </span>
+                  <ChevronRightIcon className="shrink-0 text-muted transition-transform group-hover:translate-x-1" />
+                </a>
+              </nav>
+            </div>
+
+            {/* Ilustração: um slide como o público vê. Não é conteúdo. */}
+            <div aria-hidden="true" className="relative mx-auto w-full max-w-md lg:max-w-none">
+              <div className="absolute -inset-6 rounded-[2.5rem] bg-accent/10 blur-3xl" />
+              <div className="relative rounded-3xl border border-border-strong bg-surface-raised p-3 shadow-pop">
+                <div className="flex aspect-video items-center justify-center rounded-2xl bg-[#0f172a] px-6 text-center">
+                  <p className="text-xl font-bold leading-snug text-[#f8fafc] sm:text-2xl">
+                    Hoje cantamos em união
+                    <br />
+                    Com alegria no coração
+                  </p>
+                </div>
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {['#0f172a', '#1b1033', '#052e1c', '#3b0d18'].map((color, index) => (
+                    <div key={color} className={`aspect-video rounded-lg border ${index === 0 ? 'border-accent' : 'border-border'}`} style={{ backgroundColor: color }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <ul className="grid gap-4 md:grid-cols-3">
+            {FEATURES.map(({ Icon, title, text }) => (
+              <li key={title} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised/70 p-5">
+                <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                  <Icon size={20} />
+                </span>
+                <h2 className="text-base font-bold">{title}</h2>
+                <p className="text-sm leading-relaxed text-muted">{text}</p>
+              </li>
+            ))}
+          </ul>
+        </main>
+      </div>
     </>
   );
 }

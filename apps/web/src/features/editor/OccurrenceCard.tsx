@@ -44,30 +44,30 @@ export function OccurrenceCard({ occurrence, index, total, visual, maxLines, sel
       data-testid="occurrence"
       data-occurrence-id={occurrence.id}
       data-section-id={occurrence.sourceSectionId ?? ''}
-      className={cn('flex flex-col gap-2 rounded-xl border bg-surface-raised p-3', selected ? 'border-accent' : 'border-border')}
+      className={cn('flex flex-col gap-3 rounded-2xl border bg-surface-overlay/50 p-3 transition-colors duration-150', selected ? 'border-accent bg-accent/5' : 'border-border hover:border-border-strong')}
     >
       <div className="flex items-center justify-between gap-2 text-sm">
         <label className="flex min-w-0 cursor-pointer items-center gap-2 font-semibold">
-          <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`Selecionar ${target}`} />
+          <input type="checkbox" className="h-[18px] w-[18px] shrink-0 accent-accent" checked={selected} onChange={(event) => onSelect(event.target.checked)} aria-label={`Selecionar ${target}`} />
           <span className="truncate" data-testid="occurrence-label">
             {position} · {occurrence.label || 'Sem rótulo'}
           </span>
         </label>
         <div className="flex gap-1">
-          <button type="button" className={buttonClass('secondary', 'sm')} disabled={index === 0} onClick={() => actions.move(occurrence.id, index - 1)} aria-label={`Mover ${target} para antes`}>
+          <button type="button" className={buttonClass('ghost', 'sm', 'px-2')} disabled={index === 0} onClick={() => actions.move(occurrence.id, index - 1)} aria-label={`Mover ${target} para antes`}>
             ↑
           </button>
-          <button type="button" className={buttonClass('secondary', 'sm')} disabled={index === total - 1} onClick={() => actions.move(occurrence.id, index + 1)} aria-label={`Mover ${target} para depois`}>
+          <button type="button" className={buttonClass('ghost', 'sm', 'px-2')} disabled={index === total - 1} onClick={() => actions.move(occurrence.id, index + 1)} aria-label={`Mover ${target} para depois`}>
             ↓
           </button>
         </div>
       </div>
 
-      <SlideView text={occurrence.text} style={style} fontId={visual.fontId} className="w-full rounded-md border border-border" />
+      <SlideView text={occurrence.text} style={style} fontId={visual.fontId} className="w-full overflow-hidden rounded-xl border border-border" />
 
       {occurrence.visualKind === 'instrumental' && <p className="text-xs text-muted">Slide sem letra (instrumental).</p>}
       {excess && (
-        <p className="text-xs text-danger" data-testid="occurrence-excess" data-visual-lines={visualLines} data-overflows={fit?.overflows ?? false}>
+        <p className="rounded-lg bg-danger/10 px-2.5 py-2 text-xs text-danger" data-testid="occurrence-excess" data-visual-lines={visualLines} data-overflows={fit?.overflows ?? false}>
           {fit?.overflows
             ? `Atenção: o texto não cabe neste tamanho de letra (${visualLines} linhas na tela, cabem ${fit.capacity}). Divida o slide ou reduza a letra.`
             : visualLines > lines.length
@@ -98,7 +98,7 @@ export function OccurrenceCard({ occurrence, index, total, visual, maxLines, sel
           <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => actions.repeat([occurrence.id])} aria-label={`Repetir ${target}`}>
             Repetir
           </button>
-          <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => actions.remove([occurrence.id])} aria-label={`Remover ${target}`}>
+          <button type="button" className={buttonClass('ghost', 'sm', 'hover:text-danger')} onClick={() => actions.remove([occurrence.id])} aria-label={`Remover ${target}`}>
             Remover
           </button>
         </div>

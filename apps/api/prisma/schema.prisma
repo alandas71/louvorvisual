@@ -3,15 +3,15 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlserver"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-// SQL Server não possui enums Prisma nativos; valores são validados pelos contratos.
+// Os valores de estado são validados pelos contratos para manter o banco flexível.
 // Este schema é exclusivo do LouvorVisual: não há tabelas importadas do domínio de livros.
 model Workspace {
-  id         String   @id @db.UniqueIdentifier
-  name       String   @db.NVarChar(200)
+  id         String   @id @db.Char(36)
+  name       String   @db.VarChar(200)
   timezone   String   @default("UTC") @db.VarChar(64)
   createdAt  DateTime @default(now())
   syncClock  WorkspaceSyncClock?
@@ -29,10 +29,10 @@ model Workspace {
 }
 
 model User {
-  id           String    @id @db.UniqueIdentifier
-  name         String    @db.NVarChar(200)
-  email        String    @unique @db.NVarChar(320)
-  passwordHash String    @db.NVarChar(512)
+  id           String    @id @db.Char(36)
+  name         String    @db.VarChar(200)
+  email        String    @unique @db.VarChar(320)
+  passwordHash String    @db.VarChar(512)
   status       String    @default("active") @db.VarChar(20)
   createdAt    DateTime  @default(now())
   memberships  Membership[]
@@ -43,8 +43,8 @@ model User {
 }
 
 model Membership {
-  workspaceId String    @db.UniqueIdentifier
-  userId      String    @db.UniqueIdentifier
+  workspaceId String    @db.Char(36)
+  userId      String    @db.Char(36)
   role        String    @db.VarChar(20)
   status      String    @default("active") @db.VarChar(20)
   createdAt   DateTime  @default(now())
@@ -58,15 +58,15 @@ model Membership {
 }
 
 model Invitation {
-  id              String     @id @db.UniqueIdentifier
-  workspaceId     String     @db.UniqueIdentifier
-  email           String     @db.NVarChar(320)
+  id              String     @id @db.Char(36)
+  workspaceId     String     @db.Char(36)
+  email           String     @db.VarChar(320)
   role            String     @db.VarChar(20)
   tokenHash       String     @unique @db.Char(64)
   expiresAt       DateTime
   acceptedAt      DateTime?
-  recipientUserId String?    @db.UniqueIdentifier
-  createdBy       String     @db.UniqueIdentifier
+  recipientUserId String?    @db.Char(36)
+  createdBy       String     @db.Char(36)
   createdAt       DateTime   @default(now())
   workspace       Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recipient       User?      @relation("InvitationRecipient", fields: [recipientUserId], references: [id])
@@ -76,13 +76,13 @@ model Invitation {
 }
 
 model Session {
-  id               String   @id @db.UniqueIdentifier
-  userId           String   @db.UniqueIdentifier
+  id               String   @id @db.Char(36)
+  userId           String   @db.Char(36)
   refreshTokenHash String   @unique @db.Char(64)
-  familyId         String   @db.UniqueIdentifier
+  familyId         String   @db.Char(36)
   expiresAt        DateTime
   revokedAt        DateTime?
-  replacedById     String?  @db.UniqueIdentifier
+  replacedById     String?  @db.Char(36)
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -91,17 +91,17 @@ model Session {
 }
 
 model Asset {
-  id          String    @id @db.UniqueIdentifier
-  workspaceId String    @db.UniqueIdentifier
+  id          String    @id @db.Char(36)
+  workspaceId String    @db.Char(36)
   sha256      String    @db.Char(64)
-  filename    String    @db.NVarChar(255)
+  filename    String    @db.VarChar(255)
   mimeType    String    @db.VarChar(64)
   byteSize    Int
   audioKind   String    @db.VarChar(20)
   durationMs  Int?
   state       String    @db.VarChar(20)
-  storageKey  String?   @db.NVarChar(512)
-  uploadId    String?   @db.UniqueIdentifier
+  storageKey  String?   @db.VarChar(512)
+  uploadId    String?   @db.Char(36)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -111,7 +111,7 @@ model Asset {
 }
 
 model WorkspaceSyncClock {
-  workspaceId String @id @db.UniqueIdentifier
+  workspaceId String @id @db.Char(36)
   nextCursor  BigInt @default(0)
   minCursor   BigInt @default(0)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -120,9 +120,9 @@ model WorkspaceSyncClock {
 }
 
 model Device {
-  id          String   @id @db.UniqueIdentifier
-  workspaceId String   @db.UniqueIdentifier
-  userId      String   @db.UniqueIdentifier
+  id          String   @id @db.Char(36)
+  workspaceId String   @db.Char(36)
+  userId      String   @db.Char(36)
   lastSeenAt  DateTime @default(now())
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -131,11 +131,11 @@ model Device {
 }
 
 model SyncBootstrapSnapshot {
-  token       String   @id @db.UniqueIdentifier
-  workspaceId String   @db.UniqueIdentifier
+  token       String   @id @db.Char(36)
+  workspaceId String   @db.Char(36)
   accessRevision BigInt @default(0)
   cutCursor   BigInt
-  documentsJson String @db.NVarChar(Max)
+  documentsJson String @db.LongText
   expiresAt   DateTime
   createdAt   DateTime @default(now())
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -145,11 +145,11 @@ model SyncBootstrapSnapshot {
 }
 
 model ContentEntity {
-  workspaceId     String   @db.UniqueIdentifier
+  workspaceId     String   @db.Char(36)
   entityType      String   @db.VarChar(20)
-  entityId        String   @db.UniqueIdentifier
+  entityId        String   @db.Char(36)
   currentRevision BigInt
-  documentJson    String   @db.NVarChar(Max)
+  documentJson    String   @db.LongText
   deletedAt       DateTime?
   updatedAt       DateTime @default(now())
   workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -160,13 +160,13 @@ model ContentEntity {
 }
 
 model ContentRevision {
-  workspaceId  String   @db.UniqueIdentifier
+  workspaceId  String   @db.Char(36)
   entityType   String   @db.VarChar(20)
-  entityId     String   @db.UniqueIdentifier
+  entityId     String   @db.Char(36)
   revision     BigInt
-  documentJson String   @db.NVarChar(Max)
+  documentJson String   @db.LongText
   action       String   @db.VarChar(10)
-  actorId      String   @db.UniqueIdentifier
+  actorId      String   @db.Char(36)
   createdAt    DateTime @default(now())
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -175,10 +175,10 @@ model ContentRevision {
 }
 
 model ChangeEvent {
-  workspaceId String   @db.UniqueIdentifier
+  workspaceId String   @db.Char(36)
   cursor      BigInt
   entityType  String   @db.VarChar(20)
-  entityId    String   @db.UniqueIdentifier
+  entityId    String   @db.Char(36)
   revision    BigInt
   action      String   @db.VarChar(10)
   createdAt   DateTime @default(now())
@@ -190,11 +190,11 @@ model ChangeEvent {
 }
 
 model ProcessedOperation {
-  workspaceId String   @db.UniqueIdentifier
-  opId        String   @db.UniqueIdentifier
-  actorId     String   @db.UniqueIdentifier
+  workspaceId String   @db.Char(36)
+  opId        String   @db.Char(36)
+  actorId     String   @db.Char(36)
   payloadHash String   @db.Char(64)
-  resultJson  String   @db.NVarChar(Max)
+  resultJson  String   @db.LongText
   createdAt   DateTime @default(now())
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -203,9 +203,9 @@ model ProcessedOperation {
 }
 
 model RetiredEntityId {
-  workspaceId String   @db.UniqueIdentifier
+  workspaceId String   @db.Char(36)
   entityType  String   @db.VarChar(20)
-  entityId    String   @db.UniqueIdentifier
+  entityId    String   @db.Char(36)
   retiredAt   DateTime @default(now())
 
   @@id([workspaceId, entityType, entityId])

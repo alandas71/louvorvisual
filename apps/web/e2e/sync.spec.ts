@@ -34,7 +34,7 @@ import {
 
 // Demonstração de sincronização com dois perfis de navegador como dispositivos
 // distintos (A = Ana, administradora; B = Bruno, editor), contra a API real e
-// um SQL Server descartável. Requer:
+// um MySQL descartável. Requer:
 //   LV_E2E_DATABASE_URL=<banco isolado, com as migrations aplicadas>
 //   build do web feito com BACKEND_URL=http://127.0.0.1:3121
 test.skip(!DATABASE_URL, 'Defina LV_E2E_DATABASE_URL para rodar a demonstração de sincronização.');
@@ -460,7 +460,7 @@ test('AT-23: cursor e dispositivo muito antigos; bootstrap preserva pendências 
     // Enquanto A está fora, B publica algo e a retenção avança além do cursor de A.
     await createSong(b, { title: 'Publicado enquanto A estava fora', durations: [null] });
     await syncUntilClean(b);
-    await sql.$executeRawUnsafe(`UPDATE [dbo].[workspace_sync_clocks] SET [minCursor] = [nextCursor] WHERE [workspaceId] = '${workspaceId}'`);
+    await sql.$executeRawUnsafe(`UPDATE \`workspace_sync_clocks\` SET \`minCursor\` = \`nextCursor\` WHERE \`workspaceId\` = '${workspaceId}'`);
 
     await ctxA.setOffline(false);
     const bootstrapsBefore = logA.bootstraps.length;
@@ -469,7 +469,7 @@ test('AT-23: cursor e dispositivo muito antigos; bootstrap preserva pendências 
     // Base nova recebida e pendência preservada e publicada.
     expect((await songs(a, teamA.dbName)).map((item) => item.title)).toContain('Publicado enquanto A estava fora');
     expect(await serverDocument(ctxA, workspaceId, 'songs', song.id)).toMatchObject({ document: { title: 'Pendente de Ana durante o cursor vencido' } });
-    const clocks = await sql.$queryRawUnsafe<{ nextCursor: bigint }[]>(`SELECT [nextCursor] FROM [dbo].[workspace_sync_clocks] WHERE [workspaceId] = '${workspaceId}'`);
+    const clocks = await sql.$queryRawUnsafe<{ nextCursor: bigint }[]>(`SELECT \`nextCursor\` FROM \`workspace_sync_clocks\` WHERE \`workspaceId\` = '${workspaceId}'`);
     await expect(status(a)).toHaveAttribute('data-cursor', String(clocks[0]!.nextCursor));
 
     // --- dispositivo fora da janela de idempotência ----------------------------
@@ -485,7 +485,7 @@ test('AT-23: cursor e dispositivo muito antigos; bootstrap preserva pendências 
     const revisionsAfterLost = await serverRevisions(ctxB, workspaceId, 'song', song.id);
     expect((await serverDocument(ctxB, workspaceId, 'songs', song.id)).document!.title).toBe('Chegou ao servidor, resposta perdida');
 
-    await sql.$executeRawUnsafe(`UPDATE [dbo].[devices] SET [lastSeenAt] = DATEADD(day, -200, SYSUTCDATETIME()) WHERE [id] = '${deviceId}'`);
+    await sql.$executeRawUnsafe(`UPDATE \`devices\` SET \`lastSeenAt\` = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 200 DAY) WHERE \`id\` = '${deviceId}'`);
     const mark = logA.pushes.length;
     await ctxA.setOffline(false);
     await syncUntilClean(a);

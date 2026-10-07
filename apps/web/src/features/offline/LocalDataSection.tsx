@@ -49,8 +49,8 @@ export function LocalDataSection({ buttonClassName }: { buttonClassName: string 
   }
 
   return (
-    <section aria-labelledby="dados-locais" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5">
-      <h2 id="dados-locais" className="text-lg font-semibold">
+    <section aria-labelledby="dados-locais" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
+      <h2 id="dados-locais" className="text-lg font-bold">
         Dados neste dispositivo
       </h2>
       {local.status === 'error' ? (

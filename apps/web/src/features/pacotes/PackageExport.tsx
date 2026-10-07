@@ -66,8 +66,8 @@ export function PackageExport({ session, setlistId, refreshKey }: { session: Loc
   const media = done?.manifest.entries.filter((entry) => entry.kind === 'media').length ?? 0;
 
   return (
-    <section aria-labelledby="pacote" className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5" data-testid="package-export">
-      <h2 id="pacote" className="text-lg font-semibold">
+    <section aria-labelledby="pacote" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6" data-testid="package-export">
+      <h2 id="pacote" className="text-lg font-bold">
         Pacote de segurança
       </h2>
       <p className="text-sm text-muted">

@@ -57,6 +57,8 @@ export type SessionState = {
   visualMode: VisualMode;
   frozenOutput: boolean;
   sequenceNumber: number;
+  /** Ensaio assistido no manual: tempos já capturados para o padrão automático. */
+  manualTiming: { active: boolean; complete: boolean; captured: number; total: number };
 };
 
 /** Um quadro da saída: o que desenhar, sem nada sobre tempo. */
@@ -165,6 +167,8 @@ export type OperatorCommand =
   | { type: 'first' }
   | { type: 'goTo'; occurrenceId: Uuid }
   | { type: 'setMode'; mode: PresentationMode }
+  /** Fecha o ensaio manual no último slide e prepara seus tempos para salvar. */
+  | { type: 'completeManualTiming' }
   | { type: 'restartOccurrence' }
   | { type: 'stop' }
   | { type: 'setVisualMode'; visualMode: VisualMode }
@@ -273,6 +277,10 @@ export class PresentationEngine {
   private notice: EngineNotice = null;
   private view: EngineView | null = null;
   private disposed = false;
+  /** Cronômetro do ensaio assistido. Só registra avanços sequenciais no manual. */
+  private manualTiming = new Map<Uuid, number>();
+  private manualTimingAnchor: number | null = null;
+  private manualTimingComplete = false;
 
   private readonly transport: AudioTransport | null;
   private audioPolicy: SessionAudioPolicy = 'none';
@@ -531,6 +539,38 @@ export class PresentationEngine {
     return this.accumulatedMs + (this.anchor === null ? 0 : this.clock.now() - this.anchor);
   }
 
+  private manualTimingState() {
+    return { active: this.mode === 'manual' && this.status === 'running' && !this.manualTimingComplete, complete: this.manualTimingComplete, captured: this.manualTiming.size, total: this.snapshot.occurrences.length };
+  }
+
+  private beginManualTiming(): void {
+    if (this.mode === 'manual' && this.status === 'running' && !this.manualTimingComplete && this.manualTimingAnchor === null) this.manualTimingAnchor = this.clock.now();
+  }
+
+  private pauseManualTiming(): void {
+    this.manualTimingAnchor = null;
+  }
+
+  /** Guarda o tempo do slide que acabou de ser avançado, nunca de saltos. */
+  private captureManualTiming(nextIndex: number): void {
+    if (this.mode !== 'manual' || this.status !== 'running' || this.manualTimingComplete || nextIndex !== this.index + 1 || this.manualTimingAnchor === null) return;
+    const occurrence = this.snapshot.occurrences[this.index] as { id: Uuid };
+    this.manualTiming.set(occurrence.id, Math.max(500, Math.round(this.clock.now() - this.manualTimingAnchor)));
+    this.manualTimingAnchor = this.clock.now();
+  }
+
+  private completeManualTiming(): CommandResult {
+    if (this.mode !== 'manual' || this.status !== 'running' || this.index !== this.snapshot.occurrences.length - 1 || this.manualTimingAnchor === null) return fail('invalid-state');
+    const occurrence = this.snapshot.occurrences[this.index] as { id: Uuid };
+    this.manualTiming.set(occurrence.id, Math.max(500, Math.round(this.clock.now() - this.manualTimingAnchor)));
+    if (this.manualTiming.size !== this.snapshot.occurrences.length) return fail('invalid-state');
+    const next = applyDurations(this.overrides, Object.fromEntries(this.manualTiming) as Record<Uuid, number>);
+    if (next) this.overrides = next;
+    this.manualTimingComplete = true;
+    this.manualTimingAnchor = null;
+    return OK;
+  }
+
   getState(): SessionState {
     const current = this.slideAt(this.index);
     const timed = this.mode === 'automatic' && current.durationMs !== null;
@@ -549,6 +589,7 @@ export class PresentationEngine {
       visualMode: this.visualMode,
       frozenOutput: this.frozenFrame !== null,
       sequenceNumber: this.sequenceNumber,
+      manualTiming: this.manualTimingState(),
     };
   }
 
@@ -710,6 +751,7 @@ export class PresentationEngine {
     const duration = this.currentDuration();
     if (this.status !== 'running' || this.mode !== 'automatic' || duration === null) {
       if (this.anchor !== null) this.hold();
+      this.beginManualTiming();
       return;
     }
     if (this.anchor === null) this.anchor = this.clock.now();
@@ -799,6 +841,12 @@ export class PresentationEngine {
       this.requestSeek(this.cueAt(index).startMs, index);
       return OK;
     }
+    // Um retorno ou salto deixa de representar uma passagem contínua da música.
+    // Recomeçamos a coleta para que o padrão salvo nunca misture trechos de ensaios diferentes.
+    if (this.mode === 'manual' && !this.manualTimingComplete && index !== this.index + 1) {
+      this.manualTiming.clear();
+      this.manualTimingAnchor = this.status === 'running' ? this.clock.now() : null;
+    }
     this.index = index;
     // Sair do fim por navegação volta a executar; pausa e pronto são mantidos.
     if (this.status === 'finished') this.status = 'running';
@@ -885,10 +933,12 @@ export class PresentationEngine {
           );
         }
         this.restartInterval();
+        this.beginManualTiming();
         return OK;
       case 'pause':
         if (this.status !== 'running') return fail('invalid-state');
         this.hold();
+        this.pauseManualTiming();
         this.status = 'paused';
         if (this.linked) {
           this.transport?.pause();
@@ -908,6 +958,7 @@ export class PresentationEngine {
           this.playAudio();
         }
         this.arm();
+        this.beginManualTiming();
         return OK;
       case 'toggle': {
         if (this.status === 'ready') return this.run({ type: 'start' });
@@ -926,6 +977,7 @@ export class PresentationEngine {
         return fail('invalid-state');
       }
       case 'next':
+        this.captureManualTiming(this.index + 1);
         return this.select(this.index + 1);
       case 'previous':
         return this.select(this.index - 1);
@@ -939,6 +991,7 @@ export class PresentationEngine {
         if (command.mode !== 'manual' && command.mode !== 'automatic') return fail('invalid-value');
         if (command.mode === this.mode) return OK;
         this.mode = command.mode;
+        this.pauseManualTiming();
         if (this.linked) {
           // A faixa não é reposicionada: no automático os slides passam a seguir a
           // posição em que ela está; no manual, deixam de segui-la.
@@ -950,7 +1003,10 @@ export class PresentationEngine {
         }
         // Para o automático: intervalo completo. Para o manual: nenhum avanço armado.
         this.restartInterval();
+        this.beginManualTiming();
         return OK;
+      case 'completeManualTiming':
+        return this.completeManualTiming();
       case 'restartOccurrence':
         if (this.status === 'finished') this.status = 'running';
         if (this.linked) {
@@ -978,6 +1034,9 @@ export class PresentationEngine {
         this.visualMode = 'normal';
         this.frozenFrame = null;
         this.notice = null;
+        this.manualTiming.clear();
+        this.manualTimingAnchor = null;
+        this.manualTimingComplete = false;
         return OK;
       case 'setVisualMode':
         if (!['normal', 'black', 'lyricsHidden'].includes(command.visualMode)) return fail('invalid-value');

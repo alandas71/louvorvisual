@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Snapshot operacional: o SQL Server gera o .bak consistente; os bytes privados
+# Snapshot operacional: o MySQL gera o dump consistente; os bytes privados
 # são arquivados e cada objeto recebe SHA-256 no mesmo manifesto de conjunto.
 : "${LOUVORVISUAL_MEDIA_DIR:?defina LOUVORVISUAL_MEDIA_DIR}"
 : "${LOUVORVISUAL_BACKUP_DIR:?defina LOUVORVISUAL_BACKUP_DIR}"
-: "${LOUVORVISUAL_SQL_DATABASE:?defina LOUVORVISUAL_SQL_DATABASE}"
+: "${LOUVORVISUAL_MYSQL_DATABASE:?defina LOUVORVISUAL_MYSQL_DATABASE}"
 media_dir="${LOUVORVISUAL_MEDIA_DIR%/}"
 backup_dir="${LOUVORVISUAL_BACKUP_DIR%/}"
 [[ -d "$media_dir" ]] || { echo 'LOUVORVISUAL_MEDIA_DIR não existe.' >&2; exit 2; }
@@ -16,7 +16,7 @@ stamp="${LOUVORVISUAL_BACKUP_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 export LOUVORVISUAL_BACKUP_STAMP="$stamp"
 "$(dirname "$0")/db-backup.sh"
 
-prefix="$backup_dir/${LOUVORVISUAL_SQL_DATABASE}-${stamp}"
+prefix="$backup_dir/${LOUVORVISUAL_MYSQL_DATABASE}-${stamp}"
 media_archive="$prefix.media.tar"
 media_checksums="$prefix.media.sha256"
 manifest="$prefix.manifest"
@@ -38,8 +38,8 @@ sha256sum "$media_checksums" > "$media_checksums.sha256"
 {
   printf 'format=louvorvisual-backup-v1\n'
   printf 'created_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf 'database_backup=%s\n' "$(basename "$prefix.bak")"
-  printf 'database_sha256=%s\n' "$(cut -d ' ' -f 1 "$prefix.bak.sha256")"
+  printf 'database_backup=%s\n' "$(basename "$prefix.sql.gz")"
+  printf 'database_sha256=%s\n' "$(cut -d ' ' -f 1 "$prefix.sql.gz.sha256")"
   printf 'media_archive=%s\n' "$(basename "$media_archive")"
   printf 'media_archive_sha256=%s\n' "$(cut -d ' ' -f 1 "$media_archive.sha256")"
   printf 'media_checksums=%s\n' "$(basename "$media_checksums")"

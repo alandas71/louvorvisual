@@ -2,24 +2,147 @@
 
 /* Interface do aplicativo. As cores dos slides vêm dos temas, não daqui. */
 @theme {
-  --color-surface: #0f1115;
-  --color-surface-raised: #181b22;
-  --color-border: #2c313c;
-  --color-border-strong: #4a5160;
-  --color-foreground: #f3f4f6;
-  --color-muted: #a3aab8;
-  --color-accent: #7cc4ff;
-  --color-danger: #ff9b9b;
+  --color-surface: #0a0c11;
+  --color-surface-raised: #12151d;
+  --color-surface-overlay: #1a1e29;
+  --color-border: #232836;
+  --color-border-strong: #3a4256;
+  --color-foreground: #f1f3f7;
+  --color-muted: #a0a9bb;
+  --color-accent: #f4bd6a;
+  --color-accent-strong: #ffd596;
+  --color-accent-ink: #1c1304;
+  --color-danger: #ff9d9d;
+  --color-success: #7fdcae;
+  --color-info: #8fc7ff;
+
+  /* Inter do pacote embutido, com troca imediata; ver layout.tsx. */
+  --font-sans: "Inter UI", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -16px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 24px 60px -20px rgb(0 0 0 / 0.85), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-glow: 0 8px 28px -10px rgb(244 189 106 / 0.45);
+
+  --animate-rise: lv-rise 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-fade: lv-fade 0.2s ease-out both;
+  --animate-pulse-soft: lv-pulse 1.8s ease-in-out infinite;
+
+  @keyframes lv-rise {
+    /* Só deslocamento: a opacidade em transição falsearia a medição de contraste. */
+    from {
+      transform: translateY(8px);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes lv-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes lv-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
 }
 
 @layer base {
   html {
     color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scrollbar-color: var(--color-border-strong) transparent;
   }
 
   body {
     background-color: var(--color-surface);
     color: var(--color-foreground);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+    /* Instalado, o aplicativo não rola "por baixo" da própria moldura. */
+    overscroll-behavior-y: none;
   }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: rgb(244 189 106 / 0.3);
+  }
+
+  /* Campos nativos seguem a interface escura. */
+  select option,
+  select optgroup {
+    background-color: var(--color-surface-raised);
+    color: var(--color-foreground);
+  }
+
+  summary {
+    list-style-position: outside;
+  }
+
+  progress {
+    appearance: none;
+    overflow: hidden;
+    border-radius: 999px;
+    background-color: var(--color-border);
+  }
+  progress::-webkit-progress-bar {
+    background-color: var(--color-border);
+  }
+  progress::-webkit-progress-value {
+    border-radius: 999px;
+    background-color: var(--color-accent);
+    transition: width 0.2s ease;
+  }
+  progress::-moz-progress-bar {
+    border-radius: 999px;
+    background-color: var(--color-accent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Luz de palco discreta atrás das telas do aplicativo (não das saídas de projeção). */
+@utility lv-stage {
+  background-image:
+    radial-gradient(60rem 28rem at 85% -10%, rgb(244 189 106 / 0.07), transparent 60%),
+    radial-gradient(48rem 26rem at -10% 0%, rgb(143 199 255 / 0.05), transparent 60%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Áreas que respeitam o recorte da tela em celulares com o aplicativo instalado. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
 }

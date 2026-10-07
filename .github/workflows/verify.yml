@@ -11,21 +11,23 @@ jobs:
   node:
     runs-on: ubuntu-latest
     services:
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
+      mysql:
+        image: mysql:8.4
         env:
-          ACCEPT_EULA: Y
-          MSSQL_SA_PASSWORD: LouvorVisual_CI_2026!
+          MYSQL_DATABASE: LouvorVisual
+          MYSQL_USER: louvorvisual
+          MYSQL_PASSWORD: LouvorVisual_CI_2026!
+          MYSQL_ROOT_PASSWORD: LouvorVisual_Root_2026!
         ports:
-          - 1433:1433
+          - 3306:3306
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'LouvorVisual_CI_2026!' -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -C -S localhost -U sa -P 'LouvorVisual_CI_2026!' -Q 'SELECT 1'"
+          --health-cmd "mysqladmin ping -h localhost -u louvorvisual -pLouvorVisual_CI_2026!"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 15
     env:
-      DATABASE_URL: "sqlserver://localhost:1433;database=LouvorVisual;user=sa;password=LouvorVisual_CI_2026!;encrypt=true;trustServerCertificate=true"
-      LV_E2E_DATABASE_URL: "sqlserver://localhost:1433;database=LouvorVisual;user=sa;password=LouvorVisual_CI_2026!;encrypt=true;trustServerCertificate=true"
+      DATABASE_URL: "mysql://louvorvisual:LouvorVisual_CI_2026!@localhost:3306/LouvorVisual"
+      LV_E2E_DATABASE_URL: "mysql://louvorvisual:LouvorVisual_CI_2026!@localhost:3306/LouvorVisual"
       BACKEND_URL: http://127.0.0.1:3121
     steps:
       - uses: actions/checkout@v4

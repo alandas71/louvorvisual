@@ -8,7 +8,7 @@ import { ORIGIN } from './helpers';
 
 export const API_PORT = 3121;
 export const API_ORIGIN = `http://127.0.0.1:${API_PORT}`;
-/** Banco SQL Server descartável; sem ele a demonstração de sincronização não roda. */
+/** Banco MySQL descartável; sem ele a demonstração de sincronização não roda. */
 export const DATABASE_URL = process.env.LV_E2E_DATABASE_URL ?? '';
 
 const apiRoot = join(__dirname, '..', '..', 'api');

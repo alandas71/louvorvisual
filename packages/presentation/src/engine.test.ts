@@ -44,6 +44,23 @@ describe('modo manual (AT-04)', () => {
     run({ type: 'start' });
     expect(engine.getView().output).toMatchObject({ visualMode: 'normal', index: 2 });
   });
+
+  it('aprende os avanços sequenciais e prepara o padrão automático no último slide', () => {
+    const { clock, engine, run, ids } = session([null, null, null], 'manual');
+    run({ type: 'start' });
+    clock.advance(4 * S);
+    run({ type: 'next' });
+    clock.advance(7 * S);
+    run({ type: 'next' });
+    clock.advance(9 * S);
+    expect(run({ type: 'completeManualTiming' })).toEqual({ ok: true });
+    expect(engine.getState().manualTiming).toEqual({ active: false, complete: true, captured: 3, total: 3 });
+    expect(engine.getOverrides().occurrences).toMatchObject({
+      [ids[0]!]: { durationMs: 4 * S },
+      [ids[1]!]: { durationMs: 7 * S },
+      [ids[2]!]: { durationMs: 9 * S },
+    });
+  });
 });
 
 describe('automático 8, 12 e 10 segundos (AT-05)', () => {

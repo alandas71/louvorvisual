@@ -4,7 +4,8 @@ import { touch, type Uuid } from '@louvorvisual/domain';
 import { mergeOverridesIntoArrangement, shortcutCommand, type OperatorCommand, type OutputFrame, type ResolvedSlide, type SaveToArrangementResult } from '@louvorvisual/presentation';
 import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { SlideView } from '@/components/SlideView';
-import { buttonClass } from '@/components/ui/buttonStyles';
+import { buttonClass, pressedClass } from '@/components/ui/buttonStyles';
+import { Loading, noticeClass, pillClass } from '@/components/ui/PageHeader';
 import { Textarea } from '@/components/ui/Textarea';
 import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
@@ -39,10 +40,20 @@ const AUDIO_PROBLEM_TEXT: Record<AudioProblem, string> = {
 
 function Notice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main id="main-content" className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-4 px-6" data-view="apresentar">
-      <h1 className="text-2xl font-bold">{title}</h1>
-      {children}
+    <main id="main-content" className="lv-stage flex min-h-dvh items-center justify-center p-4" data-view="apresentar">
+      <div className="flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-border bg-surface-raised p-6 leading-relaxed shadow-pop sm:p-8">
+        <h1 className="text-2xl font-bold leading-tight">{title}</h1>
+        {children}
+      </div>
     </main>
+  );
+}
+
+function Preparing({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center p-6">
+      <Loading>{children}</Loading>
+    </div>
   );
 }
 
@@ -60,7 +71,7 @@ export function OperatorView() {
       </Notice>
     );
   }
-  if (local.status === 'loading') return <p role="status" className="p-6">Preparando a apresentação…</p>;
+  if (local.status === 'loading') return <Preparing>Preparando a apresentação…</Preparing>;
   if (local.status === 'error') return <p role="alert" className="p-6">{local.message}</p>;
   const setlistId = query.get('repertorio');
   const itemId = query.get('item');
@@ -79,7 +90,7 @@ function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint
     </button>
   );
 
-  if (state.status === 'loading') return <p role="status" className="p-6">{state.detail ?? 'Preparando a apresentação…'}</p>;
+  if (state.status === 'loading') return <Preparing>{state.detail ?? 'Preparando a apresentação…'}</Preparing>;
   if (state.status === 'audio-problem') {
     return (
       <Notice title="A faixa de áudio não pode ser usada">
@@ -246,7 +257,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
     setPopupBlocked(opened === null);
   }
 
-  async function saveToArrangement() {
+  async function saveToArrangement(options: { setDefaultModeAutomatic?: boolean } = {}) {
     setSaveResult(null);
     try {
       const latest = await local.db.arrangements.get(row.arrangementId);
@@ -254,7 +265,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
         setSaveResult({ error: 'O arranjo não existe mais na biblioteca; os ajustes continuam só nesta sessão.' });
         return;
       }
-      const result = mergeOverridesIntoArrangement(baseArrangement, controller.engine.getOverrides(), latest);
+      const result = mergeOverridesIntoArrangement(baseArrangement, controller.engine.getOverrides(), latest, options);
       if (result.changed) {
         const saved = touch(result.arrangement, local.context());
         await saveDocuments(local.db, [{ entityType: 'arrangement', document: saved }]);
@@ -266,6 +277,16 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
     } catch (error) {
       setSaveResult({ error: error instanceof Error ? error.message : 'Não foi possível gravar no arranjo.' });
     }
+  }
+
+  async function saveAssistedTiming() {
+    const result = controller.execute({ type: 'completeManualTiming' });
+    if (!result.ok) {
+      setMessage(COMMAND_FAILURE_TEXT[result.reason]);
+      return;
+    }
+    setMessage(null);
+    await saveToArrangement({ setDefaultModeAutomatic: true });
   }
 
   const frozenDiffers = state.frozenOutput && (output.occurrenceId !== current.occurrenceId || output.overridesRevision !== state.overridesRevision);
@@ -366,9 +387,9 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
   }
 
   return (
-    <main id="main-content" className="flex min-h-dvh flex-col gap-4 p-4" data-view="apresentar" {...rootAttributes}>
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+    <main id="main-content" className="flex min-h-dvh flex-col gap-3 p-3 sm:p-4 lg:h-dvh lg:overflow-hidden" data-view="apresentar" {...rootAttributes}>
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border bg-surface-raised px-4 py-3 shadow-card">
+        <div className="min-w-0 flex-1 basis-56">
           <h1 className="truncate text-xl font-bold">{row.snapshot.song.title}</h1>
           <p className="text-sm text-muted">
             {row.snapshot.arrangement.name} · slide {state.currentIndex + 1} de {slides.length}
@@ -382,11 +403,11 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
             Próximo louvor: {setlist.next.title} →
           </button>
         )}
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Modo de avanço">
-          <button type="button" className={cn(buttonClass('secondary', 'sm'), state.mode === 'manual' && 'border-accent text-accent')} aria-pressed={state.mode === 'manual'} onClick={() => dispatch({ type: 'setMode', mode: 'manual' })}>
+        <div className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1" role="group" aria-label="Modo de avanço">
+          <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'manual' && pressedClass)} aria-pressed={state.mode === 'manual'} onClick={() => dispatch({ type: 'setMode', mode: 'manual' })}>
             Manual
           </button>
-          <button type="button" className={cn(buttonClass('secondary', 'sm'), state.mode === 'automatic' && 'border-accent text-accent')} aria-pressed={state.mode === 'automatic'} onClick={() => dispatch({ type: 'setMode', mode: 'automatic' })}>
+          <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'automatic' && pressedClass)} aria-pressed={state.mode === 'automatic'} onClick={() => dispatch({ type: 'setMode', mode: 'automatic' })}>
             Automático
           </button>
         </div>
@@ -401,12 +422,12 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
         </button>
       </header>
 
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-        <p role="status" data-testid="projection-status" data-connection={link.connection} className={link.connection === 'lost' ? 'font-semibold text-danger' : 'text-muted'}>
+      <div className="flex flex-wrap gap-2">
+        <p role="status" data-testid="projection-status" data-connection={link.connection} className={pillClass(link.connection === 'lost' ? 'danger' : link.connection === 'connected' && link.armed ? 'success' : link.connection === 'connected' ? 'accent' : 'neutral')}>
           {link.connection === 'lost' ? '⚠ ' : link.connection === 'connected' ? '● ' : '○ '}
           {projectionText}
         </p>
-        <p role="status" data-testid="checkpoint-status" data-state={checkpoint} className={checkpoint === 'memory-only' ? 'font-semibold text-danger' : 'text-muted'}>
+        <p role="status" data-testid="checkpoint-status" data-state={checkpoint} className={pillClass(checkpoint === 'memory-only' ? 'danger' : 'neutral')}>
           {checkpoint === 'saved' && '✓ Guardado nesta sessão'}
           {checkpoint === 'saving' && 'Guardando…'}
           {checkpoint === 'memory-only' && '⚠ Não foi possível gravar: o ajuste está apenas em memória.'}
@@ -414,45 +435,46 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
       </div>
 
       {link.fontMissing && (
-        <p role="alert" data-testid="projection-font-missing" className="text-sm text-danger">
+        <p role="alert" data-testid="projection-font-missing" className={noticeClass('danger')}>
           ⚠ A janela de projeção não conseguiu carregar o arquivo da fonte deste slide e está usando a fonte de reserva. Escolha Inter ou outra
           fonte no menu.
         </p>
       )}
       {popupBlocked && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className={noticeClass('danger')}>
           O navegador bloqueou a nova janela. Permita pop-ups para este endereço e clique de novo.
         </p>
       )}
       {warnings.map((warning) => (
-        <p key={warning} role="alert" data-testid="session-warning" className="text-sm text-danger">
+        <p key={warning} role="alert" data-testid="session-warning" className={noticeClass('danger')}>
           ⚠ {warning}
         </p>
       ))}
       {view.notice === 'suspension-detected' && (
-        <p role="alert" data-testid="suspension-notice" className="rounded-lg border border-danger p-3 text-sm">
+        <p role="alert" data-testid="suspension-notice" className={noticeClass('danger', 'text-foreground')}>
           O computador ou a aba ficou suspenso durante a apresentação. Ela foi pausada neste slide, com a faixa parada, sem pular os slides que
           venceram. Retome quando quiser ou navegue para onde a música está.
         </p>
       )}
       {wakeLock === 'released' && state.status === 'running' && (
-        <p role="status" data-testid="wake-lock-lost" className="text-sm text-muted">
+        <p role="status" data-testid="wake-lock-lost" className={noticeClass('neutral', 'py-2 text-muted')}>
           O navegador não está mantendo a tela acordada. Deixe esta janela visível e desative a suspensão automática do computador durante o culto.
         </p>
       )}
       {message && (
-        <p role="status" data-testid="operator-message" className="text-sm text-muted">
+        <p role="status" data-testid="operator-message" className={noticeClass('accent', 'py-2 text-foreground')}>
           {message}
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(16rem,22rem)]">
+      {/* Em telas largas só esta área rola: cabeçalho, miniaturas e comandos ficam sempre à vista. */}
+      <div className="grid gap-4 scrollbar-thin lg:-m-1 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(16rem,22rem)] lg:items-start lg:overflow-y-auto lg:p-1">
         <section aria-labelledby="atual" className="flex flex-col gap-2">
-          <h2 id="atual" className="text-sm font-semibold text-muted">
+          <h2 id="atual" className="text-xs font-bold uppercase tracking-wider text-muted">
             Slide atual · {current.label || 'Sem rótulo'}
           </h2>
           <div data-testid="current-slide">
-            <SlideView text={current.text} style={current.style} fontId={current.fontId} className="w-full rounded-lg border border-border" />
+            <SlideView text={current.text} style={current.style} fontId={current.fontId} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
           </div>
           <SlideChecks slide={current} />
           <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="timing">
@@ -472,16 +494,34 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
             {state.status === 'paused' && <span className="font-semibold">Em pausa.</span>}
             {state.status === 'finished' && <span className="font-semibold">Fim da sequência.</span>}
           </div>
+          {state.mode === 'manual' && state.manualTiming.active && (
+            <p className="text-xs text-muted" data-testid="assisted-timing-progress">
+              Ensaio assistido: {state.manualTiming.captured} de {state.manualTiming.total} passagens registradas. Avance os textos na ordem da música.
+            </p>
+          )}
+          {state.mode === 'manual' && controls.audio?.policy !== 'linked' && state.currentIndex === slides.length - 1 && state.status === 'running' && !state.manualTiming.complete && state.manualTiming.captured === slides.length - 1 && (
+            <section className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-accent/5 p-3" data-testid="assisted-timing-save">
+              <p className="text-sm">Último texto em exibição. Salve os tempos registrados para usar este louvor no automático.</p>
+              <button type="button" className={buttonClass('primary', 'sm')} onClick={() => void saveAssistedTiming()}>
+                Salvar padrão automático
+              </button>
+            </section>
+          )}
+          {state.manualTiming.complete && (
+            <p role="status" className="text-sm text-success" data-testid="assisted-timing-saved">
+              ✓ Padrão automático preparado com os tempos deste ensaio.
+            </p>
+          )}
           <AudioPanel controller={controller} view={view} dispatch={dispatch} choices={audioChoices} selectedBindingId={row.snapshot.audio?.bindingId ?? null} onChoose={onChooseAudio} />
         </section>
 
         <section aria-labelledby="lado" className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <h2 id="lado" className="text-sm font-semibold text-muted">
+            <h2 id="lado" className="text-xs font-bold uppercase tracking-wider text-muted">
               O público vê agora
             </h2>
             <PublicPreview frame={output} rotation={view.rotation} />
-            <p className="text-xs" data-testid="public-summary">
+            <p className="text-xs font-semibold text-muted" data-testid="public-summary">
               {state.status === 'ready' ? 'Preto (aguardando iniciar)' : OUTPUT_LABEL[output.visualMode]}
               {state.frozenOutput && ' · congelada'}
               {frozenDiffers && ' · diferente do slide atual'}
@@ -489,17 +529,17 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
           </div>
           {row.snapshot.song.notes.trim() !== '' && (
             <div className="flex flex-col gap-1">
-              <h2 className="text-sm font-semibold text-muted">Notas privadas</h2>
-              <p className="whitespace-pre-line text-sm" data-testid="private-notes">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Notas privadas</h2>
+              <p className="whitespace-pre-line rounded-xl border border-accent/30 bg-accent/5 px-3 py-2 text-sm" data-testid="private-notes">
                 {row.snapshot.song.notes}
               </p>
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-muted">Próximo slide{next ? ` · ${next.label || 'Sem rótulo'}` : ''}</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Próximo slide{next ? ` · ${next.label || 'Sem rótulo'}` : ''}</h2>
             {next ? (
               <div data-testid="next-slide">
-                <SlideView text={next.text} style={next.style} fontId={next.fontId} className="w-full rounded-lg border border-border" />
+                <SlideView text={next.text} style={next.style} fontId={next.fontId} className="w-full overflow-hidden rounded-xl border border-border" />
               </div>
             ) : (
               <p className="text-sm text-muted">Este é o último slide.</p>
@@ -508,14 +548,14 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
         </section>
 
         {/* Coluna privada: nada daqui é enviado à janela de projeção. */}
-        <aside aria-label="Ajustes ao vivo" className="max-h-[70dvh] overflow-y-auto rounded-xl border border-border bg-surface-raised p-3">
+        <aside aria-label="Ajustes ao vivo" className="max-h-[70dvh] overflow-y-auto rounded-2xl border border-border bg-surface-raised p-3 shadow-card scrollbar-thin lg:sticky lg:top-0 lg:max-h-[calc(100dvh-21rem)]">
           <LiveMenu controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} />
         </aside>
       </div>
 
-      <ol className="flex gap-2 overflow-x-auto pb-2" aria-label="Slides da apresentação">
+      <ol className="flex shrink-0 gap-2 overflow-x-auto p-1 pb-2 scrollbar-thin" aria-label="Slides da apresentação">
         {slides.map((slide, index) => (
-          <li key={slide.occurrenceId} className="w-40 shrink-0">
+          <li key={slide.occurrenceId} className="w-36 shrink-0">
             <button
               type="button"
               data-testid="thumbnail"
@@ -524,12 +564,12 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
               aria-label={`Ir para o slide ${index + 1}: ${slide.label || 'sem rótulo'}`}
               onClick={() => dispatch({ type: 'goTo', occurrenceId: slide.occurrenceId })}
               className={cn(
-                'flex w-full flex-col gap-1 rounded-lg border p-1 text-left text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-                index === state.currentIndex ? 'border-accent' : 'border-border',
+                'flex w-full cursor-pointer flex-col gap-1 rounded-xl border-2 p-1 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                index === state.currentIndex ? 'border-accent bg-accent/10' : 'border-border hover:border-border-strong',
               )}
             >
-              <SlideView text={slide.text} style={slide.style} fontId={slide.fontId} className="w-full rounded" />
-              <span className="flex justify-between gap-1">
+              <SlideView text={slide.text} style={slide.style} fontId={slide.fontId} className="w-full overflow-hidden rounded-lg" />
+              <span className="flex justify-between gap-1 px-0.5">
                 <span className="truncate">
                   {index + 1} · {slide.label || 'Sem rótulo'}
                 </span>
@@ -543,42 +583,42 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
       </ol>
 
       {/* Sempre à vista: em telas baixas (notebook de 768 px) Iniciar, Avançar e Tela preta ficavam abaixo da dobra. */}
-      <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex flex-col gap-2 border-t border-border bg-surface px-4 py-3" data-testid="operator-controls">
+      <div className="sticky bottom-0 z-10 -mx-3 -mb-3 mt-auto flex shrink-0 flex-col gap-2 border-t border-border bg-surface-raised/95 px-3 py-3 pb-safe backdrop-blur-md sm:-mx-4 sm:-mb-4 sm:px-4" data-testid="operator-controls">
         <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Controle da apresentação">
-          <button type="button" className={buttonClass('secondary')} onClick={() => dispatch({ type: 'previous' })}>
+          <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'previous' })}>
             ← Voltar
           </button>
           {state.status === 'ready' && (
-            <button type="button" className={buttonClass('primary')} onClick={() => dispatch({ type: 'start' })}>
+            <button type="button" className={buttonClass('primary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'start' })}>
               ▶ Iniciar
             </button>
           )}
           {/* Sem duração atual no automático e sem faixa, não existe play/pause. */}
           {controls.capabilities.transport && (
-            <button type="button" className={buttonClass('primary')} data-testid="transport" onClick={() => dispatch({ type: 'toggle' })}>
+            <button type="button" className={buttonClass('primary', 'lg', 'max-sm:flex-1 max-sm:px-3')} data-testid="transport" onClick={() => dispatch({ type: 'toggle' })}>
               {transportLabel}
             </button>
           )}
-          <button type="button" className={buttonClass('secondary')} onClick={() => dispatch({ type: 'next' })}>
+          <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'next' })}>
             Avançar →
           </button>
-          <span className="mx-2 h-6 w-px bg-border" aria-hidden="true" />
-          <button type="button" className={cn(buttonClass('secondary'), state.visualMode === 'black' && 'border-accent text-accent')} aria-pressed={state.visualMode === 'black'} onClick={() => dispatch({ type: 'setVisualMode', visualMode: state.visualMode === 'black' ? 'normal' : 'black' })}>
+          <span className="mx-2 h-8 w-px bg-border max-sm:hidden" aria-hidden="true" />
+          <button type="button" className={cn(buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3'), state.visualMode === 'black' && pressedClass)} aria-pressed={state.visualMode === 'black'} onClick={() => dispatch({ type: 'setVisualMode', visualMode: state.visualMode === 'black' ? 'normal' : 'black' })}>
             Tela preta
           </button>
-          <button type="button" className={cn(buttonClass('secondary'), state.visualMode === 'lyricsHidden' && 'border-accent text-accent')} aria-pressed={state.visualMode === 'lyricsHidden'} onClick={() => dispatch({ type: 'setVisualMode', visualMode: state.visualMode === 'lyricsHidden' ? 'normal' : 'lyricsHidden' })}>
+          <button type="button" className={cn(buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3'), state.visualMode === 'lyricsHidden' && pressedClass)} aria-pressed={state.visualMode === 'lyricsHidden'} onClick={() => dispatch({ type: 'setVisualMode', visualMode: state.visualMode === 'lyricsHidden' ? 'normal' : 'lyricsHidden' })}>
             Ocultar letra
           </button>
-          <button type="button" className={cn(buttonClass('secondary'), state.frozenOutput && 'border-accent text-accent')} aria-pressed={state.frozenOutput} onClick={() => dispatch({ type: 'setFrozen', frozen: !state.frozenOutput })}>
+          <button type="button" className={cn(buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3'), state.frozenOutput && pressedClass)} aria-pressed={state.frozenOutput} onClick={() => dispatch({ type: 'setFrozen', frozen: !state.frozenOutput })}>
             {state.frozenOutput ? 'Liberar saída' : 'Congelar'}
           </button>
           {state.status !== 'ready' && (
-            <button type="button" className={buttonClass('secondary')} onClick={() => dispatch({ type: 'stop' })}>
+            <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'stop' })}>
               ■ Parar
             </button>
           )}
         </div>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted max-md:hidden">
           Atalhos: → ou Page Down avança · ← ou Page Up volta · Espaço inicia, pausa ou retoma · B tela preta · L oculta a letra · C congela · Home vai ao
           primeiro slide.
         </p>

@@ -15,7 +15,7 @@ function operation(entityId: string, action: SyncOperation['action'], baseRevisi
   return { opId: randomUUID(), entityType: 'song', entityId, action, baseRevision, schemaVersion: 1, payload: { ...song, id: entityId, workspaceId: workspace } };
 }
 
-maybeDescribe('Prisma + SQL Server: concorrência', () => {
+maybeDescribe('Prisma + MySQL: concorrência', () => {
   const store = new PrismaSyncStore(prisma);
   beforeAll(async () => {
     await prisma.$connect();

@@ -123,7 +123,7 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
   return (
     <section aria-labelledby="audio" className="flex flex-col gap-4" data-testid="audio-section">
       <div>
-        <h2 id="audio" className="text-lg font-semibold">
+        <h2 id="audio" className="text-lg font-bold">
           Áudio
         </h2>
         <p className="text-sm text-muted">Os arquivos ficam guardados neste dispositivo e tocam sem conexão. Na apresentação toca uma faixa por vez.</p>
@@ -149,7 +149,7 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
         {AUDIO_KINDS.map((kind) => {
           const binding = arrangement.audioBindings.find((item) => item.kind === kind);
           return (
-            <div key={kind} className="flex flex-col gap-3 rounded-lg border border-border bg-surface-raised p-4" data-testid={`audio-${kind}`} data-state={binding ? 'bound' : 'empty'}>
+            <div key={kind} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card" data-testid={`audio-${kind}`} data-state={binding ? 'bound' : 'empty'}>
               <div>
                 <h3 className="font-semibold">{KIND_TEXT[kind].title}</h3>
                 <p className="text-xs text-muted">{KIND_TEXT[kind].help}</p>

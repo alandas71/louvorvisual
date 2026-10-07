@@ -5,7 +5,7 @@ import type { SessionOverrides, VisualPatch } from './overrides';
 /** Campo que a sessão ajustou e o que aconteceu com ele ao salvar no arranjo. */
 export type SaveField = {
   target: 'arrangement' | Uuid;
-  field: 'theme' | 'font' | 'fontSizePx' | 'fontWeight' | 'textAlign' | 'verticalAlign' | 'lineHeight' | 'text' | 'durationMs';
+  field: 'theme' | 'font' | 'fontSizePx' | 'fontWeight' | 'textAlign' | 'verticalAlign' | 'lineHeight' | 'text' | 'durationMs' | 'defaultMode';
 };
 
 export type SaveToArrangementResult = {
@@ -30,6 +30,7 @@ export function mergeOverridesIntoArrangement(
   base: Arrangement,
   overrides: SessionOverrides,
   current: Arrangement,
+  options: { setDefaultModeAutomatic?: boolean } = {},
 ): SaveToArrangementResult {
   const applied: SaveField[] = [];
   const conflicts: SaveField[] = [];
@@ -37,6 +38,15 @@ export function mergeOverridesIntoArrangement(
   let themeRef: ThemeRef = current.themeRef;
   let themeOverrides: ThemeOverrides = { ...(current.themeOverrides ?? {}) };
   let fontId = current.fontId;
+  let defaultMode = current.defaultMode;
+
+  if (options.setDefaultModeAutomatic) {
+    const field: SaveField = { target: 'arrangement', field: 'defaultMode' };
+    if (current.defaultMode === base.defaultMode) {
+      defaultMode = 'automatic';
+      if (current.defaultMode !== defaultMode) applied.push(field);
+    } else conflicts.push(field);
+  }
 
   const song = overrides.song;
   if (song.themePresetId !== undefined) {
@@ -126,7 +136,7 @@ export function mergeOverridesIntoArrangement(
   const changed = applied.length > 0;
   return {
     arrangement: changed
-      ? { ...current, themeRef, themeOverrides: Object.keys(themeOverrides).length > 0 ? themeOverrides : null, fontId, occurrences }
+      ? { ...current, themeRef, themeOverrides: Object.keys(themeOverrides).length > 0 ? themeOverrides : null, fontId, defaultMode, occurrences }
       : current,
     applied,
     conflicts,

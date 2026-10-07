@@ -10,7 +10,7 @@ const TRANSIENT_CODES = new Set(['P2034', 'P2028']); const MAX_ATTEMPTS = 4;
 type Tx = Prisma.TransactionClient;
 
 /**
- * O lock UPDLOCK da clock row serializa toda mutação compartilhada do espaço.
+ * O lock FOR UPDATE da clock row serializa toda mutação compartilhada do espaço.
  * Portanto entidade, revisão recuperável, opId e evento/cursor confirmam juntos.
  */
 export class PrismaSyncStore implements SyncStore {
@@ -71,7 +71,7 @@ export class PrismaSyncStore implements SyncStore {
   async get(workspaceId: string, entityType: SyncOperation['entityType'], entityId: string) { const entity = await this.prisma.contentEntity.findUnique({ where: { workspaceId_entityType_entityId: { workspaceId, entityType, entityId } } }); return entity ? { revision: entity.currentRevision.toString(), document: decodeDocument(entity.documentJson) } : null; }
   async list(workspaceId: string, entityType: SyncOperation['entityType'], limit: number) { const entities = await this.prisma.contentEntity.findMany({ where: { workspaceId, entityType, deletedAt: null }, take: limit, orderBy: { updatedAt: 'desc' } }); return entities.map((entity) => ({ revision: entity.currentRevision.toString(), document: decodeDocument(entity.documentJson) })); }
   async revisions(workspaceId: string, entityType: SyncOperation['entityType'], entityId: string, limit: number) { const rows = await this.prisma.contentRevision.findMany({ where: { workspaceId, entityType, entityId }, take: limit, orderBy: { revision: 'desc' } }); return rows.map((row) => ({ revision: row.revision.toString(), action: row.action as SyncOperation['action'], document: decodeDocument(row.documentJson) })); }
-  private async lockClock(tx: Tx, workspaceId: string) { const locks = await tx.$queryRaw<{ workspaceId: string }[]>`SELECT [workspaceId] FROM [dbo].[workspace_sync_clocks] WITH (UPDLOCK, ROWLOCK) WHERE [workspaceId] = ${workspaceId}`; if (!locks.length) throw new AppError(404, 'NOT_FOUND', 'Espaço de trabalho não encontrado.'); return tx.workspaceSyncClock.findUniqueOrThrow({ where: { workspaceId } }); }
+  private async lockClock(tx: Tx, workspaceId: string) { const locks = await tx.$queryRaw<{ workspaceId: string }[]>`SELECT \`workspaceId\` FROM \`workspace_sync_clocks\` WHERE \`workspaceId\` = ${workspaceId} FOR UPDATE`; if (!locks.length) throw new AppError(404, 'NOT_FOUND', 'Espaço de trabalho não encontrado.'); return tx.workspaceSyncClock.findUniqueOrThrow({ where: { workspaceId } }); }
   private async remember(tx: Tx, workspaceId: string, actorId: string, opId: string, payloadHash: string, result: SyncResult) { await tx.processedOperation.create({ data: { workspaceId, opId, actorId, payloadHash, resultJson: JSON.stringify(result) } }); return result; }
   private async validateReferences(tx: Tx, workspaceId: string, operation: SyncOperation): Promise<'DEPENDENCY_NOT_READY' | undefined> {
     if (!['create', 'update', 'restore'].includes(operation.action)) return undefined;

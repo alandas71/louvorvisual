@@ -11,7 +11,7 @@ export function DataNoticeBanner() {
   const notice = useDataNotice();
   if (!notice) return null;
   return (
-    <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-accent bg-surface-raised px-6 py-3 text-sm" data-testid="data-notice" data-kind={notice}>
+    <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-accent/60 bg-accent/10 px-4 py-3 text-sm leading-relaxed sm:px-6" data-testid="data-notice" data-kind={notice}>
       {notice === 'blocked' ? (
         <p className="min-w-0 flex-1">
           Os dados deste dispositivo precisam ser atualizados para esta versão, mas outra janela do LouvorVisual ainda está aberta com a versão anterior — talvez uma apresentação. Nada será

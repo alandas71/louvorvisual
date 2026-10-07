@@ -9,7 +9,7 @@ const maybeDescribe = process.env.DATABASE_URL ? describe : describe.skip;
 const prisma = new PrismaClient(); const workspaceId = randomUUID(); const otherWorkspaceId = randomUUID(); const actorId = randomUUID();
 function songOp(id = randomUUID(), action: SyncOperation['action'] = 'create', baseRevision = '0'): SyncOperation { return { opId: randomUUID(), entityType: 'song', entityId: id, action, baseRevision, schemaVersion: 1, payload: { ...song, id, workspaceId, title: `${song.title} ${id}` } }; }
 
-maybeDescribe('SQL Server: bootstrap, referências e retenção da etapa 09', () => {
+maybeDescribe('MySQL: bootstrap, referências e retenção da etapa 09', () => {
   const store = new PrismaSyncStore(prisma);
   beforeAll(async () => { await prisma.$connect(); for (const id of [workspaceId, otherWorkspaceId]) await prisma.workspace.create({ data: { id, name: 'Etapa 09', syncClock: { create: {} } } }); });
   afterAll(async () => { await prisma.workspace.deleteMany({ where: { id: { in: [workspaceId, otherWorkspaceId] } } }); await prisma.$disconnect(); });

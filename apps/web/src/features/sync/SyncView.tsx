@@ -1,5 +1,6 @@
 'use client';
 
+import { Loading } from '@/components/ui/PageHeader';
 import { listOpenConflicts, listPending, type ConflictRecord, type PendingItem } from '@louvorvisual/sync';
 import { useCallback, useEffect, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
@@ -11,11 +12,11 @@ import { useLibraryVersion, useSyncEngine, useSyncStatus } from '@/sync/hooks';
 import { ConflictPanel } from './ConflictPanel';
 import { BLOCK_TEXT, CONFLICT_TEXT, connectionSummary, dateTime, ENTITY_TEXT, PHASE_TEXT, SUSPENDED_TEXT } from './labels';
 
-const sectionClass = 'flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5';
+const sectionClass = 'flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6';
 
 export function SyncView() {
   const current = useSyncEngine();
-  if (!current) return <p role="status">Abrindo os dados deste dispositivo…</p>;
+  if (!current) return <Loading>Abrindo os dados deste dispositivo…</Loading>;
   return <Sync session={current.session} engine={current.engine} />;
 }
 
@@ -59,14 +60,14 @@ function Sync({ session, engine }: { session: LocalSession; engine: SyncEngine }
   return (
     <div className="flex flex-col gap-8" data-testid="sync-view">
       <header>
-        <h1 className="text-2xl font-bold">Sincronização</h1>
-        <p className="mt-1 text-muted">
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Sincronização</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
           {team ? `Equipe ${team.workspaceName}, como ${team.userName} (${team.userEmail}).` : 'Perfil pessoal deste dispositivo.'} O que você grava fica primeiro aqui; o envio acontece quando há conexão.
         </p>
       </header>
 
       <section aria-labelledby="sync-estado" className={sectionClass}>
-        <h2 id="sync-estado" className="text-lg font-semibold">
+        <h2 id="sync-estado" className="text-lg font-bold">
           Conexão
         </h2>
         <p
@@ -131,7 +132,7 @@ function Sync({ session, engine }: { session: LocalSession; engine: SyncEngine }
       )}
 
       <section aria-labelledby="sync-conflitos" className={sectionClass}>
-        <h2 id="sync-conflitos" className="text-lg font-semibold">
+        <h2 id="sync-conflitos" className="text-lg font-bold">
           Conflitos
         </h2>
         {conflicts.length === 0 ? (
@@ -171,12 +172,12 @@ function Sync({ session, engine }: { session: LocalSession; engine: SyncEngine }
       </section>
 
       <section aria-labelledby="sync-pendencias" className={sectionClass}>
-        <h2 id="sync-pendencias" className="text-lg font-semibold">
+        <h2 id="sync-pendencias" className="text-lg font-bold">
           Pendências
         </h2>
         {!team && <p className="text-sm text-muted">No perfil pessoal, as alterações ficam só neste dispositivo. Para compartilhar, entre em uma equipe em &ldquo;Conta e equipe&rdquo;.</p>}
         {pending === null ? (
-          <p role="status">Carregando…</p>
+          <Loading>Carregando…</Loading>
         ) : waiting.length === 0 ? (
           <p className="text-muted" data-testid="pending-empty">
             {team ? 'Nada aguardando envio.' : 'Nada a enviar.'}
