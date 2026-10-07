@@ -1,0 +1,277 @@
+{
+  "version": "1",
+  "fonts": [
+    {
+      "fontId": "inter",
+      "family": "Inter",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/inter-OFL.txt",
+      "licenseSha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57",
+      "reservedFontName": null,
+      "source": {
+        "package": "@fontsource/inter",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v20 (2025-09-10)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "inter-400.woff2",
+          "sha256": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc",
+          "byteSize": 23664
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "inter-700.woff2",
+          "sha256": "6f56409fd3d64bb85f7d070bce20749db2d66b6d63cec586cc22d1c761be2491",
+          "byteSize": 24356
+        }
+      ]
+    },
+    {
+      "fontId": "roboto",
+      "family": "Roboto",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/roboto-OFL.txt",
+      "licenseSha256": "061402327a96aadb0bfb694a960ed289ecd38d383e396243831ab81feb109c41",
+      "reservedFontName": null,
+      "source": {
+        "package": "@fontsource/roboto",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v51 (2026-02-19)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "roboto-400.woff2",
+          "sha256": "425c0713a8176f92273d378599c7eac57de7fafabd4bd0ed457b70eb8f80d371",
+          "byteSize": 21884
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "roboto-700.woff2",
+          "sha256": "b9d66d1708156f765ada51939bc24ed259dafa69eb631b36e443680fe9e15879",
+          "byteSize": 22240
+        }
+      ]
+    },
+    {
+      "fontId": "open-sans",
+      "family": "Open Sans",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/open-sans-OFL.txt",
+      "licenseSha256": "fbbbcfef55318de350562559b671360de6d597112ecc5c73881b05092db89602",
+      "reservedFontName": null,
+      "source": {
+        "package": "@fontsource/open-sans",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v44 (2025-09-16)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "open-sans-400.woff2",
+          "sha256": "0e44026ad31376af1b56593cd4acb4f353f8e8789c51759e18f64578e4ef296a",
+          "byteSize": 18640
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "open-sans-700.woff2",
+          "sha256": "594a622208d1dad5d1dd58aef74f212ce7132d8f0aa5bacea6cfeb86d308c17a",
+          "byteSize": 18204
+        }
+      ]
+    },
+    {
+      "fontId": "montserrat",
+      "family": "Montserrat",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/montserrat-OFL.txt",
+      "licenseSha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e",
+      "reservedFontName": null,
+      "source": {
+        "package": "@fontsource/montserrat",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v31 (2025-09-05)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "montserrat-400.woff2",
+          "sha256": "e66bcd2761ab6924b25ce70dafe10e57a39193c4fea1516730bd9cb5240af6c8",
+          "byteSize": 18780
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "montserrat-700.woff2",
+          "sha256": "f9d9e65b15372cebcafc3acd1e664a564c5c4b23278de4d5760de9a13c530371",
+          "byteSize": 18824
+        }
+      ]
+    },
+    {
+      "fontId": "lato",
+      "family": "Lato",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/lato-OFL.txt",
+      "licenseSha256": "74ba064d03f1f1c4a952da936c3eb71866c34404916734de3cae73b34357e59e",
+      "reservedFontName": "Lato",
+      "source": {
+        "package": "@fontsource/lato",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v25 (2025-09-16)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/lato/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "lato-400.woff2",
+          "sha256": "918b7dc3e2e2d015c16ce08b57bcb64d2253bafc1707658f361e72865498e537",
+          "byteSize": 23580
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "lato-700.woff2",
+          "sha256": "c447dd7677b419db7b21dbdfc6277c7816a913ffda76fd2e52702df538de0e49",
+          "byteSize": 23040
+        }
+      ]
+    },
+    {
+      "fontId": "noto-sans",
+      "family": "Noto Sans",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/noto-sans-OFL.txt",
+      "licenseSha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a",
+      "reservedFontName": null,
+      "source": {
+        "package": "@fontsource/noto-sans",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v42 (2025-09-11)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosans/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "noto-sans-400.woff2",
+          "sha256": "09aee8065d25508f23a4c3d92cd777ac869c52d93fd868a88f025d888a7937d6",
+          "byteSize": 13120
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "noto-sans-700.woff2",
+          "sha256": "e77bfe1db912f687b0319b60de158cfada67f89c8ee4f8e2bd6020f970accbfb",
+          "byteSize": 13464
+        }
+      ]
+    },
+    {
+      "fontId": "source-sans-3",
+      "family": "Source Sans 3",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/source-sans-3-OFL.txt",
+      "licenseSha256": "09746787287a289323b0ec3cff4d1a4a801331b82b7207c1e186f5d26619a392",
+      "reservedFontName": "Source",
+      "source": {
+        "package": "@fontsource/source-sans-3",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v19 (2025-09-05)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourcesans3/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "source-sans-3-400.woff2",
+          "sha256": "0f73f35e08cde0a2f10c109c6e01d71459d97e4099ecd9a50f1b6c0209e4de2b",
+          "byteSize": 15696
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "source-sans-3-700.woff2",
+          "sha256": "ae35266f2ab0d5314ff9a04127931eb26c793e4f1269bb240046d4d2db4b7bb1",
+          "byteSize": 15596
+        }
+      ]
+    },
+    {
+      "fontId": "atkinson-hyperlegible",
+      "family": "Atkinson Hyperlegible",
+      "license": "OFL-1.1",
+      "licenseFile": "licenses/atkinson-hyperlegible-OFL.txt",
+      "licenseSha256": "f32d22b3908fcad2c86a74000614ec22e6a7f66ea7e867e616026a27aebdc143",
+      "reservedFontName": null,
+      "source": {
+        "package": "@fontsource/atkinson-hyperlegible",
+        "packageVersion": "5.3.0",
+        "upstreamVersion": "Google Fonts v12 (2025-09-05)",
+        "metadataUrl": "https://raw.githubusercontent.com/google/fonts/main/ofl/atkinsonhyperlegible/METADATA.pb"
+      },
+      "subsets": [
+        "latin"
+      ],
+      "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+      "faces": [
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "atkinson-hyperlegible-400.woff2",
+          "sha256": "d64ba838ef5472bba248620ec4fd8b5aa7cf0db2908e0bb230600caf279ba7bc",
+          "byteSize": 17208
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "atkinson-hyperlegible-700.woff2",
+          "sha256": "140e2bd25a7315c8a062508391426b0d8c3297400c947b8d847be28f73a199f0",
+          "byteSize": 17524
+        }
+      ]
+    }
+  ]
+}

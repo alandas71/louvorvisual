@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// SQL Server não possui enums Prisma nativos; valores são validados pelos contratos.
+// Este schema é exclusivo do LouvorVisual: não há tabelas importadas do domínio de livros.
+model Workspace {
+  id         String   @id @db.UniqueIdentifier
+  name       String   @db.NVarChar(200)
+  timezone   String   @default("UTC") @db.VarChar(64)
+  createdAt  DateTime @default(now())
+  syncClock  WorkspaceSyncClock?
+  entities   ContentEntity[]
+  revisions  ContentRevision[]
+  events     ChangeEvent[]
+  operations ProcessedOperation[]
+  memberships Membership[]
+  invitations Invitation[]
+  assets      Asset[]
+  devices     Device[]
+  snapshots   SyncBootstrapSnapshot[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id           String    @id @db.UniqueIdentifier
+  name         String    @db.NVarChar(200)
+  email        String    @unique @db.NVarChar(320)
+  passwordHash String    @db.NVarChar(512)
+  status       String    @default("active") @db.VarChar(20)
+  createdAt    DateTime  @default(now())
+  memberships  Membership[]
+  sessions     Session[]
+  invitations  Invitation[] @relation("InvitationRecipient")
+
+  @@map("users")
+}
+
+model Membership {
+  workspaceId String    @db.UniqueIdentifier
+  userId      String    @db.UniqueIdentifier
+  role        String    @db.VarChar(20)
+  status      String    @default("active") @db.VarChar(20)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId, status])
+  @@map("memberships")
+}
+
+model Invitation {
+  id              String     @id @db.UniqueIdentifier
+  workspaceId     String     @db.UniqueIdentifier
+  email           String     @db.NVarChar(320)
+  role            String     @db.VarChar(20)
+  tokenHash       String     @unique @db.Char(64)
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  recipientUserId String?    @db.UniqueIdentifier
+  createdBy       String     @db.UniqueIdentifier
+  createdAt       DateTime   @default(now())
+  workspace       Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipient       User?      @relation("InvitationRecipient", fields: [recipientUserId], references: [id])
+
+  @@index([workspaceId, email])
+  @@map("invitations")
+}
+
+model Session {
+  id               String   @id @db.UniqueIdentifier
+  userId           String   @db.UniqueIdentifier
+  refreshTokenHash String   @unique @db.Char(64)
+  familyId         String   @db.UniqueIdentifier
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  replacedById     String?  @db.UniqueIdentifier
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, familyId])
+  @@map("sessions")
+}
+
+model Asset {
+  id          String    @id @db.UniqueIdentifier
+  workspaceId String    @db.UniqueIdentifier
+  sha256      String    @db.Char(64)
+  filename    String    @db.NVarChar(255)
+  mimeType    String    @db.VarChar(64)
+  byteSize    Int
+  audioKind   String    @db.VarChar(20)
+  durationMs  Int?
+  state       String    @db.VarChar(20)
+  storageKey  String?   @db.NVarChar(512)
+  uploadId    String?   @db.UniqueIdentifier
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, state])
+  @@map("assets")
+}
+
+model WorkspaceSyncClock {
+  workspaceId String @id @db.UniqueIdentifier
+  nextCursor  BigInt @default(0)
+  minCursor   BigInt @default(0)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_sync_clocks")
+}
+
+model Device {
+  id          String   @id @db.UniqueIdentifier
+  workspaceId String   @db.UniqueIdentifier
+  userId      String   @db.UniqueIdentifier
+  lastSeenAt  DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, lastSeenAt])
+  @@map("devices")
+}
+
+model SyncBootstrapSnapshot {
+  token       String   @id @db.UniqueIdentifier
+  workspaceId String   @db.UniqueIdentifier
+  accessRevision BigInt @default(0)
+  cutCursor   BigInt
+  documentsJson String @db.NVarChar(Max)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, expiresAt])
+  @@map("sync_bootstrap_snapshots")
+}
+
+model ContentEntity {
+  workspaceId     String   @db.UniqueIdentifier
+  entityType      String   @db.VarChar(20)
+  entityId        String   @db.UniqueIdentifier
+  currentRevision BigInt
+  documentJson    String   @db.NVarChar(Max)
+  deletedAt       DateTime?
+  updatedAt       DateTime @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, entityType, entityId])
+  @@index([workspaceId, deletedAt, updatedAt])
+  @@map("content_entities")
+}
+
+model ContentRevision {
+  workspaceId  String   @db.UniqueIdentifier
+  entityType   String   @db.VarChar(20)
+  entityId     String   @db.UniqueIdentifier
+  revision     BigInt
+  documentJson String   @db.NVarChar(Max)
+  action       String   @db.VarChar(10)
+  actorId      String   @db.UniqueIdentifier
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, entityType, entityId, revision])
+  @@map("content_revisions")
+}
+
+model ChangeEvent {
+  workspaceId String   @db.UniqueIdentifier
+  cursor      BigInt
+  entityType  String   @db.VarChar(20)
+  entityId    String   @db.UniqueIdentifier
+  revision    BigInt
+  action      String   @db.VarChar(10)
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, cursor])
+  @@index([workspaceId, cursor])
+  @@map("change_events")
+}
+
+model ProcessedOperation {
+  workspaceId String   @db.UniqueIdentifier
+  opId        String   @db.UniqueIdentifier
+  actorId     String   @db.UniqueIdentifier
+  payloadHash String   @db.Char(64)
+  resultJson  String   @db.NVarChar(Max)
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, opId])
+  @@map("processed_operations")
+}
+
+model RetiredEntityId {
+  workspaceId String   @db.UniqueIdentifier
+  entityType  String   @db.VarChar(20)
+  entityId    String   @db.UniqueIdentifier
+  retiredAt   DateTime @default(now())
+
+  @@id([workspaceId, entityType, entityId])
+  @@map("retired_entity_ids")
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@louvorvisual/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API Express do LouvorVisual",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "prisma generate && tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "prisma:validate": "prisma validate",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@louvorvisual/contracts": "*",
+    "@prisma/client": "6.19.3",
+    "express": "5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/supertest": "6.0.3",
+    "prisma": "6.19.3",
+    "supertest": "7.3.1",
+    "tsx": "4.23.15"
+  }
+}

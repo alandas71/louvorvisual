@@ -1,0 +1,35 @@
+{
+  "name": "@louvorvisual/projector",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Interface do projetor: bundle estático embarcado no APK, operado pelo controle remoto",
+  "scripts": {
+    "fonts": "node scripts/prepare-fonts.mjs",
+    "predev": "node scripts/prepare-fonts.mjs",
+    "dev": "next dev -p 3320",
+    "build": "node scripts/build-static.mjs",
+    "check": "node scripts/check-static.mjs",
+    "serve": "node scripts/serve-static.mjs",
+    "prelint": "node scripts/prepare-fonts.mjs",
+    "lint": "eslint .",
+    "pretypecheck": "node scripts/prepare-fonts.mjs",
+    "typecheck": "next typegen && tsc --noEmit",
+    "pretest": "node scripts/prepare-fonts.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@louvorvisual/contracts": "*",
+    "@louvorvisual/domain": "*",
+    "@louvorvisual/presentation": "*",
+    "next": "16.3.8",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "eslint-config-next": "16.3.8"
+  }
+}

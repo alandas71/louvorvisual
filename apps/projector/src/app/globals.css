@@ -1,0 +1,620 @@
+/* Interface do projetor. Tudo é dimensionado em rem, e 1 rem acompanha a altura
+   da saída: 16 px em 1080p. Assim um alvo de 4 rem tem 64 px na composição de
+   referência (planejamento/21) e escala junto em 720p ou 4K. As cores dos
+   slides vêm dos temas, nunca daqui. */
+:root {
+  --surface: #0f1115;
+  --raised: #181b22;
+  --border: #2c313c;
+  --border-strong: #4a5160;
+  --text: #f3f4f6;
+  --muted: #a3aab8;
+  --accent: #7cc4ff;
+  --danger: #ff9b9b;
+  --ok: #86efac;
+  --focus: #ffffff;
+  --safe: 0vmin;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: calc(100vh / 67.5);
+  height: 100%;
+  background: #000;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--text);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 1.5rem;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+/* Margem de segurança ajustável: firmware que corta as bordas não esconde foco nem letra. */
+.app {
+  position: fixed;
+  inset: var(--safe);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+/* Foco: contorno claro e grosso, legível à distância e sobre qualquer um dos oito temas. */
+[data-focusable] {
+  outline: 0.25rem solid transparent;
+  outline-offset: 0.25rem;
+  transition:
+    outline-color 80ms linear,
+    background-color 80ms linear;
+}
+
+[data-focusable]:focus {
+  outline-color: var(--focus);
+  box-shadow: 0 0 0 0.75rem rgba(0, 0, 0, 0.55);
+}
+
+/* ── telas fora da apresentação ─────────────────────────────────────────── */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 3.5rem 5rem 2.5rem;
+  gap: 2rem;
+}
+
+.screen-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.screen-header h1 {
+  font-size: 3.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.screen-header p,
+.status {
+  color: var(--muted);
+  font-size: 1.5rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 1.375rem;
+  margin-top: auto;
+}
+
+.cards {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: 2rem;
+  min-height: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 2.5rem;
+  border: 0.125rem solid var(--border-strong);
+  border-radius: 1.5rem;
+  background: var(--raised);
+}
+
+.card:focus {
+  background: #232834;
+  border-color: var(--focus);
+}
+
+.card-wide {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-color: var(--accent);
+}
+
+.card-title {
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.card-sub {
+  color: var(--muted);
+  font-size: 1.625rem;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  /* Espaço para o contorno de foco não ser cortado pela rolagem. */
+  padding: 0.75rem;
+  margin: -0.75rem;
+  scrollbar-width: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 5.5rem;
+  flex-shrink: 0;
+  padding: 1rem 1.75rem;
+  border: 0.125rem solid var(--border);
+  border-radius: 1rem;
+  background: var(--raised);
+}
+
+.row:focus {
+  background: #232834;
+  border-color: var(--focus);
+}
+
+.row-index {
+  width: 3rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.row-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.row-title {
+  min-width: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-sub,
+.row-meta {
+  color: var(--muted);
+  font-size: 1.375rem;
+}
+
+.row-sub {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.row-meta {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.125rem 0.75rem;
+  border: 0.125rem solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.tag-ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.tag-warn {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.tag-accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem;
+  border: 0.125rem solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--raised);
+}
+
+.panel h2 {
+  font-size: 2rem;
+}
+
+.panel p {
+  color: var(--muted);
+}
+
+.columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-content: start;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-height: 4.5rem;
+  padding: 0.75rem 1.75rem;
+  border: 0.125rem solid var(--border-strong);
+  border-radius: 1rem;
+  background: #1f2430;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.button:focus {
+  background: #2b3242;
+  border-color: var(--focus);
+}
+
+.button[disabled] {
+  color: #6b7280;
+  border-color: var(--border);
+}
+
+.button-value {
+  color: var(--accent);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.alert {
+  color: var(--danger);
+}
+
+.progress {
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* ── apresentação ───────────────────────────────────────────────────────── */
+
+.stage {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+.stage-slide,
+.stage-focus {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A área do slide recebe o foco na apresentação limpa, sem desenhar nada sobre a letra. */
+.stage-focus,
+.stage-focus:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.pill {
+  position: absolute;
+  left: 50%;
+  bottom: 2rem;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 0.5rem 1.5rem;
+  border: 0.0625rem solid rgba(209, 213, 219, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #d1d5db;
+  font-size: 1.375rem;
+  text-align: center;
+}
+
+.pill-top {
+  top: 2rem;
+  bottom: auto;
+}
+
+/* Controles rápidos nos quatro cantos: repouso transparente, borda e ícone em cinza
+   claro (alfa na cor, nunca no botão inteiro); foco forte com rótulo. */
+.corner {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.corner-tl {
+  top: 2rem;
+  left: 2rem;
+}
+
+.corner-tr {
+  top: 2rem;
+  right: 2rem;
+}
+
+.corner-bl {
+  bottom: 2rem;
+  left: 2rem;
+}
+
+.corner-br {
+  bottom: 2rem;
+  right: 2rem;
+}
+
+.control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  /* Alvo de pelo menos 64 px na referência 1080p (planejamento/21), com folga para o arredondamento. */
+  min-width: 4.25rem;
+  height: 4.25rem;
+  padding: 0 1rem;
+  border: 0.0625rem solid rgba(209, 213, 219, 0.35);
+  border-radius: 0.75rem;
+  background: transparent;
+  color: rgba(209, 213, 219, 0.75);
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.control svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.control:focus {
+  border-color: var(--focus);
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+}
+
+.control-label {
+  display: none;
+  position: absolute;
+  white-space: nowrap;
+  padding: 0.375rem 1rem;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #000;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.control:focus .control-label {
+  display: block;
+}
+
+.corner-tl .control-label,
+.corner-tr .control-label {
+  top: calc(100% + 1rem);
+}
+
+.corner-bl .control-label,
+.corner-br .control-label {
+  bottom: calc(100% + 1rem);
+}
+
+.corner-tl .control-label,
+.corner-bl .control-label {
+  left: 0;
+}
+
+.corner-tr .control-label,
+.corner-br .control-label {
+  right: 0;
+}
+
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 4.25rem;
+  padding: 0 1rem;
+  color: rgba(209, 213, 219, 0.9);
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 0.5rem #000;
+}
+
+.indicator svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* Menu de ajustes: painel lateral, sempre na orientação normal. */
+.menu {
+  position: absolute;
+  top: 2rem;
+  bottom: 2rem;
+  left: 2rem;
+  width: 36rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 0.125rem solid var(--border-strong);
+  border-radius: 1.25rem;
+  background: rgba(15, 17, 21, 0.94);
+}
+
+.menu-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.menu-title span {
+  color: var(--muted);
+  font-size: 1.375rem;
+  font-weight: 400;
+}
+
+.menu .list {
+  gap: 0.625rem;
+}
+
+.menu .button {
+  width: 100%;
+  min-height: 4rem;
+  flex-shrink: 0;
+  font-size: 1.625rem;
+}
+
+.menu-note {
+  color: var(--muted);
+  font-size: 1.375rem;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.swatch {
+  min-height: 4.5rem;
+  padding: 0.75rem 1rem;
+  border: 0.125rem solid var(--border-strong);
+  border-radius: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.swatch[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.swatch:focus {
+  border-color: var(--focus);
+}
+
+.adjust {
+  justify-content: space-between;
+}
+
+.adjust .button-value::before {
+  content: "◀  ";
+  color: var(--muted);
+}
+
+.adjust .button-value::after {
+  content: "  ▶";
+  color: var(--muted);
+}
+
+.check::after {
+  content: "";
+  width: 1.5rem;
+}
+
+.check[aria-pressed="true"]::after {
+  content: "✓";
+  color: var(--accent);
+}
+
+/* Confirmações e avisos sobre a tela atual. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.dialog {
+  width: 52rem;
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2.5rem;
+  border: 0.125rem solid var(--border-strong);
+  border-radius: 1.5rem;
+  background: var(--raised);
+}
+
+.dialog h2 {
+  font-size: 2.5rem;
+  line-height: 1.15;
+}
+
+.dialog p {
+  color: var(--muted);
+}
+
+.dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dialog-actions .button {
+  width: 100%;
+}

@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+/* Interface do aplicativo. As cores dos slides vêm dos temas, não daqui. */
+@theme {
+  --color-surface: #0f1115;
+  --color-surface-raised: #181b22;
+  --color-border: #2c313c;
+  --color-border-strong: #4a5160;
+  --color-foreground: #f3f4f6;
+  --color-muted: #a3aab8;
+  --color-accent: #7cc4ff;
+  --color-danger: #ff9b9b;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-foreground);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+}

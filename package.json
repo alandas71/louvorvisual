@@ -1,0 +1,40 @@
+{
+  "name": "louvorvisual",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LouvorVisual — criação e apresentação de slides de louvores",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/projector",
+    "apps/api",
+    "packages/domain",
+    "packages/contracts",
+    "packages/presentation",
+    "packages/sync",
+    "packages/pack"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @louvorvisual/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "test:e2e": "npm run build --workspace @louvorvisual/web && npm run test:e2e --workspace @louvorvisual/web"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "20.19.43",
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.0",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "zod": "4.6.5"
+  }
+}

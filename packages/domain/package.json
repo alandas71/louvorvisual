@@ -1,0 +1,16 @@
+{
+  "name": "@louvorvisual/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Regras puras e tipos de domínio do LouvorVisual",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

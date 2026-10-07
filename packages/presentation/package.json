@@ -1,0 +1,19 @@
+{
+  "name": "@louvorvisual/presentation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Motor de apresentação, SlideRenderer, ajustes de sessão e protocolo da projeção",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@louvorvisual/domain": "*"
+  }
+}

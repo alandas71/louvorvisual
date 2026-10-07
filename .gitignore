@@ -1,0 +1,34 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Artefatos locais de builds Android
+**/build/
+**/.gradle/
+*.apk
+local.properties
+
+# Ambiente: versionar apenas os exemplos
+.env
+.env.*
+!.env.example
+
+# Relatórios de teste
+playwright-report/
+test-results/
+
+# Gerado depois do build por apps/web/scripts/generate-sw.mjs
+apps/web/public/sw.js
+
+# Material de referência e documentação fora do produto
+ReaproveitaRecursos/
+docs/
+planejamento/
+execucao/
+contexto_base.md
+**/*.md
+**/.env.example

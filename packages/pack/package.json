@@ -1,0 +1,21 @@
+{
+  "name": "@louvorvisual/pack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Formato do pacote .louvorvisual.zip: escrita, leitura validada e plano de importação",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@louvorvisual/contracts": "*",
+    "@louvorvisual/domain": "*",
+    "zod": "4.6.5"
+  }
+}

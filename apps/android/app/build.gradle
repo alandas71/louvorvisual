@@ -1,0 +1,96 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace 'br.org.louvorvisual.projector'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'br.org.louvorvisual.projector'
+        minSdk 23
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0-e0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        // A origem da API é do host, nunca é entregue ao bundle do WebView.
+        def apiBaseUrl = project.findProperty('louvorvisualApiBaseUrl') ?: ''
+        buildConfigField 'String', 'API_BASE_URL', "\"${apiBaseUrl.replace('\\', '\\\\').replace('\"', '\\\"')}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            // A chave de produção não pertence ao repositório. O APK controlado
+            // desta etapa é o debug assinado pelo certificado de teste do SDK.
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    androidResources {
+        // O padrão do aapt descarta pastas de assets que começam com "_", e a
+        // exportação do Next guarda todos os chunks em "_next/". Mantém as demais
+        // exclusões do padrão e tira só essa.
+        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+def buildProjectorAssets = tasks.register('buildProjectorAssets', Exec) {
+    workingDir file('../../projector')
+    commandLine 'node', 'scripts/build-static.mjs'
+}
+tasks.named('preBuild').configure { dependsOn(buildProjectorAssets) }
+
+android.sourceSets.main.assets.srcDirs += ['../../projector/dist']
+
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.media3:media3-exoplayer:1.5.1'
+    implementation 'androidx.media3:media3-common:1.5.1'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// A chave fica fora do repositório. Sem este arquivo, o release continua
+// identificável apenas como build de teste (assinatura debug).
+def signingProperties = new Properties()
+def signingFile = rootProject.file('keystore.properties')
+if (signingFile.exists()) {
+    signingFile.withInputStream { signingProperties.load(it) }
+    android.signingConfigs.create('production') {
+        storeFile rootProject.file(signingProperties.getProperty('storeFile'))
+        storePassword signingProperties.getProperty('storePassword')
+        keyAlias signingProperties.getProperty('keyAlias')
+        keyPassword signingProperties.getProperty('keyPassword')
+    }
+    android.buildTypes.release.signingConfig android.signingConfigs.production
+}
+
+// Um APK release assinado com a chave debug não é distribuível nem atualizável
+// sobre uma instalação de produção. Falhar cedo evita produzir esse artefato por
+// engano quando o cofre de chaves não foi montado no agente de build.
+tasks.register('verifyReleaseSigning') {
+    onlyIf { gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } }
+    doLast {
+        if (!signingFile.exists()) {
+            throw new GradleException('keystore.properties é obrigatório para builds release; use assembleDebug para testes locais.')
+        }
+    }
+}
+// Algumas versões do Android Gradle Plugin não expõem preReleaseBuild; ligar a
+// guarda aos tasks release evita depender de um nome interno do plugin.
+tasks.configureEach {
+    if (name.toLowerCase().contains('release') && name != 'verifyReleaseSigning') {
+        dependsOn(tasks.named('verifyReleaseSigning'))
+    }
+}

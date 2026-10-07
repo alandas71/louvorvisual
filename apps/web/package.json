@@ -1,0 +1,48 @@
+{
+  "name": "@louvorvisual/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build && node scripts/generate-sw.mjs",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "fonts:build": "node scripts/build-font-pack.mjs",
+    "icons:build": "node scripts/build-icons.mjs"
+  },
+  "dependencies": {
+    "@louvorvisual/contracts": "*",
+    "@louvorvisual/domain": "*",
+    "@louvorvisual/pack": "*",
+    "@louvorvisual/presentation": "*",
+    "@louvorvisual/sync": "*",
+    "clsx": "2.1.1",
+    "dexie": "4.4.6",
+    "next": "16.3.8",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.7.0"
+  },
+  "devDependencies": {
+    "@fontsource/atkinson-hyperlegible": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/lato": "5.3.0",
+    "@fontsource/montserrat": "5.3.0",
+    "@fontsource/noto-sans": "5.3.0",
+    "@fontsource/open-sans": "5.3.0",
+    "@fontsource/roboto": "5.3.0",
+    "@fontsource/source-sans-3": "5.3.0",
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "axe-core": "4.13.0",
+    "eslint-config-next": "16.3.8",
+    "fake-indexeddb": "6.2.5",
+    "fontkit": "2.0.4",
+    "tailwindcss": "4.3.3"
+  }
+}
