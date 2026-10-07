@@ -4,7 +4,7 @@ module.exports = {
       name: 'louvorvisual-api',
       cwd: '/root/apps/louvorvisual',
       script: 'node',
-      args: '--env-file=apps/api/.env apps/api/dist/server.js',
+      args: '--env-file=apps/api/.env --import tsx apps/api/src/server.ts',
     },
     {
       name: 'louvorvisual-web',
