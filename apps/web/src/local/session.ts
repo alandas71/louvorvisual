@@ -3,7 +3,8 @@
 import type { AuthoringContext } from '@louvorvisual/domain';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { isPresentingWindow } from '@/lib/presenting';
-import { activeTeamProfile, type TeamProfile } from '@/sync/profiles';
+import { currentAccount } from '@/sync/api';
+import { activateTeamProfile, activeTeamProfile, listTeamProfiles, type TeamProfile } from '@/sync/profiles';
 import { LocalDatabase, localDatabase } from './db';
 import { classifyOpenError, ensureCompatible, guardConnection, LocalOpenError } from './open';
 import { ensureProfile } from './repository';
@@ -58,8 +59,20 @@ export function useDataNotice(): DataNotice {
  */
 export function openLocalSession(): Promise<LocalSession> {
   opening ??= (async () => {
-    // Sem registro de perfis legível, o aplicativo abre no perfil pessoal.
-    const team = await activeTeamProfile().catch(() => null);
+    // O banco local é uma cópia offline, não a fonte da equipe. No primeiro
+    // acesso deste navegador não há perfil nem documentos para abrir: se há
+    // uma conta conectada, criamos a cópia local da equipe e o SyncEngine faz
+    // bootstrap dela a partir do servidor. Sem rede/sessão, preservamos o
+    // perfil pessoal para que o aplicativo continue abrindo offline.
+    let team = await activeTeamProfile().catch(() => null);
+    const hasLocalProfiles = team !== null || (await listTeamProfiles().catch(() => [])).length > 0;
+    if (!hasLocalProfiles) {
+      const account = await currentAccount().catch(() => null);
+      const workspace = account?.workspaces[0];
+      if (account && workspace) {
+        team = await activateTeamProfile(account.user, workspace).catch(() => null);
+      }
+    }
     const db = team ? new LocalDatabase(team.dbName) : localDatabase();
     guardConnection(db, {
       isPresenting: isPresentingWindow,
