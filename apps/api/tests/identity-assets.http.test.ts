@@ -49,6 +49,32 @@ describe('identidade, isolamento e arquivos privados', () => {
     expect(again.body.data).toMatchObject({ id: first, state: 'ready' });
   });
 
+  it('envio em partes: retoma de onde parou, recusa posição errada e só publica com o hash conferido', async () => {
+    const app = createApp(); const admin = await signup(app, 'Admin', 'partes@example.test');
+    const ws = await request(app).post('/api/v1/workspaces').set(auth(admin.token)).send({ name: 'Louvor', timezone: 'UTC' }).expect(201); const workspaceId = ws.body.data.id as string;
+    const assetId = randomUUID(); const sha256 = createHash('sha256').update(wav).digest('hex');
+    const body = { id: assetId, sha256, filename: 'faixa.wav', mimeType: 'audio/wav', byteSize: wav.length, audioKind: 'playback', durationMs: null };
+    const url = `/api/v1/workspaces/${workspaceId}/assets/${assetId}/content`;
+    const created = await request(app).post(`/api/v1/workspaces/${workspaceId}/assets`).set(auth(admin.token)).send(body).expect(201);
+    expect(created.body.data).toMatchObject({ state: 'pending', receivedBytes: 0 });
+    const part = (offset: number, bytes: Buffer, uploadId: string = created.body.data.uploadId) => request(app).patch(url).set(auth(admin.token)).set('Content-Type', 'audio/wav').set('Upload-Attempt-Id', uploadId).set('Upload-Offset', String(offset)).send(bytes);
+    await part(0, wav.subarray(0, 8)).expect(200).expect(({ body: { data } }) => expect(data).toMatchObject({ state: 'pending', receivedBytes: 8 }));
+    // Registrar de novo não descarta o que já chegou nem troca a tentativa.
+    const resumed = await request(app).post(`/api/v1/workspaces/${workspaceId}/assets`).set(auth(admin.token)).send(body).expect(201);
+    expect(resumed.body.data).toMatchObject({ state: 'pending', receivedBytes: 8, uploadId: created.body.data.uploadId });
+    await part(0, wav.subarray(0, 8)).expect(409).expect(({ body: { error } }) => expect(error).toMatchObject({ code: 'UPLOAD_OFFSET_MISMATCH', details: { receivedBytes: 8 } }));
+    await part(8, wav.subarray(8), randomUUID()).expect(409).expect(({ body: { error } }) => expect(error.code).toBe('UPLOAD_ATTEMPT_INVALID'));
+    await request(app).get(url).set(auth(admin.token)).expect(422);
+    await part(8, wav.subarray(8)).expect(200).expect(({ body: { data } }) => expect(data).toMatchObject({ state: 'ready', receivedBytes: wav.length }));
+    // A última parte repetida (resposta perdida) só confirma.
+    await part(8, wav.subarray(8)).expect(200).expect(({ body: { data } }) => expect(data.state).toBe('ready'));
+    const downloaded = await request(app).get(url).set(auth(admin.token)).buffer(true).parse((res, done) => { const chunks: Buffer[] = []; res.on('data', (chunk: Buffer) => chunks.push(chunk)); res.on('end', () => done(null, Buffer.concat(chunks))); }).expect(200);
+    expect(downloaded.body).toEqual(wav);
+
+    const broken = randomUUID(); const wrong = await request(app).post(`/api/v1/workspaces/${workspaceId}/assets`).set(auth(admin.token)).send({ ...body, id: broken, sha256: 'a'.repeat(64) }).expect(201);
+    await request(app).patch(`/api/v1/workspaces/${workspaceId}/assets/${broken}/content`).set(auth(admin.token)).set('Content-Type', 'audio/wav').set('Upload-Attempt-Id', wrong.body.data.uploadId).set('Upload-Offset', '0').send(wav).expect(400).expect(({ body: { error } }) => expect(error.code).toBe('ASSET_CHECKSUM_MISMATCH'));
+  });
+
   it('rotaciona refresh e revoga toda a família quando token antigo é reutilizado', async () => {
     const app = createApp(); const account = await signup(app, 'Sessão', 'sessao@example.test');
     const refresh = account.cookies.find((cookie) => cookie.startsWith('lv_refresh='))!.split(';')[0]!.slice('lv_refresh='.length);

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useLocalSession, type LocalSession } from '@/local/session';
 import { LIBRARY_CHANGED_EVENT, syncEngine, type SyncEngine, type SyncStatus } from './engine';
 
-const LOADING: SyncStatus = { connection: 'local-only', leader: false, summary: null, lastOutcome: null, cycles: 0, nextRetryAt: null };
+const LOADING: SyncStatus = { connection: 'local-only', leader: false, summary: null, lastOutcome: null, cycles: 0, nextRetryAt: null, progress: null, transferResult: null };
 const noop = () => () => undefined;
 
 /** Motor de sincronização do perfil aberto; `null` enquanto o banco local abre. */

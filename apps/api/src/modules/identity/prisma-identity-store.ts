@@ -1,8 +1,9 @@
 import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { type Asset, type IdentityStore, IdentityError, type Invitation, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
+import { type Asset, type AssetUpload, type IdentityStore, IdentityError, type Invitation, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
 
 const DAY = 86_400_000;
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -26,10 +27,22 @@ export class LocalAssetStorage {
   async put(key: string, bytes: Buffer) { const target = this.path(key); await mkdir(dirname(target), { recursive: true }); const temporary = `${target}.${randomUUID()}.partial`; await writeFile(temporary, bytes, { flag: 'wx' }); await rename(temporary, target); }
   async get(key: string) { try { return await readFile(this.path(key)); } catch (error: unknown) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); throw error; } }
   async remove(key: string) { await rm(this.path(key), { force: true }); }
+  /** Bytes já gravados de um envio em partes; zero quando ainda não há nada. */
+  async size(key: string) { try { return (await stat(this.path(key))).size; } catch (error: unknown) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0; throw error; } }
+  async append(key: string, bytes: Buffer) { const target = this.path(key); await mkdir(dirname(target), { recursive: true }); await appendFile(target, bytes); }
+  async head(key: string, length: number) { const file = await open(this.path(key), 'r'); try { const { buffer, bytesRead } = await file.read(Buffer.alloc(length), 0, length, 0); return buffer.subarray(0, bytesRead); } finally { await file.close(); } }
+  /** SHA-256 lido em fluxo: o arquivo completo nunca fica inteiro na memória. */
+  async sha256(key: string) { const hash = createHash('sha256'); for await (const chunk of createReadStream(this.path(key))) hash.update(chunk as Buffer); return hash.digest('hex'); }
+  async move(from: string, to: string) { await rename(this.path(from), this.path(to)); }
 }
 
 export class PrismaIdentityStore implements IdentityStore {
+  /** Um envio em partes por arquivo de cada vez: conferir a posição e acrescentar não podem se intercalar. */
+  private readonly uploads = new Map<string, Promise<unknown>>();
   constructor(private readonly prisma: PrismaClient, private readonly storage: LocalAssetStorage, private readonly accessSecret: string, private readonly sessionDays = 30) {}
+  private partialKey(workspaceId: string, assetId: string) { return join(workspaceId, `${assetId}.upload`); }
+  private async received(asset: { id: string; workspaceId: string; state: string; byteSize: number }) { return asset.state === 'ready' ? asset.byteSize : asset.state === 'pending' ? this.storage.size(this.partialKey(asset.workspaceId, asset.id)) : 0; }
+  private async exclusive<T>(assetId: string, work: () => Promise<T>): Promise<T> { const previous = this.uploads.get(assetId) ?? Promise.resolve(); const current = previous.catch(() => undefined).then(work); this.uploads.set(assetId, current); try { return await current; } finally { if (this.uploads.get(assetId) === current) this.uploads.delete(assetId); } }
 
   async register(name: string, email: string, password: string) { try { return mapUser(await this.prisma.user.create({ data: { id: randomUUID(), name: name.trim(), email: normalizeEmail(email), passwordHash: hashPassword(password) } })); } catch (error: unknown) { if ((error as { code?: string }).code === 'P2002') throw new IdentityError('EMAIL_ALREADY_EXISTS', 409, 'Este e-mail já está cadastrado.'); throw error; } }
   async login(email: string, password: string) { const user = await this.prisma.user.findUnique({ where: { email: normalizeEmail(email) } }); if (!user || user.status !== 'active' || !verifyPassword(password, user.passwordHash)) throw new IdentityError('INVALID_CREDENTIALS', 401, 'E-mail ou senha inválidos.'); return mapUser(user); }
@@ -49,19 +62,40 @@ export class PrismaIdentityStore implements IdentityStore {
   async updateMember(workspaceId: string, requester: string, targetUserId: string, patch: { role?: Role; status?: 'active' | 'revoked' }) { await this.requireRole(workspaceId, requester, ['admin']); const current = await this.membership(workspaceId, targetUserId); if (!current) throw new IdentityError('NOT_FOUND', 404, 'Membro não encontrado.'); const removesAdmin = current.role === 'admin' && ((patch.role !== undefined && patch.role !== 'admin') || patch.status === 'revoked'); if (removesAdmin) { const count = await this.prisma.membership.count({ where: { workspaceId, role: 'admin', status: 'active' } }); if (count <= 1) throw new IdentityError('LAST_ADMIN_PROTECTED', 409, 'O último administrador ativo não pode ser removido ou rebaixado.'); }
     return mapMember(await this.prisma.membership.update({ where: { workspaceId_userId: { workspaceId, userId: targetUserId } }, data: { ...(patch.role ? { role: patch.role } : {}), ...(patch.status ? { status: patch.status } : {}) } }));
   }
-  async registerAsset(workspaceId: string, userId: string, value: Omit<Asset, 'state' | 'uploadId' | 'createdAt' | 'updatedAt'>) { await this.requireRole(workspaceId, userId, ['editor', 'admin']); if (value.workspaceId !== workspaceId) throw new IdentityError('WORKSPACE_MISMATCH', 400, 'Arquivo pertence a outro espaço.'); const existing = await this.prisma.asset.findUnique({ where: { id: value.id } }); if (existing && existing.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); if (existing?.state === 'ready' && existing.sha256 === value.sha256) return mapAsset(existing);
+  async registerAsset(workspaceId: string, userId: string, value: Omit<Asset, 'state' | 'uploadId' | 'createdAt' | 'updatedAt'>) { await this.requireRole(workspaceId, userId, ['editor', 'admin']); if (value.workspaceId !== workspaceId) throw new IdentityError('WORKSPACE_MISMATCH', 400, 'Arquivo pertence a outro espaço.'); const existing = await this.prisma.asset.findUnique({ where: { id: value.id } }); if (existing && existing.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); if (existing?.state === 'ready' && existing.sha256 === value.sha256) return { ...mapAsset(existing), receivedBytes: existing.byteSize };
+    // Envio em andamento do mesmo conteúdo: a tentativa e as partes já recebidas continuam valendo.
+    if (existing?.state === 'pending' && existing.uploadId && existing.sha256 === value.sha256 && existing.byteSize === value.byteSize) return { ...mapAsset(existing), receivedBytes: await this.received(existing) };
     const duplicate = await this.prisma.asset.findFirst({ where: { workspaceId, sha256: value.sha256, byteSize: value.byteSize, state: 'ready' } }); const uploadId = randomUUID();
-    if (existing) return mapAsset(await this.prisma.asset.update({ where: { id: value.id }, data: { ...value, state: 'pending', uploadId, storageKey: null } }));
-    return mapAsset(await this.prisma.asset.create({ data: { ...value, state: duplicate ? 'ready' : 'pending', uploadId, storageKey: duplicate?.storageKey ?? null } }));
+    if (existing) { await this.storage.remove(this.partialKey(workspaceId, value.id)); return { ...mapAsset(await this.prisma.asset.update({ where: { id: value.id }, data: { ...value, state: 'pending', uploadId, storageKey: null } })), receivedBytes: 0 }; }
+    const created = await this.prisma.asset.create({ data: { ...value, state: duplicate ? 'ready' : 'pending', uploadId, storageKey: duplicate?.storageKey ?? null } }); return { ...mapAsset(created), receivedBytes: await this.received(created) };
   }
   async getAsset(workspaceId: string, userId: string, assetId: string) { await this.requireRole(workspaceId, userId, ROLES); const value = await this.prisma.asset.findUnique({ where: { id: assetId } }); if (!value || value.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); return mapAsset(value); }
   async upload(workspaceId: string, userId: string, assetId: string, uploadId: string | undefined, bytes: Buffer, contentType: string | undefined) { await this.requireRole(workspaceId, userId, ['editor', 'admin']); const asset = await this.prisma.asset.findUnique({ where: { id: assetId } }); if (!asset || asset.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); if (asset.state === 'ready') { if (asset.sha256 === digest(bytes)) return mapAsset(asset); throw new IdentityError('IDEMPOTENCY_KEY_REUSED', 409, 'O arquivo já foi publicado com outro conteúdo.'); }
     if (!uploadId || uploadId !== asset.uploadId) throw new IdentityError('UPLOAD_ATTEMPT_INVALID', 409, 'Tentativa de upload inválida; registre o arquivo novamente.'); const fail = async (code: 'ASSET_SIZE_MISMATCH' | 'ASSET_CHECKSUM_MISMATCH' | 'ASSET_TYPE_UNSUPPORTED', status: number, message: string): Promise<never> => { await this.prisma.asset.update({ where: { id: asset.id }, data: { state: 'failed' } }); throw new IdentityError(code, status, message); };
     if (bytes.length !== asset.byteSize) return fail('ASSET_SIZE_MISMATCH', 400, 'Tamanho do arquivo não confere.'); if (digest(bytes) !== asset.sha256) return fail('ASSET_CHECKSUM_MISMATCH', 400, 'Checksum do arquivo não confere.'); if ((contentType && contentType.split(';')[0] !== asset.mimeType) || !audioMagic(bytes, asset.mimeType)) return fail('ASSET_TYPE_UNSUPPORTED', 415, 'O conteúdo não é o áudio declarado.');
-    const storageKey = join(workspaceId, asset.sha256); await this.storage.put(storageKey, bytes); return mapAsset(await this.prisma.asset.update({ where: { id: asset.id }, data: { state: 'ready', storageKey, updatedAt: new Date() } }));
+    const storageKey = join(workspaceId, asset.sha256); await this.storage.put(storageKey, bytes); await this.storage.remove(this.partialKey(workspaceId, asset.id)); return mapAsset(await this.prisma.asset.update({ where: { id: asset.id }, data: { state: 'ready', storageKey, updatedAt: new Date() } }));
+  }
+  async uploadChunk(workspaceId: string, userId: string, assetId: string, uploadId: string | undefined, offset: number, bytes: Buffer, contentType: string | undefined): Promise<AssetUpload> {
+    await this.requireRole(workspaceId, userId, ['editor', 'admin']);
+    return this.exclusive(assetId, async () => {
+      const asset = await this.prisma.asset.findUnique({ where: { id: assetId } }); if (!asset || asset.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.');
+      // Resposta da última parte perdida: o arquivo já está publicado e a repetição só confirma.
+      if (asset.state === 'ready') return { ...mapAsset(asset), receivedBytes: asset.byteSize };
+      if (!uploadId || uploadId !== asset.uploadId) throw new IdentityError('UPLOAD_ATTEMPT_INVALID', 409, 'Tentativa de upload inválida; registre o arquivo novamente.');
+      const partial = this.partialKey(workspaceId, asset.id); const stored = await this.storage.size(partial);
+      if (offset !== stored) throw new IdentityError('UPLOAD_OFFSET_MISMATCH', 409, 'O envio deve continuar de onde parou.', { receivedBytes: stored });
+      const fail = async (code: 'ASSET_SIZE_MISMATCH' | 'ASSET_CHECKSUM_MISMATCH' | 'ASSET_TYPE_UNSUPPORTED', status: number, message: string): Promise<never> => { await this.storage.remove(partial); await this.prisma.asset.update({ where: { id: asset.id }, data: { state: 'failed' } }); throw new IdentityError(code, status, message); };
+      if (bytes.length === 0 || stored + bytes.length > asset.byteSize) return fail('ASSET_SIZE_MISMATCH', 400, 'Tamanho do arquivo não confere.');
+      await this.storage.append(partial, bytes); const received = stored + bytes.length;
+      if (received < asset.byteSize) return { ...mapAsset(asset), receivedBytes: received };
+      if (await this.storage.sha256(partial) !== asset.sha256) return fail('ASSET_CHECKSUM_MISMATCH', 400, 'Checksum do arquivo não confere.');
+      if ((contentType && contentType.split(';')[0] !== asset.mimeType) || !audioMagic(await this.storage.head(partial, 12), asset.mimeType)) return fail('ASSET_TYPE_UNSUPPORTED', 415, 'O conteúdo não é o áudio declarado.');
+      const storageKey = join(workspaceId, asset.sha256); await this.storage.move(partial, storageKey);
+      return { ...mapAsset(await this.prisma.asset.update({ where: { id: asset.id }, data: { state: 'ready', storageKey, updatedAt: new Date() } })), receivedBytes: asset.byteSize };
+    });
   }
   async content(workspaceId: string, userId: string, assetId: string) { const asset = await this.getAsset(workspaceId, userId, assetId); if (asset.state !== 'ready') throw new IdentityError('DEPENDENCY_NOT_READY', 422, 'Arquivo ainda não está disponível.'); const record = await this.prisma.asset.findUniqueOrThrow({ where: { id: assetId } }); if (!record.storageKey) throw new IdentityError('DEPENDENCY_NOT_READY', 422, 'Arquivo ainda não está disponível.'); return this.storage.get(record.storageKey); }
-  async deleteAsset(workspaceId: string, userId: string, assetId: string) { await this.requireRole(workspaceId, userId, ['editor', 'admin']); const asset = await this.prisma.asset.findUnique({ where: { id: assetId } }); if (!asset || asset.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); await this.prisma.asset.delete({ where: { id: assetId } }); if (asset.storageKey && !await this.prisma.asset.findFirst({ where: { storageKey: asset.storageKey } })) await this.storage.remove(asset.storageKey); }
+  async deleteAsset(workspaceId: string, userId: string, assetId: string) { await this.requireRole(workspaceId, userId, ['editor', 'admin']); const asset = await this.prisma.asset.findUnique({ where: { id: assetId } }); if (!asset || asset.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); await this.prisma.asset.delete({ where: { id: assetId } }); await this.storage.remove(this.partialKey(workspaceId, assetId)); if (asset.storageKey && !await this.prisma.asset.findFirst({ where: { storageKey: asset.storageKey } })) await this.storage.remove(asset.storageKey); }
   async recoverPartialUploads() { const rows = await this.prisma.asset.updateMany({ where: { state: 'pending' }, data: { uploadId: randomUUID(), updatedAt: new Date() } }); return rows.count; }
   private accessToken(sessionId: string) { const expiresAt = Math.floor((Date.now() + 15 * 60_000) / 1000); const body = `${sessionId}.${expiresAt}`; return `${body}.${createHmac('sha256', this.accessSecret).update(body).digest('base64url')}`; }
   private verifyAccess(token: string) { const [sessionId, expiresAt, signature] = token.split('.'); if (!sessionId || !expiresAt || !signature || !/^\d+$/.test(expiresAt) || Number(expiresAt) * 1000 < Date.now()) return null; const body = `${sessionId}.${expiresAt}`; const expected = createHmac('sha256', this.accessSecret).update(body).digest('base64url'); return equal(signature, expected) ? { sessionId } : null; }

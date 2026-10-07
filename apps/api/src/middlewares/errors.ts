@@ -16,7 +16,7 @@ function fromBodyParser(error: unknown): AppError | null {
 }
 
 export function errorHandler(error: unknown, req: Request, res: Response, _next: NextFunction): void {
-  let appError = error instanceof AppError ? error : error instanceof IdentityError ? new AppError(error.status, error.code as import('../utils/AppError').ErrorCode, error.message) : fromBodyParser(error);
+  let appError = error instanceof AppError ? error : error instanceof IdentityError ? new AppError(error.status, error.code as import('../utils/AppError').ErrorCode, error.message, error.details) : fromBodyParser(error);
   const requestId = (req as RequestWithId).requestId;
   if (!appError) {
     console.error(`[${requestId}] erro não tratado`, error);

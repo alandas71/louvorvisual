@@ -17,6 +17,7 @@ import {
   type SyncDoc,
   type SyncEntityType,
   type SuspensionCode,
+  type SyncProgress,
   type SyncStorage,
   type SyncTransport,
   type SyncTx,
@@ -26,6 +27,10 @@ import {
 export const MAX_BATCH_OPERATIONS = 20;
 export const MAX_BATCH_BYTES = 1_800_000;
 const PAGE_SIZE = 100;
+/** Tamanho de cada parte do envio de mídia: pequena o bastante para passar por proxy e repetir barato. */
+export const UPLOAD_CHUNK_BYTES = 1024 * 1024;
+/** Quantas vezes um envio se realinha com a posição informada pelo servidor antes de desistir do ciclo. */
+const MAX_OFFSET_RESYNCS = 3;
 /** Espera antes de recapturar um agregado recusado por dependência ainda não pronta no servidor. */
 const DEPENDENCY_RETRY_MS = 30_000;
 
@@ -57,6 +62,8 @@ export type CoordinatorDeps = {
   newId: () => string;
   /** Durante uma apresentação, downloads de mídia ficam suspensos (planejamento/09). */
   isPresenting?: () => boolean | Promise<boolean>;
+  /** Andamento do ciclo; `null` quando não há mais nada em transferência. */
+  onProgress?: (progress: SyncProgress | null) => void;
 };
 
 class NeedBootstrap extends Error {}
@@ -117,6 +124,8 @@ export function formBatches(operations: readonly QueuedOperation[]): QueuedOpera
  */
 export class SyncCoordinator {
   private running: Promise<CycleOutcome> | null = null;
+  /** Falha passageira de mídia neste ciclo: o resto segue e o ciclo termina pedindo nova tentativa. */
+  private mediaFailure: TransportError | null = null;
 
   constructor(private readonly deps: CoordinatorDeps) {}
 
@@ -131,6 +140,7 @@ export class SyncCoordinator {
   private async run(): Promise<CycleOutcome> {
     const report = emptyReport();
     const done = (connection: ConnectionState, extra: Partial<CycleOutcome> = {}): CycleOutcome => ({ ...report, connection, retry: false, retryAfterMs: null, error: null, ...extra });
+    this.mediaFailure = null;
     try {
       let identity = await this.deps.transport.checkIdentity();
       if (identity === 'unauthenticated' && (await this.deps.transport.refreshSession().catch(() => false))) identity = await this.deps.transport.checkIdentity();
@@ -158,9 +168,12 @@ export class SyncCoordinator {
         const meta = await tx.getMeta();
         await tx.putMeta({ ...meta, lastSyncAt: this.deps.now() });
       });
+      if (this.mediaFailure && !readOnly) return done(...(await this.classify(this.mediaFailure)));
       return done(readOnly ? 'read-only' : 'idle');
     } catch (error) {
       return done(...(await this.classify(error)));
+    } finally {
+      this.deps.onProgress?.(null);
     }
   }
 
@@ -169,6 +182,8 @@ export class SyncCoordinator {
       return ['error', { retry: true, error: { code: 'LOCAL_ERROR', message: error instanceof Error ? error.message : String(error) } }];
     }
     const detail = { code: error.code, message: error.message };
+    // Resposta 5xx que não veio da API (proxy): o servidor existe, mas falhou; não é falta de conexão.
+    if (error.kind === 'network' && error.status >= 500) return ['error', { retry: true, error: detail }];
     if (error.kind === 'network') return ['offline', { retry: true }];
     if (error.kind === 'contract') return ['error', { error: detail }];
     if (error.status === 401) return ['auth-required', {}];
@@ -413,7 +428,13 @@ export class SyncCoordinator {
         if (queued.length === 0) break;
         queued.sort((a, b) => ENTITY_ORDER.indexOf(a.entityType) - ENTITY_ORDER.indexOf(b.entityType) || a.createdAt.localeCompare(b.createdAt));
         for (const operation of queued) attempted.add(operation.opId);
-        for (const batch of formBatches(queued)) await this.sendBatch(batch, report);
+        let sent = 0;
+        for (const batch of formBatches(queued)) {
+          this.deps.onProgress?.({ phase: 'documents', loaded: sent, total: queued.length, filename: null, index: 1, count: 1 });
+          await this.sendBatch(batch, report);
+          sent += batch.length;
+        }
+        this.deps.onProgress?.({ phase: 'documents', loaded: sent, total: queued.length, filename: null, index: 1, count: 1 });
       }
       await this.clearSuspension('read-only');
       return false;
@@ -657,32 +678,55 @@ export class SyncCoordinator {
       return assets;
     });
 
-    for (const asset of waiting) {
+    const total = waiting.reduce((sum, asset) => sum + asset.byteSize, 0);
+    let finished = 0;
+    for (const [position, asset] of waiting.entries()) {
       const update = (changes: Partial<AssetDoc>, blocked: EntityState['blocked'] = null) =>
         this.deps.storage.transaction((tx) => this.writeLocal(tx, 'asset', { ...asset, ...changes, updatedAt: this.deps.now() }, blocked));
+      const progress = (sent: number) => this.deps.onProgress?.({ phase: 'upload', loaded: finished + Math.min(sent, asset.byteSize), total, filename: asset.filename, index: position + 1, count: waiting.length });
       const bytes = await this.deps.assets.read(asset);
       if (!bytes) {
         await update({ remoteState: 'failed' }, { code: 'LOCAL_BYTES_MISSING', generation: 0, retryAt: null });
+        finished += asset.byteSize;
         continue;
       }
       try {
         let registration = await this.call(() => this.deps.transport.registerAsset(asset));
         if (registration.id !== asset.id) throw new TransportError('contract', 200, 'ASSET_ID_MISMATCH', 'O servidor registrou o arquivo com outro ID.');
-        if (registration.state !== 'ready') {
+        // Só vai o que o servidor ainda não tem: o envio continua da posição que ele informa.
+        let offset = registration.receivedBytes;
+        let resyncs = 0;
+        while (registration.state !== 'ready' && offset < bytes.size) {
+          progress(offset);
           const { uploadId } = registration;
-          registration = await this.call(() => this.deps.transport.uploadAsset(asset, uploadId, bytes));
+          const from = offset;
+          try {
+            registration = await this.call(() => this.deps.transport.uploadAssetChunk(asset, uploadId, from, bytes.slice(from, from + UPLOAD_CHUNK_BYTES)));
+            offset = registration.receivedBytes;
+          } catch (error) {
+            const received = (error instanceof TransportError && error.code === 'UPLOAD_OFFSET_MISMATCH' ? (error.options.details as { receivedBytes?: unknown } | undefined) : undefined)?.receivedBytes;
+            if (typeof received !== 'number' || (resyncs += 1) > MAX_OFFSET_RESYNCS) throw error;
+            // A parte anterior chegou sem a resposta (ou outra janela enviou): realinha e segue.
+            offset = received;
+          }
         }
         if (registration.state !== 'ready') throw new TransportError('contract', 200, 'ASSET_NOT_READY', 'O servidor não confirmou o arquivo.');
+        progress(asset.byteSize);
         await update({ remoteState: 'ready' });
         report.uploaded += 1;
       } catch (error) {
-        if (!(error instanceof TransportError) || error.kind === 'network') throw error;
+        if (!(error instanceof TransportError) || (error.kind === 'network' && error.status < 500)) throw error;
         if (error.status === 403 && error.code === 'WORKSPACE_FORBIDDEN') throw new PushForbidden();
-        if (error.status === 401 || error.status === 403 || error.status === 429 || error.status >= 500) throw error;
+        if (error.status === 401 || error.status === 403) throw error;
+        if (error.status === 429 || error.status >= 500) {
+          // Falha passageira do servidor: o que já chegou fica guardado lá e os documentos seguem neste ciclo.
+          this.mediaFailure = error;
+          break;
+        }
         // Tentativa de upload trocada por outra janela/ciclo: registrar de novo no próximo ciclo.
-        if (error.code === 'UPLOAD_ATTEMPT_INVALID') continue;
-        await update({ remoteState: 'failed' }, { code: error.code, generation: 0, retryAt: null });
+        if (error.code !== 'UPLOAD_ATTEMPT_INVALID' && error.code !== 'UPLOAD_OFFSET_MISMATCH') await update({ remoteState: 'failed' }, { code: error.code, generation: 0, retryAt: null });
       }
+      finished += asset.byteSize;
     }
   }
 
@@ -696,20 +740,25 @@ export class SyncCoordinator {
       }
       return ((await tx.listDocuments('asset')) as AssetDoc[]).filter((asset) => used.has(asset.id) && asset.deletedAt === null && asset.remoteState === 'ready' && asset.workspaceId === this.deps.workspaceId);
     });
-    for (const asset of missing) {
-      if (await this.deps.assets.has(asset)) continue;
+    const absent: AssetDoc[] = [];
+    for (const asset of missing) if (!(await this.deps.assets.has(asset))) absent.push(asset);
+    const total = absent.reduce((sum, asset) => sum + asset.byteSize, 0);
+    let finished = 0;
+    for (const [position, asset] of absent.entries()) {
       if (await this.deps.isPresenting?.()) {
         report.downloadsDeferred += 1;
         continue;
       }
+      const progress = (received: number) => this.deps.onProgress?.({ phase: 'download', loaded: finished + Math.min(received, asset.byteSize), total, filename: asset.filename, index: position + 1, count: absent.length });
       try {
-        const bytes = await this.call(() => this.deps.transport.downloadAsset(asset));
+        progress(0);
+        const bytes = await this.call(() => this.deps.transport.downloadAsset(asset, progress));
         // Bytes incompletos ou diferentes do hash nunca ficam referenciados como disponíveis.
         if ((await this.deps.assets.write(asset, bytes)) === 'stored') report.downloaded += 1;
       } catch (error) {
-        if (error instanceof TransportError && error.kind === 'http' && (error.status === 404 || error.status === 422)) continue;
-        throw error;
+        if (!(error instanceof TransportError && error.kind === 'http' && (error.status === 404 || error.status === 422))) throw error;
       }
+      finished += asset.byteSize;
     }
   }
 }

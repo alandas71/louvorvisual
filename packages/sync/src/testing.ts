@@ -2,7 +2,7 @@ import type { SyncBootstrapResponse, SyncOperation, SyncPullResponse, SyncResult
 import { arrangement, asset, setlist, song } from '../../contracts/src/fixtures';
 import { SyncCoordinator } from './coordinator';
 import { MemoryAssetBytes, MemorySyncStorage } from './memory';
-import { entityKey, TransportError, type AssetDoc, type AssetRegistration, type IdentityCheck, type SyncDoc, type SyncEntityType, type SyncTransport } from './types';
+import { entityKey, TransportError, type AssetDoc, type AssetRegistration, type IdentityCheck, type SyncDoc, type SyncEntityType, type SyncProgress, type SyncTransport } from './types';
 
 export const WORKSPACE = song.workspaceId;
 export const USER = song.createdBy;
@@ -19,7 +19,7 @@ export class FakeServer {
   readonly entities = new Map<string, Entity>();
   readonly processed = new Map<string, { hash: string; result: SyncResult }>();
   readonly events: Change[] = [];
-  readonly assets = new Map<string, { state: 'pending' | 'ready'; uploadId: string; bytes: Blob | null }>();
+  readonly assets = new Map<string, { state: 'pending' | 'ready'; uploadId: string; bytes: Blob | null; partial?: Blob }>();
   readonly snapshots = new Map<string, { documents: SyncBootstrapResponse['documents']; cutCursor: string }>();
   readonly expiredDevices = new Set<string>();
   readonly pushLog: { deviceId: string; userId: string; operations: SyncOperation[] }[] = [];
@@ -99,6 +99,8 @@ export type Faults = {
   afterPull: (() => void | Promise<void>) | null;
   bootstrapExpiresOnce: boolean;
   pushStatus: { status: number; code: string } | null;
+  /** Toda parte de upload responde com este erro. */
+  uploadStatus: { status: number; code: string } | null;
   /** Quantas chamadas seguintes respondem 401 (sessão de acesso vencida). */
   unauthorized: number;
   /** A renovação da sessão funciona? */
@@ -108,8 +110,10 @@ export type Faults = {
 const network = () => new TransportError('network', 0, 'NETWORK_ERROR', 'Sem conexão.');
 
 export class FakeTransport implements SyncTransport {
-  readonly faults: Faults = { offline: false, loseResponses: 0, identity: 'ok', role: 'editor', beforePush: null, afterPull: null, bootstrapExpiresOnce: false, pushStatus: null, unauthorized: 0, refreshWorks: false };
+  readonly faults: Faults = { offline: false, loseResponses: 0, identity: 'ok', role: 'editor', beforePush: null, afterPull: null, bootstrapExpiresOnce: false, pushStatus: null, uploadStatus: null, unauthorized: 0, refreshWorks: false };
   refreshes = 0;
+  /** Bytes de mídia que este dispositivo efetivamente enviou. */
+  uploadedBytes = 0;
   readonly calls: string[] = [];
 
   constructor(
@@ -193,19 +197,31 @@ export class FakeTransport implements SyncTransport {
   async registerAsset(document: AssetDoc): Promise<AssetRegistration> {
     this.gate('registerAsset', true);
     const existing = this.server.assets.get(document.id);
-    if (existing?.state === 'ready') return { id: document.id, state: 'ready', uploadId: existing.uploadId };
+    if (existing?.state === 'ready') return { id: document.id, state: 'ready', uploadId: existing.uploadId, receivedBytes: document.byteSize };
+    // Envio em andamento: a tentativa e as partes já recebidas continuam valendo.
+    if (existing) return { id: document.id, state: 'pending', uploadId: existing.uploadId, receivedBytes: existing.partial?.size ?? 0 };
     const uploadId = this.server.uuid();
     this.server.assets.set(document.id, { state: 'pending', uploadId, bytes: null });
-    return { id: document.id, state: 'pending', uploadId };
+    return { id: document.id, state: 'pending', uploadId, receivedBytes: 0 };
   }
 
-  async uploadAsset(document: AssetDoc, uploadId: string, bytes: Blob): Promise<AssetRegistration> {
-    this.gate('uploadAsset', true);
+  async uploadAssetChunk(document: AssetDoc, uploadId: string, offset: number, chunk: Blob): Promise<AssetRegistration> {
+    this.gate('uploadAssetChunk', true);
+    if (this.faults.uploadStatus) throw new TransportError('http', this.faults.uploadStatus.status, this.faults.uploadStatus.code, 'falha simulada');
     const registered = this.server.assets.get(document.id);
+    if (registered?.state === 'ready') return { id: document.id, state: 'ready', uploadId, receivedBytes: document.byteSize };
     if (!registered || registered.uploadId !== uploadId) throw new TransportError('http', 409, 'UPLOAD_ATTEMPT_INVALID', 'Tentativa de upload inválida.');
-    if (bytes.size !== document.byteSize) throw new TransportError('http', 400, 'ASSET_SIZE_MISMATCH', 'Tamanho do arquivo não confere.');
-    this.server.assets.set(document.id, { state: 'ready', uploadId, bytes });
-    return { id: document.id, state: 'ready', uploadId };
+    const stored = registered.partial ?? new Blob([]);
+    if (offset !== stored.size) throw new TransportError('http', 409, 'UPLOAD_OFFSET_MISMATCH', 'O envio deve continuar de onde parou.', { details: { receivedBytes: stored.size } });
+    const all = new Blob([stored, chunk]);
+    this.uploadedBytes += chunk.size;
+    if (chunk.size === 0 || all.size > document.byteSize) throw new TransportError('http', 400, 'ASSET_SIZE_MISMATCH', 'Tamanho do arquivo não confere.');
+    if (all.size < document.byteSize) {
+      this.server.assets.set(document.id, { state: 'pending', uploadId, bytes: null, partial: all });
+      return { id: document.id, state: 'pending', uploadId, receivedBytes: all.size };
+    }
+    this.server.assets.set(document.id, { state: 'ready', uploadId, bytes: all });
+    return { id: document.id, state: 'ready', uploadId, receivedBytes: all.size };
   }
 
   async downloadAsset(document: AssetDoc): Promise<Blob> {
@@ -230,7 +246,8 @@ export function device(server: FakeServer, name: string, userId: string = USER) 
   const transport = new FakeTransport(server, userId);
   const state = { presenting: false };
   const now = () => new Date((clock += 1000)).toISOString();
-  const coordinator = new SyncCoordinator({ storage, transport, assets: bytes, workspaceId: WORKSPACE, now, newId, isPresenting: () => state.presenting });
+  const progress: (SyncProgress | null)[] = [];
+  const coordinator = new SyncCoordinator({ storage, transport, assets: bytes, workspaceId: WORKSPACE, now, newId, isPresenting: () => state.presenting, onProgress: (step) => void progress.push(step) });
   const read = <T>(work: Parameters<MemorySyncStorage['transaction']>[0]) => storage.transaction(work) as Promise<T>;
   return {
     name,
@@ -241,6 +258,7 @@ export function device(server: FakeServer, name: string, userId: string = USER) 
     newId,
     now,
     state,
+    progress,
     advance: (ms: number) => void (clock += ms),
     sync: () => coordinator.syncOnce(),
     save: (entityType: SyncEntityType, document: SyncDoc) => storage.saveLocal(entityType, document),

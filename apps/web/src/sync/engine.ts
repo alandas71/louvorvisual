@@ -5,6 +5,7 @@ import {
   SyncScheduler,
   type ConnectionState,
   type CycleOutcome,
+  type SyncProgress,
   type SyncSummary,
 } from '@louvorvisual/sync';
 import type { LocalSession } from '@/local/session';
@@ -24,7 +25,20 @@ export type SyncStatus = {
   cycles: number;
   /** Instante previsto da próxima tentativa automática depois de uma falha passageira. */
   nextRetryAt: number | null;
+  /** Transferência em curso (arquivos ou alterações); `null` quando não há nada indo ou vindo. */
+  progress: SyncProgress | null;
+  /** Resultado da última transferência mostrada; some sozinho depois de alguns segundos. */
+  transferResult: 'done' | 'failed' | 'offline' | null;
 };
+
+/** Envio de poucas alterações termina antes de dar para ler: só o envio em vários lotes é mostrado. */
+const MIN_DOCUMENTS_SHOWN = 20;
+const RESULT_VISIBLE_MS = { done: 2_500, failed: 6_000, offline: 6_000 } as const;
+
+/** Transferência que vale mostrar a quem usa: bytes de áudio ou muitas alterações de uma vez. */
+export function visibleProgress(progress: SyncProgress | null): SyncProgress | null {
+  return progress && (progress.phase !== 'documents' || progress.total >= MIN_DOCUMENTS_SHOWN) ? progress : null;
+}
 
 /** Avisado quando documentos locais mudaram por sincronização ou resolução; as listas recarregam. */
 export const LIBRARY_CHANGED_EVENT = 'lv:library-changed';
@@ -58,11 +72,13 @@ export class SyncEngine {
   private stopped = false;
   private releaseLeadership: (() => void) | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private transferShown = false;
+  private resultTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly session: LocalSession) {
     const { db, profile, team } = session;
     this.storage = new DexieSyncStorage(db, { workspaceId: profile.workspaceId, deviceId: profile.deviceId });
-    this.status = { connection: team ? 'syncing' : 'local-only', leader: false, summary: null, lastOutcome: null, cycles: 0, nextRetryAt: null };
+    this.status = { connection: team ? 'syncing' : 'local-only', leader: false, summary: null, lastOutcome: null, cycles: 0, nextRetryAt: null, progress: null, transferResult: null };
     this.channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(`lv-sync:${profile.profileId}`);
   }
 
@@ -148,17 +164,35 @@ export class SyncEngine {
       now: () => new Date().toISOString(),
       newId: () => crypto.randomUUID(),
       isPresenting,
+      onProgress: (progress) => {
+        if (visibleProgress(progress)) {
+          this.transferShown = true;
+          if (this.resultTimer) clearTimeout(this.resultTimer);
+          this.setStatus({ progress, transferResult: null });
+        } else if (progress !== this.status.progress) this.setStatus({ progress });
+      },
     });
     this.scheduler = new SyncScheduler({
       run: () => coordinator.syncOnce(),
       onStart: () => this.setStatus({ connection: 'syncing', nextRetryAt: null }),
       onOutcome: (outcome, nextRunInMs) => {
-        this.setStatus({ connection: outcome.connection, lastOutcome: outcome, cycles: this.status.cycles + 1, nextRetryAt: outcome.retry && nextRunInMs !== null ? Date.now() + nextRunInMs : null }, false);
+        this.setStatus({ connection: outcome.connection, lastOutcome: outcome, cycles: this.status.cycles + 1, nextRetryAt: outcome.retry && nextRunInMs !== null ? Date.now() + nextRunInMs : null, ...this.transferOutcome(outcome) }, false);
         void this.refreshSummary();
         if (outcome.adopted > 0 || outcome.conflictsOpened > 0 || outcome.downloaded > 0) this.announceLibraryChange();
       },
     });
     this.scheduler.start();
+  }
+
+  /** Fecha a transferência mostrada neste ciclo com o resultado dele. */
+  private transferOutcome(outcome: CycleOutcome): Partial<SyncStatus> {
+    if (!this.transferShown) return {};
+    this.transferShown = false;
+    const transferResult = outcome.connection === 'offline' ? 'offline' : outcome.retry || outcome.error ? 'failed' : 'done';
+    this.resultTimer = setTimeout(() => {
+      if (!this.stopped) this.setStatus({ transferResult: null });
+    }, RESULT_VISIBLE_MS[transferResult]);
+    return { transferResult };
   }
 
   private onOnline = () => this.scheduler?.request(0);

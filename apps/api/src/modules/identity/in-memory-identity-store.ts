@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
-import { type Asset, type IdentityStore, IdentityError, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
+import { type Asset, type AssetUpload, type IdentityStore, IdentityError, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
 
 export { IdentityError, ROLES, safeUser, type Asset, type Membership, type Role, type User, type Workspace } from './identity-store';
 type Session = { id: string; userId: string; refreshHash: string; familyId: string; expiresAt: number; revokedAt: number | null };
@@ -17,6 +17,9 @@ export class InMemoryIdentityStore implements IdentityStore {
   private readonly sessions = new Map<string, Session>();
   private readonly assets = new Map<string, Asset>();
   private readonly bytes = new Map<string, Buffer>();
+  /** Partes já recebidas de um envio ainda não concluído. */
+  private readonly partial = new Map<string, Buffer>();
+  private received(asset: Asset): AssetUpload { return { ...asset, receivedBytes: asset.state === 'ready' ? asset.byteSize : this.partial.get(asset.id)?.length ?? 0 }; }
   private readonly access = new Map<string, { sessionId: string; expiresAt: number }>();
 
   async register(name: string, email: string, password: string): Promise<User> {
@@ -82,17 +85,19 @@ export class InMemoryIdentityStore implements IdentityStore {
     if (removesAdmin && this.activeAdminCount(workspaceId) <= 1) throw new IdentityError('LAST_ADMIN_PROTECTED', 409, 'O último administrador ativo não pode ser removido ou rebaixado.');
     if (patch.role) member.role = patch.role; if (patch.status) member.status = patch.status; member.updatedAt = now(); return member;
   }
-  async registerAsset(workspaceId: string, userId: string, value: Omit<Asset, 'state' | 'uploadId' | 'createdAt' | 'updatedAt'>): Promise<Asset> {
+  async registerAsset(workspaceId: string, userId: string, value: Omit<Asset, 'state' | 'uploadId' | 'createdAt' | 'updatedAt'>): Promise<AssetUpload> {
     await this.requireRole(workspaceId, userId, ['editor', 'admin']); if (value.workspaceId !== workspaceId) throw new IdentityError('WORKSPACE_MISMATCH', 400, 'Arquivo pertence a outro espaço.');
     const existing = this.assets.get(value.id); if (existing && existing.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.');
-    if (existing?.state === 'ready' && existing.sha256 === value.sha256) return existing;
+    if (existing?.state === 'ready' && existing.sha256 === value.sha256) return this.received(existing);
+    // Envio em andamento do mesmo conteúdo: a tentativa e as partes já recebidas continuam valendo.
+    if (existing?.state === 'pending' && existing.sha256 === value.sha256 && existing.byteSize === value.byteSize) return this.received(existing);
     // O ID do arquivo é gerado no dispositivo e é o que os arranjos referenciam (planejamento/11 e 12):
     // quando os mesmos bytes já estão publicados no espaço sob outro ID, este ID passa a apontar para
     // eles, sem novo upload. Devolver o ID alheio deixaria a referência do arranjo sem download possível.
     const duplicate = [...this.assets.values()].find((asset) => asset.workspaceId === workspaceId && asset.sha256 === value.sha256 && asset.state === 'ready' && asset.byteSize === value.byteSize);
-    if (duplicate && !existing) { const alias: Asset = { ...value, state: 'ready', uploadId: randomUUID(), createdAt: now(), updatedAt: now() }; this.assets.set(alias.id, alias); this.bytes.set(alias.id, this.bytes.get(duplicate.id) ?? Buffer.alloc(0)); return alias; }
-    if (existing) { existing.state = 'pending'; existing.uploadId = randomUUID(); existing.updatedAt = now(); return existing; }
-    const asset: Asset = { ...value, state: 'pending', uploadId: randomUUID(), createdAt: now(), updatedAt: now() }; this.assets.set(asset.id, asset); return asset;
+    if (duplicate && !existing) { const alias: Asset = { ...value, state: 'ready', uploadId: randomUUID(), createdAt: now(), updatedAt: now() }; this.assets.set(alias.id, alias); this.bytes.set(alias.id, this.bytes.get(duplicate.id) ?? Buffer.alloc(0)); return this.received(alias); }
+    if (existing) { Object.assign(existing, value); existing.state = 'pending'; existing.uploadId = randomUUID(); existing.updatedAt = now(); this.partial.delete(existing.id); return this.received(existing); }
+    const asset: Asset = { ...value, state: 'pending', uploadId: randomUUID(), createdAt: now(), updatedAt: now() }; this.assets.set(asset.id, asset); return this.received(asset);
   }
   async getAsset(workspaceId: string, userId: string, assetId: string): Promise<Asset> { await this.requireRole(workspaceId, userId, ROLES); const asset = this.assets.get(assetId); if (!asset || asset.workspaceId !== workspaceId) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); return asset; }
   async upload(workspaceId: string, userId: string, assetId: string, uploadId: string | undefined, data: Buffer, contentType: string | undefined): Promise<Asset> {
@@ -102,11 +107,26 @@ export class InMemoryIdentityStore implements IdentityStore {
     if (data.length !== asset.byteSize) { asset.state = 'failed'; throw new IdentityError('ASSET_SIZE_MISMATCH', 400, 'Tamanho do arquivo não confere.'); }
     if (sha(data) !== asset.sha256) { asset.state = 'failed'; throw new IdentityError('ASSET_CHECKSUM_MISMATCH', 400, 'Checksum do arquivo não confere.'); }
     if (contentType && contentType.split(';')[0] !== asset.mimeType || !hasAudioMagic(data, asset.mimeType)) { asset.state = 'failed'; throw new IdentityError('ASSET_TYPE_UNSUPPORTED', 415, 'O conteúdo não é o áudio declarado.'); }
-    this.bytes.set(asset.id, Buffer.from(data)); asset.state = 'ready'; asset.updatedAt = now(); return asset;
+    this.bytes.set(asset.id, Buffer.from(data)); this.partial.delete(asset.id); asset.state = 'ready'; asset.updatedAt = now(); return asset;
+  }
+  async uploadChunk(workspaceId: string, userId: string, assetId: string, uploadId: string | undefined, offset: number, data: Buffer, contentType: string | undefined): Promise<AssetUpload> {
+    await this.requireRole(workspaceId, userId, ['editor', 'admin']); const asset = await this.getAsset(workspaceId, userId, assetId);
+    // Resposta da última parte perdida: o arquivo já está publicado e a repetição só confirma.
+    if (asset.state === 'ready') return this.received(asset);
+    if (!uploadId || uploadId !== asset.uploadId) throw new IdentityError('UPLOAD_ATTEMPT_INVALID', 409, 'Tentativa de upload inválida; registre o arquivo novamente.');
+    const stored = this.partial.get(asset.id) ?? Buffer.alloc(0);
+    if (offset !== stored.length) throw new IdentityError('UPLOAD_OFFSET_MISMATCH', 409, 'O envio deve continuar de onde parou.', { receivedBytes: stored.length });
+    const fail = (code: string, status: number, message: string): never => { this.partial.delete(asset.id); asset.state = 'failed'; throw new IdentityError(code, status, message); };
+    if (data.length === 0 || stored.length + data.length > asset.byteSize) fail('ASSET_SIZE_MISMATCH', 400, 'Tamanho do arquivo não confere.');
+    const all = Buffer.concat([stored, data]);
+    if (all.length < asset.byteSize) { this.partial.set(asset.id, all); return this.received(asset); }
+    if (sha(all) !== asset.sha256) fail('ASSET_CHECKSUM_MISMATCH', 400, 'Checksum do arquivo não confere.');
+    if (contentType && contentType.split(';')[0] !== asset.mimeType || !hasAudioMagic(all, asset.mimeType)) fail('ASSET_TYPE_UNSUPPORTED', 415, 'O conteúdo não é o áudio declarado.');
+    this.bytes.set(asset.id, all); this.partial.delete(asset.id); asset.state = 'ready'; asset.updatedAt = now(); return this.received(asset);
   }
   async content(workspaceId: string, userId: string, assetId: string): Promise<Buffer> { const asset = await this.getAsset(workspaceId, userId, assetId); if (asset.state !== 'ready') throw new IdentityError('DEPENDENCY_NOT_READY', 422, 'Arquivo ainda não está disponível.'); return Buffer.from(this.bytes.get(asset.id) ?? Buffer.alloc(0)); }
-  async deleteAsset(workspaceId: string, userId: string, assetId: string): Promise<void> { await this.requireRole(workspaceId, userId, ['editor', 'admin']); await this.getAsset(workspaceId, userId, assetId); this.assets.delete(assetId); this.bytes.delete(assetId); }
-  async recoverPartialUploads(): Promise<number> { let count = 0; for (const asset of this.assets.values()) if (asset.state === 'pending') { this.bytes.delete(asset.id); asset.uploadId = randomUUID(); asset.updatedAt = now(); count++; } return count; }
+  async deleteAsset(workspaceId: string, userId: string, assetId: string): Promise<void> { await this.requireRole(workspaceId, userId, ['editor', 'admin']); await this.getAsset(workspaceId, userId, assetId); this.assets.delete(assetId); this.bytes.delete(assetId); this.partial.delete(assetId); }
+  async recoverPartialUploads(): Promise<number> { let count = 0; for (const asset of this.assets.values()) if (asset.state === 'pending') { this.bytes.delete(asset.id); this.partial.delete(asset.id); asset.uploadId = randomUUID(); asset.updatedAt = now(); count++; } return count; }
   private issueAccess(sessionId: string) { const token = randomBytes(32).toString('base64url'); this.access.set(token, { sessionId, expiresAt: Date.now() + 15 * 60_000 }); return token; }
   private revokeFamily(familyId: string) { for (const session of this.sessions.values()) if (session.familyId === familyId) session.revokedAt = Date.now(); }
   private requireUser(id: string) { const user = this.users.get(id); if (!user) throw new IdentityError('UNAUTHORIZED', 401, 'Não autenticado.'); return user; }

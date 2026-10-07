@@ -6,7 +6,12 @@ export type Workspace = { id: string; name: string; timezone: string; createdAt:
 export type Asset = { id: string; workspaceId: string; sha256: string; filename: string; mimeType: 'audio/mpeg' | 'audio/wav'; byteSize: number; audioKind: 'original' | 'playback'; durationMs: number | null; state: 'pending' | 'ready' | 'failed'; uploadId: string; createdAt: string; updatedAt: string };
 export type Invitation = { id: string; workspaceId: string; email: string; role: Role; expiresAt: number; acceptedAt: number | null; createdBy: string };
 
-export class IdentityError extends Error { constructor(readonly code: string, readonly status: number, message: string) { super(message); } }
+/** Registro de arquivo com o que o servidor já guardou do envio em partes. */
+export type AssetUpload = Asset & { receivedBytes: number };
+/** Tamanho máximo de uma parte do envio retomável. */
+export const MAX_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+
+export class IdentityError extends Error { constructor(readonly code: string, readonly status: number, message: string, readonly details?: unknown) { super(message); } }
 
 export interface IdentityStore {
   register(name: string, email: string, password: string): Promise<User>;
@@ -23,9 +28,11 @@ export interface IdentityStore {
   invite(workspaceId: string, requester: string, email: string, role: Role): Promise<{ token: string; invitation: Invitation }>;
   acceptInvitation(token: string, userId: string): Promise<Membership>;
   updateMember(workspaceId: string, requester: string, targetUserId: string, patch: { role?: Role; status?: 'active' | 'revoked' }): Promise<Membership>;
-  registerAsset(workspaceId: string, userId: string, value: Omit<Asset, 'state' | 'uploadId' | 'createdAt' | 'updatedAt'>): Promise<Asset>;
+  registerAsset(workspaceId: string, userId: string, value: Omit<Asset, 'state' | 'uploadId' | 'createdAt' | 'updatedAt'>): Promise<AssetUpload>;
   getAsset(workspaceId: string, userId: string, assetId: string): Promise<Asset>;
   upload(workspaceId: string, userId: string, assetId: string, uploadId: string | undefined, data: Buffer, contentType: string | undefined): Promise<Asset>;
+  /** Acrescenta uma parte a partir de `offset`; a última parte confere tamanho, hash e tipo antes de publicar. */
+  uploadChunk(workspaceId: string, userId: string, assetId: string, uploadId: string | undefined, offset: number, data: Buffer, contentType: string | undefined): Promise<AssetUpload>;
   content(workspaceId: string, userId: string, assetId: string): Promise<Buffer>;
   deleteAsset(workspaceId: string, userId: string, assetId: string): Promise<void>;
   recoverPartialUploads(): Promise<number>;

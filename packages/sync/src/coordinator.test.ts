@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formBatches } from './coordinator';
+import { formBatches, UPLOAD_CHUNK_BYTES } from './coordinator';
 import { listPending, summarize } from './inspect';
 import { adoptDeferredRemote, ConflictResolutionError, resolveAlternative, resolveKeepLocal, resolveKeepRemote } from './resolve';
 import { device, FakeServer, fixtures, songDoc, titled, titleOf, USER, type Device } from './testing';
@@ -723,26 +723,72 @@ describe('mídia', () => {
     expect((await a.doc('asset', asset.id)) as AssetDoc).toMatchObject({ remoteState: 'failed' });
   });
 
-  it('upload interrompido é refeito inteiro no ciclo seguinte', async () => {
+  it('upload interrompido continua de onde parou: só vai o que o servidor ainda não tem', async () => {
     const server = new FakeServer();
     const a = device(server, 'a');
     a.bytes.blobs.set(asset.sha256, new Blob([new Uint8Array(asset.byteSize)]));
     await a.save('asset', asset);
-    const upload = a.transport.uploadAsset.bind(a.transport);
-    let failed = false;
-    a.transport.uploadAsset = async (document, uploadId, bytes) => {
-      if (!failed) {
-        failed = true;
-        a.transport.faults.offline = true;
-      }
-      return upload(document, uploadId, bytes);
+    const upload = a.transport.uploadAssetChunk.bind(a.transport);
+    let parts = 0;
+    a.transport.uploadAssetChunk = async (document, uploadId, offset, chunk) => {
+      parts += 1;
+      if (parts === 3) a.transport.faults.offline = true;
+      return upload(document, uploadId, offset, chunk);
     };
     expect(await a.sync()).toMatchObject({ connection: 'offline', uploaded: 0 });
     expect(server.assets.get(asset.id)).toMatchObject({ state: 'pending' });
+    expect(server.assets.get(asset.id)?.partial?.size).toBe(2 * UPLOAD_CHUNK_BYTES);
     a.transport.faults.offline = false;
     expect(await a.sync()).toMatchObject({ connection: 'idle', uploaded: 1, pushed: 1 });
     expect(server.assets.get(asset.id)).toMatchObject({ state: 'ready' });
+    expect(server.assets.get(asset.id)?.bytes?.size).toBe(asset.byteSize);
     expect(server.documentOf('asset', asset.id)).toMatchObject({ remoteState: 'ready' });
+    // Nenhum byte foi enviado duas vezes.
+    expect(a.transport.uploadedBytes).toBe(asset.byteSize);
+  });
+
+  it('parte que chegou sem a resposta não é reenviada: o envio se realinha com o servidor', async () => {
+    const server = new FakeServer();
+    const a = device(server, 'a');
+    a.bytes.blobs.set(asset.sha256, new Blob([new Uint8Array(asset.byteSize)]));
+    await a.save('asset', asset);
+    const register = a.transport.registerAsset.bind(a.transport);
+    // O registro informa uma posição atrasada, como se a confirmação da primeira parte tivesse se perdido.
+    a.transport.registerAsset = async (document) => {
+      const registration = await register(document);
+      if (registration.state === 'pending') server.assets.set(document.id, { state: 'pending', uploadId: registration.uploadId, bytes: null, partial: new Blob([new Uint8Array(UPLOAD_CHUNK_BYTES)]) });
+      return registration;
+    };
+    expect(await a.sync()).toMatchObject({ connection: 'idle', uploaded: 1 });
+    expect(server.assets.get(asset.id)?.bytes?.size).toBe(asset.byteSize);
+  });
+
+  it('falha do servidor no upload não trava os documentos e o ciclo pede nova tentativa', async () => {
+    const server = new FakeServer();
+    const a = device(server, 'a');
+    a.bytes.blobs.set(asset.sha256, new Blob([new Uint8Array(asset.byteSize)]));
+    await a.save('song', song);
+    await a.save('asset', asset);
+    a.transport.faults.uploadStatus = { status: 500, code: 'INTERNAL_ERROR' };
+    expect(await a.sync()).toMatchObject({ connection: 'error', retry: true, pushed: 1, uploaded: 0, error: { code: 'INTERNAL_ERROR' } });
+    expect(server.revisionOf('song', song.id)).toBe('1');
+    expect((await a.doc('asset', asset.id)) as AssetDoc).toMatchObject({ remoteState: 'local' });
+    a.transport.faults.uploadStatus = null;
+    expect(await a.sync()).toMatchObject({ connection: 'idle', uploaded: 1, pushed: 1 });
+  });
+
+  it('informa o andamento em bytes do envio e encerra com nulo', async () => {
+    const server = new FakeServer();
+    const a = device(server, 'a');
+    a.bytes.blobs.set(asset.sha256, new Blob([new Uint8Array(asset.byteSize)]));
+    await a.save('asset', asset);
+    await a.sync();
+    const uploads = a.progress.filter((step) => step?.phase === 'upload');
+    expect(uploads[0]).toMatchObject({ loaded: 0, total: asset.byteSize, filename: asset.filename, index: 1, count: 1 });
+    expect(uploads.at(-1)).toMatchObject({ loaded: asset.byteSize, total: asset.byteSize });
+    expect(uploads.map((step) => step!.loaded)).toEqual([...uploads.map((step) => step!.loaded)].sort((x, y) => x - y));
+    expect(a.progress.some((step) => step?.phase === 'documents')).toBe(true);
+    expect(a.progress.at(-1)).toBeNull();
   });
 
   it('durante uma apresentação os downloads ficam suspensos e a biblioteca continua chegando', async () => {

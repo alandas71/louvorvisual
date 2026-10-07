@@ -7,9 +7,26 @@ const BASE = '/api/v1';
 const CLIENT_VERSION = '0.1.0';
 const TIMEOUT_MS = 30_000;
 const TRANSFER_TIMEOUT_MS = 10 * 60_000;
+/** Cada parte do envio é pequena; se demorar mais que isso, a conexão caiu e a parte é repetida. */
+const CHUNK_TIMEOUT_MS = 2 * 60_000;
 
 type Parser<T> = { parse(value: unknown): T };
-type RequestOptions<T> = { body?: unknown; bytes?: Blob; headers?: Record<string, string>; schema?: Parser<T>; timeoutMs?: number; blob?: boolean };
+type RequestOptions<T> = { body?: unknown; bytes?: Blob; headers?: Record<string, string>; schema?: Parser<T>; timeoutMs?: number; blob?: boolean; onBlobProgress?: (loadedBytes: number) => void };
+
+/** Lê o corpo em fluxo para informar os bytes já recebidos. */
+async function readBlob(response: Response, onProgress: (loadedBytes: number) => void): Promise<Blob> {
+  const reader = response.body!.getReader();
+  const parts: BlobPart[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
+    loaded += value.byteLength;
+    onProgress(loaded);
+  }
+  return new Blob(parts, { type: response.headers.get('content-type') ?? '' });
+}
 
 function retryAfterMs(response: Response): number | undefined {
   const seconds = Number(response.headers.get('retry-after'));
@@ -36,7 +53,13 @@ export async function apiRequest<T>(method: string, path: string, options: Reque
     throw new TransportError('network', 0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'Sem conexão com o servidor.');
   }
 
-  if (response.ok && options.blob) return (await response.blob()) as T;
+  if (response.ok && options.blob) {
+    try {
+      return (options.onBlobProgress && response.body ? await readBlob(response, options.onBlobProgress) : await response.blob()) as T;
+    } catch (error) {
+      throw new TransportError('network', 0, 'NETWORK_ERROR', error instanceof Error ? error.message : 'A transferência foi interrompida.');
+    }
+  }
   let body: unknown;
   try {
     body = await response.json();
@@ -86,8 +109,8 @@ export async function currentAccount(): Promise<Me | null> {
   }
 }
 
-type ServerAsset = { id: string; state: AssetRegistration['state']; uploadId: string };
-const registration = (asset: ServerAsset): AssetRegistration => ({ id: asset.id, state: asset.state, uploadId: asset.uploadId });
+type ServerAsset = { id: string; state: AssetRegistration['state']; uploadId: string; receivedBytes?: number };
+const registration = (asset: ServerAsset): AssetRegistration => ({ id: asset.id, state: asset.state, uploadId: asset.uploadId, receivedBytes: asset.receivedBytes ?? 0 });
 
 /** Transporte de um perfil de equipe: todas as chamadas levam o espaço e conferem a conta. */
 export class HttpSyncTransport implements SyncTransport {
@@ -144,14 +167,18 @@ export class HttpSyncTransport implements SyncTransport {
     return registration(await apiRequest<ServerAsset>('POST', `${this.root}/assets`, { body: { id, sha256, filename, mimeType, byteSize, audioKind, durationMs } }));
   }
 
-  async uploadAsset(asset: AssetDoc, uploadId: string, bytes: Blob): Promise<AssetRegistration> {
-    // O arquivo vai inteiro; um envio interrompido é refeito desde o início (planejamento/12).
+  async uploadAssetChunk(asset: AssetDoc, uploadId: string, offset: number, chunk: Blob): Promise<AssetRegistration> {
+    // O arquivo vai em partes; um envio interrompido continua da posição que o servidor já tem.
     return registration(
-      await apiRequest<ServerAsset>('PUT', `${this.root}/assets/${asset.id}/content`, { bytes, headers: { 'content-type': asset.mimeType, 'upload-attempt-id': uploadId }, timeoutMs: TRANSFER_TIMEOUT_MS }),
+      await apiRequest<ServerAsset>('PATCH', `${this.root}/assets/${asset.id}/content`, {
+        bytes: chunk,
+        headers: { 'content-type': asset.mimeType, 'upload-attempt-id': uploadId, 'upload-offset': String(offset) },
+        timeoutMs: CHUNK_TIMEOUT_MS,
+      }),
     );
   }
 
-  downloadAsset(asset: AssetDoc): Promise<Blob> {
-    return apiRequest<Blob>('GET', `${this.root}/assets/${asset.id}/content`, { blob: true, timeoutMs: TRANSFER_TIMEOUT_MS });
+  downloadAsset(asset: AssetDoc, onProgress?: (loadedBytes: number) => void): Promise<Blob> {
+    return apiRequest<Blob>('GET', `${this.root}/assets/${asset.id}/content`, { blob: true, timeoutMs: TRANSFER_TIMEOUT_MS, onBlobProgress: onProgress });
   }
 }

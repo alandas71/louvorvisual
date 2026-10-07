@@ -163,7 +163,22 @@ export interface AssetBytes {
   write(asset: AssetDoc, blob: Blob): Promise<'stored' | 'mismatch'>;
 }
 
-export type AssetRegistration = { id: string; state: 'pending' | 'ready' | 'failed'; uploadId: string };
+/** `receivedBytes`: quanto do arquivo o servidor já guardou; o envio continua a partir daí. */
+export type AssetRegistration = { id: string; state: 'pending' | 'ready' | 'failed'; uploadId: string; receivedBytes: number };
+
+/**
+ * Andamento real do ciclo em curso. Em `upload` e `download` a unidade é
+ * byte e `filename` é o arquivo da vez; em `documents` são alterações enviadas.
+ */
+export type SyncProgress = {
+  phase: 'upload' | 'download' | 'documents';
+  loaded: number;
+  total: number;
+  filename: string | null;
+  /** Posição do arquivo atual (1 = primeiro) e quantos arquivos há nesta fase. */
+  index: number;
+  count: number;
+};
 
 /**
  * Falha de transporte. `network` não equivale a rejeição: a operação pode ter
@@ -194,8 +209,9 @@ export interface SyncTransport {
   bootstrapStart(limit: number): Promise<SyncBootstrapResponse>;
   bootstrapPage(token: string, cursor: string, limit: number): Promise<SyncBootstrapResponse>;
   registerAsset(asset: AssetDoc): Promise<AssetRegistration>;
-  uploadAsset(asset: AssetDoc, uploadId: string, bytes: Blob): Promise<AssetRegistration>;
-  downloadAsset(asset: AssetDoc): Promise<Blob>;
+  /** Envia uma parte do arquivo a partir de `offset`; a resposta diz quanto o servidor já tem. */
+  uploadAssetChunk(asset: AssetDoc, uploadId: string, offset: number, chunk: Blob): Promise<AssetRegistration>;
+  downloadAsset(asset: AssetDoc, onProgress?: (loadedBytes: number) => void): Promise<Blob>;
 }
 
 export type ConnectionState =

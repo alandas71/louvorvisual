@@ -18,6 +18,7 @@ import { TrashView } from '../lixeira/TrashView';
 import { OfflineView } from '../offline/OfflineView';
 import { SetlistsView } from '../repertorios/SetlistsView';
 import { SyncStatusChip } from '../sync/SyncStatusChip';
+import { SyncToast } from '../sync/SyncToast';
 import { SyncView } from '../sync/SyncView';
 import { ThemesView } from '../temas/ThemesView';
 import { BrandMark } from './BrandMark';
@@ -129,6 +130,7 @@ export function AppShell() {
     <>
       <SkipToContent />
       <ServiceWorkerRegistration />
+      <SyncToast />
       <div className="lv-stage flex min-h-dvh flex-col lg:pl-72">
         <DataNoticeBanner />
 
