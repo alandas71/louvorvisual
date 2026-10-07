@@ -477,7 +477,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
             {state.cover ? 'Abertura' : `Slide atual · ${current.label || 'Sem rótulo'}`}
           </h2>
           <div data-testid="current-slide">
-            <SlideView text={current.text} style={current.style} fontId={current.fontId} cover={view.live.cover} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
+            <SlideView text={current.text} style={current.style} fontId={current.fontId} cover={view.live.cover} transitionKey={`${current.occurrenceId}:${view.live.cover ? 'abertura' : 'letra'}`} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
           </div>
           {!state.cover && <SlideChecks slide={current} />}
           <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="timing">

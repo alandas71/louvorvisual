@@ -271,14 +271,15 @@
 }
 
 /*
- * Troca de slide nas saídas: o conteúdo novo aparece enquanto o anterior some,
- * por cima do mesmo fundo. Só opacidade: nada se desloca nem muda de tamanho.
+ * Troca de slide nas saídas: o conteúdo anterior some primeiro e só então o
+ * novo aparece, sobre o mesmo fundo. Os dois textos nunca ficam legíveis um
+ * por cima do outro. Só opacidade: nada se desloca nem muda de tamanho.
  */
 .lv-slide-enter {
-  animation: lv-slide-in 0.6s ease-out both;
+  animation: lv-slide-in 0.4s ease-out 0.22s both;
 }
 .lv-slide-leave {
-  animation: lv-slide-out 0.6s ease-in both;
+  animation: lv-slide-out 0.22s ease-in both;
   pointer-events: none;
 }
 @keyframes lv-slide-in {

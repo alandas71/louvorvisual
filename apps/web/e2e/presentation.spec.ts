@@ -18,6 +18,7 @@ import {
   recordChannel,
   recordTransitions,
   SLIDE_TEXTS,
+  slideSettled,
   startShow,
   transitions,
   wallClock,
@@ -85,6 +86,7 @@ test('AT-04, AT-08, AT-16: manual, janela pública limpa, controlador único, re
   expect(await drawn(projection)).toMatchObject({ text: SLIDE_TEXTS[0], visible: true, background: 'rgb(17, 24, 39)', color: 'rgb(249, 250, 251)', family: 'Inter', weight: '700' });
 
   // Saída limpa por padrão: só o slide. Nenhum botão, relógio, nota ou mídia.
+  await slideSettled(projection);
   expect(await projection.evaluate(() => document.body.innerText.trim())).toBe(SLIDE_TEXTS[0]);
   await expect(projection.locator('button, input, a, [data-testid="countdown"], [data-testid="timer-static"], [data-corner-button]')).toHaveCount(0);
   await expect(output(projection)).toHaveAttribute('data-controls', 'false');
@@ -917,6 +919,7 @@ test('AT-14: proporção 4:3, prévia e saída equivalentes, excesso de texto me
   expect((await fontInUse(projection, 'Lato', 700)).status).toEqual(['error']);
   // A própria janela pública informa o operador; na tela dela nada aparece.
   await expect(page.getByTestId('projection-font-missing')).toBeVisible();
+  await slideSettled(projection);
   expect(await projection.evaluate(() => document.body.innerText.trim())).toBe(SLIDE_TEXTS[0]);
   // A recuperação explícita: trocar para Inter, em todos os slides.
   await page.getByRole('group', { name: 'Onde aplicar: fonte' }).getByLabel('Todos os slides deste louvor').check();
@@ -1006,7 +1009,17 @@ test('abertura, automático por padrão, indicador de avanço automático e pref
   expect(await drawn(projection)).toMatchObject({ text: SLIDE_TEXTS[0], visible: true });
   await expect(page.getByTestId('advance')).toHaveAttribute('data-auto', 'true');
   await expect(page.getByTestId('advance').getByTestId('auto-spinner')).toBeVisible();
+  // Toda troca de slide é suave, não só a saída da abertura: o texto anterior some e só então o novo aparece,
+  // no painel e na projeção. A camada que sai dura pouco; aqui se confere a entrada animada e que nada sobra.
   await expect(operator(page)).toHaveAttribute('data-index', '1', { timeout: 6000 });
+  for (const frame of [projection.getByTestId('public-output'), page.getByTestId('current-slide')]) {
+    await expect(frame.locator('[data-slide-text]')).toHaveText(SLIDE_TEXTS[1]!);
+    await expect(frame.locator('.lv-slide-enter')).toHaveCSS('animation-name', 'lv-slide-in');
+  }
+  await slideSettled(projection);
+  await slideSettled(page);
+  await expect(projection.locator('.lv-slide-leave')).toHaveCount(0);
+  await expect(page.getByTestId('current-slide').locator('.lv-slide-leave')).toHaveCount(0);
   // Em pausa o automático não está andando: a seta volta.
   await page.getByTestId('transport').click();
   await expect(operator(page)).toHaveAttribute('data-status', 'paused');

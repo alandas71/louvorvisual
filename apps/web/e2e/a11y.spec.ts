@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { BrowserProfile, openHiddenView, ORIGIN, ProductionServer } from './helpers';
-import { createSong, openOperator, openProjection, startShow } from './presentation.helpers';
+import { createSong, openOperator, openProjection, slideSettled, startShow } from './presentation.helpers';
 
 // Auditoria de acessibilidade (RNF-06) sobre o build de produção: regras WCAG 2.1 A/AA
 // do axe-core em cada tela do operador, mais a operação principal só pelo teclado.
@@ -16,6 +16,8 @@ type Audit = { screen: string; violations: Violation[]; incomplete: { id: string
 const audits: Audit[] = [];
 
 async function audit(page: Page, screen: string): Promise<Audit> {
+  // No meio da troca suave de slide o texto está semitransparente e a medição de contraste seria falsa.
+  await slideSettled(page);
   await page.addScriptTag({ content: axeSource });
   const result = await page.evaluate(async () => {
     const axe = (window as unknown as { axe: { run: (context: Document, options: unknown) => Promise<{ violations: Violation[]; incomplete: Violation[]; passes: unknown[] }> } }).axe;

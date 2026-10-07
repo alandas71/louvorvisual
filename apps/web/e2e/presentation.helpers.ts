@@ -124,6 +124,14 @@ export function drawn(page: Page, root = '[data-testid="public-output"]') {
   }, root);
 }
 
+/** Espera a troca suave de slide terminar: nenhuma camada saindo nem entrando em qualquer quadro da página. */
+export async function slideSettled(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document.querySelectorAll('.lv-slide-leave').length === 0 &&
+    !document.getAnimations().some((animation) => animation.playState === 'running' && ['lv-slide-in', 'lv-slide-out'].includes((animation as CSSAnimation).animationName)),
+  );
+}
+
 export type Transition = { id: string; mode: string; at: number };
 
 /** Registra na própria janela o instante de cada troca de slide ou de modo visual que ela recebe. */
