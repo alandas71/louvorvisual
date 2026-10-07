@@ -82,7 +82,6 @@ export function IntegritySection({ buttonClassName }: { buttonClassName: string 
       <h2 id="conferencia" className="text-lg font-bold">
         Conferência dos dados
       </h2>
-      <p className="text-sm text-muted">Verifica se os documentos gravados estão legíveis e se os áudios usados pelos louvores estão inteiros. A conferência não altera nada.</p>
       <div className="flex flex-wrap gap-3">
         <button type="button" className={buttonClassName} disabled={!session || running !== null} onClick={() => void scan(false)}>
           Conferir documentos

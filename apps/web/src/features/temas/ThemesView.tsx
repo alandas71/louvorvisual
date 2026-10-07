@@ -19,10 +19,6 @@ export function ThemesView() {
     <div className="flex flex-col gap-8">
       <header>
         <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Temas e fontes</h1>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
-          Oito temas escuros e oito famílias de fontes acompanham o aplicativo e funcionam sem conexão. A escolha abaixo
-          vale só para esta prévia; o tema e a fonte de cada louvor são escolhidos no editor ou ao vivo, na apresentação.
-        </p>
       </header>
 
       <section aria-labelledby="previa" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">
@@ -35,9 +31,6 @@ export function ThemesView() {
           fontId={selection.fontId}
           className="w-full max-w-3xl overflow-hidden rounded-2xl border border-border shadow-pop"
         />
-        <p className="text-sm text-muted">
-          É o mesmo desenho usado na projeção. Para projetar, abra um louvor na biblioteca e use &ldquo;Apresentar&rdquo;.
-        </p>
       </section>
 
       <section aria-labelledby="temas" className="flex flex-col gap-3">

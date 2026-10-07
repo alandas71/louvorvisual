@@ -18,6 +18,7 @@ import {
   recordChannel,
   recordTransitions,
   SLIDE_TEXTS,
+  startShow,
   transitions,
   wallClock,
 } from './presentation.helpers';
@@ -78,7 +79,7 @@ test('AT-04, AT-08, AT-16: manual, janela pública limpa, controlador único, re
   await expect(page.getByTestId('current-slide').locator('[data-slide-text]')).toHaveText(SLIDE_TEXTS[0]!);
   expect(await drawn(projection)).toMatchObject({ text: '', background: 'rgb(0, 0, 0)', visualMode: 'black' });
 
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
   await expectConfirmed(page, projection);
   expect(await drawn(projection)).toMatchObject({ text: SLIDE_TEXTS[0], visible: true, background: 'rgb(17, 24, 39)', color: 'rgb(249, 250, 251)', family: 'Inter', weight: '700' });
@@ -104,7 +105,7 @@ test('AT-04, AT-08, AT-16: manual, janela pública limpa, controlador único, re
     await expectConfirmed(page, projection);
     confirmTimes.push(Number(await operator(page).getAttribute('data-last-confirm-ms')));
   };
-  await page.getByRole('button', { name: 'Avançar →' }).click();
+  await page.getByTestId('advance').click();
   await expect(operator(page)).toHaveAttribute('data-index', '1');
   await confirmed();
   expect((await drawn(projection))!.text).toBe(SLIDE_TEXTS[1]);
@@ -247,7 +248,7 @@ test('AT-05: automático com 8, 12 e 10 segundos em relógio real, com pausa e r
   await recordTransitions(projection);
   const ids = await page.getByTestId('thumbnail').evaluateAll((items) => items.map((item) => item.getAttribute('data-occurrence-id')!));
 
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   const startedAt = await wallClock(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
   // Indicador, contagem e play/pause existem porque o slide atual tem tempo no automático.
@@ -319,7 +320,7 @@ test('AT-06 e AT-27: saltos no automático, slide sem tempo espera comando e aju
   const remaining = async () => Number(await page.getByTestId('countdown').first().getAttribute('data-remaining-ms'));
   const lastOf = async (id: string) => (await transitions(projection)).filter((item) => item.id === id).at(-1)!.at;
 
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
 
   // ── AT-06: no A há ~2 s, o operador seleciona C ─────────────────────────
@@ -440,7 +441,7 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
   await createSong(page, { durations: [null, '8', null] });
   await openOperator(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectConfirmed(page, projection);
 
   // ── AT-28: quatro cantos no modo interativo ─────────────────────────────
@@ -554,6 +555,7 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
 
   await page.getByTestId('corner-menu').click();
   await menu.locator('[data-theme="ambar"]').click();
+  await menu.getByRole('group', { name: 'Onde aplicar: fonte' }).getByLabel('Este slide').check();
   await menu.locator('[data-font="montserrat"]').click();
   await expectConfirmed(page, projection);
   // Fundo e letra mudam juntos; a fonte é a escolhida.
@@ -692,10 +694,11 @@ test('AT-17, AT-25, AT-26, AT-30: ajusta, fecha tudo, desliga a rede, recupera e
   const operatorUrl = page.url();
   let projection = await openProjection(context, page);
   await page.getByRole('button', { name: 'Automático' }).first().click();
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
 
   // Ajustes da sessão: tema (louvor), A+ (este slide), fonte (louvor) e giro da saída.
   await page.locator('[data-theme="violeta"]').click();
+  await page.getByRole('group', { name: 'Onde aplicar: fonte' }).getByLabel('Este slide').check();
   await page.getByRole('button', { name: 'Aumentar a letra' }).click();
   await page.getByRole('group', { name: 'Onde aplicar: fonte' }).getByLabel('Todos os slides deste louvor').check();
   await page.locator('[data-font="lato"]').click();
@@ -830,7 +833,10 @@ test('AT-17, AT-25, AT-26, AT-30: ajusta, fecha tudo, desliga a rede, recupera e
   expect((await readStore<StoredState>(page, 'entityStates')).find((item) => item.key === `arrangement:${arrangement!.id}`)).toMatchObject({ dirty: 1, localGeneration: generationBefore + 1 });
   // A rotação da saída não vai para o arranjo; fica nas preferências do dispositivo.
   expect(JSON.stringify(arrangement)).not.toContain('rotation');
-  expect(await readStore(page, 'outputPreferences')).toEqual([{ outputId: 'public', rotation: 0 }]);
+  // Junto dela ficam o modo escolhido e a aparência "para o louvor inteiro", que valem para a próxima apresentação.
+  expect(await readStore(page, 'outputPreferences')).toEqual([
+    { outputId: 'public', rotation: 0, mode: 'automatic', appearance: { themePresetId: 'petroleo', fontId: 'atkinson-hyperlegible', fontWeight: 700 } },
+  ]);
 
   // Encerrar e voltar ao editor, ainda sem rede: o arranjo mostra o que foi salvo.
   await page.getByRole('button', { name: 'Encerrar' }).click();
@@ -880,7 +886,7 @@ test('AT-14: proporção 4:3, prévia e saída equivalentes, excesso de texto me
   // ── prévia do operador e saída pública equivalentes ─────────────────────
   await openOperator(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectConfirmed(page, projection);
   const same = async () => {
     const [preview, mirrored, out] = [await drawn(page, '[data-testid="current-slide"]'), await drawn(page, '[data-testid="public-preview"]'), await drawn(projection)];
@@ -955,6 +961,82 @@ test('AT-14: proporção 4:3, prévia e saída equivalentes, excesso de texto me
   for (let step = 0; step < 16; step += 1) await page.getByRole('button', { name: 'Aumentar a letra' }).click();
   await expect(page.getByTestId('menu-font-size')).toHaveAttribute('data-font-size', '160');
   await expect(page.getByRole('button', { name: 'Aumentar a letra' })).toBeDisabled();
+  await context.close();
+  expect(profile.externalRequests()).toEqual([]);
+});
+
+test('abertura, automático por padrão, indicador de avanço automático e preferências entre apresentações', async () => {
+  const context = await profile.open();
+  const page = await context.newPage();
+  await createSong(page, { durations: ['3', '3'] });
+  // Sem preferência guardada, a apresentação abre no automático, mesmo com o arranjo criado como manual.
+  await openOperator(page, { mode: 'preference' });
+  await expect(operator(page)).toHaveAttribute('data-mode', 'automatic');
+  const projection = await openProjection(context, page);
+  expect(await drawn(projection)).toMatchObject({ text: '', visualMode: 'black' });
+
+  // ── Iniciar mostra a abertura; nenhum tempo corre até avançar ───────────
+  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await expect(operator(page)).toHaveAttribute('data-cover', 'true');
+  await expectConfirmed(page, projection);
+  await expect(output(projection)).toHaveAttribute('data-cover', 'true');
+  await expect(projection.locator('[data-slide-cover]')).toBeVisible();
+  await expect(projection.locator('[data-cover-title]')).toHaveText('Em União');
+  await expect(projection.locator('[data-slide-text]')).toHaveCount(0);
+  await expect(page.getByTestId('public-summary')).toHaveText('Abertura');
+  await expect(page.getByTestId('cover-status')).toBeVisible();
+  // Na abertura o botão de avançar ainda é a seta, e o próximo slide é o primeiro da letra.
+  await expect(page.getByTestId('advance')).toHaveAttribute('data-auto', 'false');
+  await expect(page.getByTestId('auto-spinner')).toHaveCount(0);
+  await expect(page.getByTestId('next-slide').locator('[data-slide-text]')).toHaveText(SLIDE_TEXTS[0]!);
+  await page.waitForTimeout(3500);
+  await expect(operator(page)).toHaveAttribute('data-cover', 'true');
+  await expect(operator(page)).toHaveAttribute('data-index', '0');
+  // Tela preta cobre também a abertura.
+  const blackout = page.getByTestId('operator-controls').getByRole('button', { name: 'Tela preta' });
+  await blackout.click();
+  await expectConfirmed(page, projection);
+  await expect(projection.locator('[data-slide-cover]')).toHaveCount(0);
+  await blackout.click();
+
+  // ── Avançar: primeiro slide da letra, e a seta vira o indicador girando ──
+  await page.getByTestId('advance').click();
+  await expect(operator(page)).toHaveAttribute('data-cover', 'false');
+  await expectConfirmed(page, projection);
+  expect(await drawn(projection)).toMatchObject({ text: SLIDE_TEXTS[0], visible: true });
+  await expect(page.getByTestId('advance')).toHaveAttribute('data-auto', 'true');
+  await expect(page.getByTestId('advance').getByTestId('auto-spinner')).toBeVisible();
+  await expect(operator(page)).toHaveAttribute('data-index', '1', { timeout: 6000 });
+  // Em pausa o automático não está andando: a seta volta.
+  await page.getByTestId('transport').click();
+  await expect(operator(page)).toHaveAttribute('data-status', 'paused');
+  await expect(page.getByTestId('advance')).toHaveAttribute('data-auto', 'false');
+  await page.getByTestId('transport').click();
+  // No modo interativo, o canto inferior direito mostra o mesmo indicador.
+  await page.getByRole('button', { name: 'Modo interativo' }).click();
+  await expect(page.getByTestId('corner-next').getByTestId('auto-spinner')).toBeVisible();
+  await page.getByRole('button', { name: 'Painel completo' }).click();
+
+  // ── Preferências: tema, tamanho e modo valem para a próxima apresentação ──
+  await page.locator('[data-theme="violeta"]').click();
+  await page.getByRole('button', { name: 'Aumentar a letra' }).click();
+  const size = await page.getByTestId('menu-font-size').getAttribute('data-font-size');
+  await page.getByRole('button', { name: 'Manual', exact: true }).first().click();
+  await expect(operator(page)).toHaveAttribute('data-mode', 'manual');
+  await page.getByRole('button', { name: 'Encerrar' }).click();
+
+  await createSong(page, { title: 'Manhã de Gratidão', durations: [null, null] });
+  await openOperator(page, { mode: 'preference' });
+  await expect(operator(page)).toHaveAttribute('data-mode', 'manual');
+  await expect(page.locator('[data-theme="violeta"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('menu-font-size')).toHaveAttribute('data-font-size', size!);
+  expect(await drawn(page, '[data-testid="current-slide"]')).toMatchObject({ background: rgb('#1B1033'), color: rgb('#EDE9FE') });
+  // "Restaurar aparência preparada" também limpa a preferência.
+  await page.getByRole('button', { name: /Restaurar aparência/ }).click();
+  await page.getByRole('button', { name: 'Encerrar' }).click();
+  await openOperator(page, { mode: 'preference' });
+  await expect(page.locator('[data-theme="violeta"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('menu-font-size')).toHaveAttribute('data-font-size', '96');
   await context.close();
   expect(profile.externalRequests()).toEqual([]);
 });

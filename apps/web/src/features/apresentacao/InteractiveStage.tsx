@@ -104,11 +104,12 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
   const { capabilities } = controls;
   // Com transporte separado e slide sem tempo, o botão mostra a faixa, não a sessão.
   const playing = controls.playing;
+  const autoAdvancing = capabilities.countdown;
   const corner = cn('absolute flex items-center gap-2 transition-opacity duration-150', visible ? 'opacity-100' : 'pointer-events-none invisible opacity-0');
 
   return (
     <div ref={root} className={cn('relative h-full w-full overflow-hidden', !visible && 'cursor-none')} data-testid="interactive-stage" data-controls-visible={visible}>
-      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} />
+      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} />
 
       <div data-stage-ui className={cn(corner, 'left-4 top-4')} data-corner="top-left">
         <CornerButton label={menuOpen ? 'Fechar ajustes' : 'Abrir ajustes'} testId="corner-menu" pressed={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
@@ -151,8 +152,9 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
             {playing ? <PauseIcon /> : <PlayIcon />}
           </CornerButton>
         )}
-        <CornerButton label="Próximo slide" testId="corner-next" onClick={() => dispatch({ type: 'next' })}>
-          <NextIcon />
+        {/* No automático em andamento a seta vira um indicador girando; o clique continua avançando. */}
+        <CornerButton label={autoAdvancing ? 'Próximo slide (avanço automático em andamento)' : controls.cover ? 'Mostrar a letra' : 'Próximo slide'} testId="corner-next" onClick={() => dispatch({ type: 'next' })}>
+          {autoAdvancing ? <span className="lv-auto-spinner" data-testid="auto-spinner" aria-hidden="true" /> : <NextIcon />}
         </CornerButton>
       </div>
 

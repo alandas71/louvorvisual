@@ -53,9 +53,6 @@ export function OfflineView() {
     <div className="flex flex-col gap-8">
       <header>
         <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Disponível offline</h1>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
-          Situação do aplicativo e dos dados neste dispositivo: código, temas, fontes e louvores gravados.
-        </p>
       </header>
 
       <section aria-labelledby="aplicativo" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-6">

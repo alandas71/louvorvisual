@@ -122,7 +122,7 @@ function SetlistList({ session }: { session: LocalSession }) {
 
   return (
     <div className="flex flex-col gap-6" data-testid="setlists">
-      <PageHeader title="Repertórios" description="Louvores na ordem do culto. Prepare o repertório para conferir que tudo o que ele usa está neste dispositivo." />
+      <PageHeader title="Repertórios" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card sm:p-5"

@@ -14,12 +14,15 @@ import {
   listArrangements,
   preparedItem,
   readAssetBlob,
+  readOperatorPreferences,
   readOutputRotation,
   resolveSetlist,
   saveCheckpoint,
+  saveOperatorPreferences,
   saveOutputRotation,
   verifyAsset,
   type LocalSession,
+  type OperatorPreferences,
   type PresentationSessionRow,
 } from '@/local';
 import { SESSION_LOCK } from '@/pwa/serviceWorker';
@@ -134,6 +137,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       checkpoint: SessionCheckpoint | null;
       warnings: SessionWarning[];
       rotation: 0 | 90 | 180 | 270;
+      preferences: OperatorPreferences;
       releaseLock: () => void;
       transport: HtmlAudioTransport | null;
       audioChoices: AudioChoice[];
@@ -146,11 +150,14 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
         sessionId: row.id,
         checkpoint: options.checkpoint,
         rotation: options.rotation,
+        mode: options.preferences.mode,
+        appearance: options.preferences.appearance,
         generation: Date.now(),
         transport: options.transport,
         storage: {
           saveCheckpoint: (value) => saveCheckpoint(local.db, value, new Date().toISOString()),
           saveRotation: (value) => saveOutputRotation(local.db, value),
+          savePreferences: (value) => saveOperatorPreferences(local.db, value),
         },
       });
       controller.start();
@@ -220,6 +227,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       }
       cleanup.current = releaseLock;
       const rotation = await readOutputRotation(local.db);
+      const preferences = await readOperatorPreferences(local.db);
       const setlist = await setlistPosition(local, setlistId, itemId);
       const copy = setlistId && itemId ? await preparedItem(local.db, setlistId, itemId) : null;
       const fromSetlist: SessionWarning[] = copy ? (copy.newer ? ['prepared-copy-outdated'] : []) : setlist ? ['setlist-not-prepared'] : [];
@@ -256,7 +264,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
           transport?.dispose();
           return;
         }
-        activate({ row, checkpoint: null, warnings, rotation, releaseLock, transport, audioChoices, chooseAudio, setlist });
+        activate({ row, checkpoint: null, warnings, rotation, preferences, releaseLock, transport, audioChoices, chooseAudio, setlist });
       };
 
       /** Prepara da biblioteca viva, com a faixa indicada (`undefined` = a selecionada no arranjo). */
@@ -315,7 +323,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
             if (loaded.ok) transport = loaded.transport;
             else warnings.push('audio-unavailable');
           }
-          activate({ row: session, checkpoint, warnings, rotation, releaseLock, transport, audioChoices: [], chooseAudio: () => undefined, setlist });
+          activate({ row: session, checkpoint, warnings, rotation, preferences, releaseLock, transport, audioChoices: [], chooseAudio: () => undefined, setlist });
         };
         setState({
           status: 'recoverable',

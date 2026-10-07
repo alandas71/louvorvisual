@@ -305,6 +305,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
       <LinkedTiming slides={slides} currentId={current.occurrenceId} audio={row.snapshot.audio} status={state.status} dispatch={dispatch} />
     ) : undefined;
   const timed = state.mode === 'automatic' && controls.durationMs !== null;
+  // Na abertura, o que vem a seguir é o primeiro slide da letra.
+  const upcoming = state.cover ? current : next;
   // O play/pause age só na faixa quando ela é independente e não há relógio de slide em jogo.
   const audioOnly = controls.audio?.policy === 'independent' && !timed;
   const transportLabel = audioOnly
@@ -342,6 +344,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
     'data-occurrence-id': state.currentOccurrenceId,
     'data-sequence': state.sequenceNumber,
     'data-awaiting': state.awaitingManualAdvance,
+    'data-cover': state.cover,
     'data-visual-mode': state.visualMode,
     'data-frozen': state.frozenOutput,
     'data-rotation': view.rotation,
@@ -392,7 +395,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
         <div className="min-w-0 flex-1 basis-56">
           <h1 className="truncate text-xl font-bold">{row.snapshot.song.title}</h1>
           <p className="text-sm text-muted">
-            {row.snapshot.arrangement.name} · slide {state.currentIndex + 1} de {slides.length}
+            {row.snapshot.arrangement.name} · {state.cover ? 'abertura' : `slide ${state.currentIndex + 1} de ${slides.length}`}
             {recovered && ' · sessão recuperada'}
             {setlist && ` · ${setlist.title}: louvor ${setlist.index + 1} de ${setlist.total}`}
           </p>
@@ -471,12 +474,12 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
       <div className="grid gap-4 scrollbar-thin lg:-m-1 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(16rem,22rem)] lg:items-start lg:overflow-y-auto lg:p-1">
         <section aria-labelledby="atual" className="flex flex-col gap-2">
           <h2 id="atual" className="text-xs font-bold uppercase tracking-wider text-muted">
-            Slide atual · {current.label || 'Sem rótulo'}
+            {state.cover ? 'Abertura' : `Slide atual · ${current.label || 'Sem rótulo'}`}
           </h2>
           <div data-testid="current-slide">
-            <SlideView text={current.text} style={current.style} fontId={current.fontId} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
+            <SlideView text={current.text} style={current.style} fontId={current.fontId} cover={view.live.cover} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
           </div>
-          <SlideChecks slide={current} />
+          {!state.cover && <SlideChecks slide={current} />}
           <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="timing">
             {controls.capabilities.timerIndicator && controls.durationMs !== null && (
               <span data-testid="timer-indicator" data-duration-ms={controls.durationMs}>
@@ -488,7 +491,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
                 faltam <Countdown controller={controller} className="font-semibold" />
               </span>
             )}
-            {state.awaitingManualAdvance && <span data-testid="awaiting-advance">Sem tempo neste slide: aguardando você avançar.</span>}
+            {state.cover && <span data-testid="cover-status">Abertura na tela: avance para mostrar a letra.</span>}
+            {state.awaitingManualAdvance && !state.cover && <span data-testid="awaiting-advance">Sem tempo neste slide: aguardando você avançar.</span>}
             {state.mode === 'manual' && state.status !== 'ready' && <span className="text-muted">Avanço manual.</span>}
             {state.status === 'ready' && <span className="text-muted">Pronta. O público vê preto até você iniciar.</span>}
             {state.status === 'paused' && <span className="font-semibold">Em pausa.</span>}
@@ -522,7 +526,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
             </h2>
             <PublicPreview frame={output} rotation={view.rotation} />
             <p className="text-xs font-semibold text-muted" data-testid="public-summary">
-              {state.status === 'ready' ? 'Preto (aguardando iniciar)' : OUTPUT_LABEL[output.visualMode]}
+              {state.status === 'ready' ? 'Preto (aguardando iniciar)' : output.cover && output.visualMode === 'normal' ? 'Abertura' : OUTPUT_LABEL[output.visualMode]}
               {state.frozenOutput && ' · congelada'}
               {frozenDiffers && ' · diferente do slide atual'}
             </p>
@@ -536,10 +540,10 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Próximo slide{next ? ` · ${next.label || 'Sem rótulo'}` : ''}</h2>
-            {next ? (
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Próximo slide{upcoming ? ` · ${upcoming.label || 'Sem rótulo'}` : ''}</h2>
+            {upcoming ? (
               <div data-testid="next-slide">
-                <SlideView text={next.text} style={next.style} fontId={next.fontId} className="w-full overflow-hidden rounded-xl border border-border" />
+                <SlideView text={upcoming.text} style={upcoming.style} fontId={upcoming.fontId} className="w-full overflow-hidden rounded-xl border border-border" />
               </div>
             ) : (
               <p className="text-sm text-muted">Este é o último slide.</p>
@@ -599,8 +603,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
               {transportLabel}
             </button>
           )}
-          <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'next' })}>
-            Avançar →
+          <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} data-testid="advance" data-auto={controls.capabilities.countdown} onClick={() => dispatch({ type: 'next' })}>
+            Avançar {controls.capabilities.countdown ? <span className="lv-auto-spinner" data-testid="auto-spinner" aria-hidden="true" /> : '→'}
           </button>
           <span className="mx-2 h-8 w-px bg-border max-sm:hidden" aria-hidden="true" />
           <button type="button" className={cn(buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3'), state.visualMode === 'black' && pressedClass)} aria-pressed={state.visualMode === 'black'} onClick={() => dispatch({ type: 'setVisualMode', visualMode: state.visualMode === 'black' ? 'normal' : 'black' })}>
@@ -631,7 +635,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
 function PublicPreview({ frame, rotation }: { frame: OutputFrame; rotation: 0 | 90 | 180 | 270 }) {
   return (
     <div className="aspect-video w-full overflow-hidden rounded-lg border border-border" data-testid="public-preview" data-occurrence-id={frame.occurrenceId}>
-      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} />
+      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} />
     </div>
   );
 }

@@ -68,7 +68,6 @@ function Account({ session, engine }: { session: LocalSession; engine: SyncEngin
     <div className="flex flex-col gap-8" data-testid="account-view">
       <header>
         <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Conta e equipe</h1>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">Entrar, escolher a equipe e gerenciar os perfis guardados neste dispositivo. Tudo aqui precisa de conexão; a biblioteca aberta continua funcionando sem ela.</p>
       </header>
 
       <section aria-labelledby="perfil-em-uso" className={sectionClass}>
@@ -86,7 +85,6 @@ function Account({ session, engine }: { session: LocalSession; engine: SyncEngin
             </>
           )}
         </p>
-        {team && <p className="text-xs text-muted">O papel mostrado é o da última vez online; quem decide o que você pode publicar é sempre o servidor.</p>}
       </section>
 
       {account.state === 'loading' && <p role="status">Consultando a sessão…</p>}
@@ -372,7 +370,6 @@ function Members({ team, me }: { team: TeamProfile; me: Me }) {
       <h2 id="membros" className="text-lg font-bold">
         Membros de {team.workspaceName}
       </h2>
-      <p className="text-sm text-muted">Mudança de papel e revogação valem no servidor na hora. Um dispositivo desconectado só fica sabendo quando reconectar, e o que ele já baixou não é apagado à distância.</p>
       {members === null ? (
         <Loading>Carregando membros…</Loading>
       ) : (
@@ -479,7 +476,7 @@ function Profiles({ session, profiles, onChange }: { session: LocalSession; prof
       <h2 id="perfis" className="text-lg font-bold">
         Perfis guardados neste dispositivo
       </h2>
-      <p className="text-sm text-muted">Cada perfil tem biblioteca, áudio, fila de envio e conflitos próprios. Trocar de perfil não mistura nada. Os dados ficam no navegador, sem criptografia: quem usa este usuário do computador pode abri-los.</p>
+      <p className="text-sm text-muted">Os dados ficam no navegador, sem criptografia: quem usa este usuário do computador pode abri-los.</p>
       <ul className="flex flex-col gap-2">
         <li data-testid="profile-row" data-kind="personal" data-active={activeId === null} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
           <span>

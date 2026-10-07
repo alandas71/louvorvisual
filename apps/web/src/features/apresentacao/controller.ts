@@ -1,4 +1,4 @@
-import type { Uuid } from '@louvorvisual/domain';
+import type { PresentationMode, Uuid } from '@louvorvisual/domain';
 import {
   ControllerLink,
   HEARTBEAT_INTERVAL_MS,
@@ -12,6 +12,7 @@ import {
   type Rotation,
   type SessionCheckpoint,
   type SessionSnapshot,
+  type VisualPatch,
   type VisualState,
 } from '@louvorvisual/presentation';
 import type { HtmlAudioTransport } from '../audio/htmlTransport';
@@ -42,6 +43,8 @@ export type ControllerSnapshot = {
 export type ControllerStorage = {
   saveCheckpoint(checkpoint: SessionCheckpoint): Promise<void>;
   saveRotation(rotation: Rotation): Promise<void>;
+  /** Modo de avanço e aparência "para o louvor inteiro": valem para a próxima apresentação. */
+  savePreferences(preferences: { mode?: PresentationMode; appearance?: VisualPatch }): Promise<void>;
 };
 
 export type ControllerOptions = {
@@ -49,6 +52,9 @@ export type ControllerOptions = {
   sessionId: Uuid;
   checkpoint: SessionCheckpoint | null;
   rotation: Rotation;
+  /** Preferências do operador; uma sessão recuperada mantém o que estava no checkpoint. */
+  mode: PresentationMode;
+  appearance: VisualPatch;
   storage: ControllerStorage;
   /** Cresce a cada controlador criado; a janela pública ignora gerações antigas. */
   generation: number;
@@ -98,6 +104,7 @@ export class SessionController {
   private heartbeat: number | null = null;
   private lastProgressAt = 0;
   private lastRotation: Rotation;
+  private lastAppearance: string;
   private lastConfirmMs: number | null = null;
   private readonly publishedAt = new Map<number, number>();
   private confirmed = -1;
@@ -117,10 +124,14 @@ export class SessionController {
       clock: browserClock,
       sessionId: options.sessionId,
       rotation: options.rotation,
+      mode: options.mode,
+      appearance: options.appearance,
+      cover: true,
       checkpoint: options.checkpoint ?? undefined,
       transport: options.transport,
     });
     this.lastRotation = this.engine.getView().rotation;
+    this.lastAppearance = JSON.stringify(this.engine.getOverrides().song);
     this.link = new ControllerLink(options.sessionId, options.generation, { title: options.snapshot.song.title, artist: options.snapshot.song.artist });
     this.snapshot = this.read();
   }
@@ -213,6 +224,12 @@ export class SessionController {
       this.lastRotation = state.rotation;
       void this.storage.saveRotation(state.rotation).catch(() => undefined);
     }
+    const song = this.engine.getOverrides().song;
+    const appearance = JSON.stringify(song);
+    if (appearance !== this.lastAppearance) {
+      this.lastAppearance = appearance;
+      void this.storage.savePreferences({ appearance: song }).catch(() => undefined);
+    }
     this.scheduleCheckpoint(CHECKPOINT_DEBOUNCE_MS);
     this.notify();
   }
@@ -222,7 +239,7 @@ export class SessionController {
     const { hello, command } = this.link.receive(message, now);
     if (hello) this.channel?.post(this.link.snapshotMessage(this.visualState()));
     // Comando de uma saída com controles: validado, deduplicado e executado aqui, no único motor.
-    if (command) this.engine.execute(command);
+    if (command) this.execute(command);
     const status = this.link.status(now);
     if (status.confirmedSequence !== null && status.confirmedSequence > this.confirmed) {
       this.confirmed = status.confirmedSequence;
@@ -266,7 +283,10 @@ export class SessionController {
   }
 
   execute(command: OperatorCommand): CommandResult {
-    return this.engine.execute(command);
+    const result = this.engine.execute(command);
+    // Só a escolha explícita do operador vira preferência; a troca automática ao soltar a faixa, não.
+    if (result.ok && command.type === 'setMode') void this.storage.savePreferences({ mode: command.mode }).catch(() => undefined);
+    return result;
   }
 
   getSnapshot = (): ControllerSnapshot => this.snapshot;

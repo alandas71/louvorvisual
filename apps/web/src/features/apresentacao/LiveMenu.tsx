@@ -58,8 +58,8 @@ const pill = (active: boolean) => cn(buttonClass('secondary', 'sm'), active && p
  * único, esteja este menu no painel do operador ou numa saída com controles.
  */
 export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHideOutputControls, className }: LiveMenuProps) {
-  // Fonte e tamanho valem, por padrão, para o slide atual; tema, para o louvor.
-  const [styleScope, setStyleScope] = useState<AdjustScope>('occurrence');
+  // Por padrão os ajustes valem para o louvor inteiro: é esse escopo que fica guardado como preferência do operador.
+  const [styleScope, setStyleScope] = useState<AdjustScope>('song');
   const [themeScope, setThemeScope] = useState<AdjustScope>('song');
   const { appearance } = controls;
 

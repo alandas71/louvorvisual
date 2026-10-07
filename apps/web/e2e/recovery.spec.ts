@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
 import { chromium, expect, test, type Page } from '@playwright/test';
 import { importAudio, tamperAudioBlobs, wavFile } from './audio.helpers';
-import { BrowserProfile, cacheNames, isReachable, ORIGIN, ProductionServer, publishServiceWorker, waitUntilInstalled } from './helpers';
-import { createSong, openOperator, openProjection, operator, readStore, SLIDE_TEXTS } from './presentation.helpers';
+import { BrowserProfile, cacheNames, isReachable, openHiddenView, ORIGIN, ProductionServer, publishServiceWorker, waitUntilInstalled } from './helpers';
+import { createSong, openOperator, openProjection, operator, readStore, SLIDE_TEXTS, startShow } from './presentation.helpers';
 
 // Recuperação (E6): pacote de repertório, lixeira e histórico, atualização do
 // aplicativo durante a apresentação e falta de espaço. Sempre sobre o build de
@@ -120,7 +120,7 @@ test('AT-18: exporta o repertório com áudio, importa offline em outro disposit
   await page.getByRole('button', { name: '← Biblioteca' }).click();
   await createSong(page, { title: 'Manhã de Gratidão', durations: [null, null] });
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByLabel('Nome do repertório').fill('Culto de domingo');
   await page.getByLabel('Data do culto').fill('2026-10-11');
   await page.getByRole('button', { name: 'Criar repertório' }).click();
@@ -377,7 +377,7 @@ test('AT-21: atualização chega durante a apresentação — nenhuma recarga, n
   await openOperator(page);
   const projection = await openProjection(context, page);
   await page.getByRole('button', { name: 'Automático' }).first().click();
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
   const sessionId = await operator(page).getAttribute('data-session-id');
   // Marcas na memória de cada janela: somem se a página recarregar.
@@ -426,7 +426,7 @@ test('AT-21: atualização chega durante a apresentação — nenhuma recarga, n
   await expect(admin.getByTestId('app-version')).toHaveText(currentVersion);
 
   // A apresentação segue operável com os recursos da versão em uso: avança, reabre a projeção.
-  await page.getByRole('button', { name: 'Avançar →' }).click();
+  await page.getByTestId('advance').click();
   await expect(operator(page)).toHaveAttribute('data-index', '1');
   const reopened = await openProjection(context, page);
   expect((await waitUntilInstalled(reopened)).version).toBe(currentVersion);
@@ -465,7 +465,7 @@ test('AT-22: pacote que não cabe no dispositivo não deixa nada importado, e m�
   expect(big.buffer.length).toBeGreaterThan(10_000_000);
   await importAudio(page, 'playback', big);
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByLabel('Nome do repertório').fill('Culto de domingo');
   await page.getByRole('button', { name: 'Criar repertório' }).click();
   await page.getByLabel('Acrescentar louvor').selectOption({ label: 'Em União — Culto' });
@@ -584,7 +584,7 @@ test('medição: memória e tempo ao exportar e importar um pacote grande', asyn
   await source.getByTestId('audio-import-playback').getByRole('button', { name: 'Importar', exact: true }).click();
   await expect(source.getByTestId('audio-playback')).toHaveAttribute('data-state', 'bound', { timeout: 300_000 });
   await source.getByRole('button', { name: '← Biblioteca' }).click();
-  await source.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(source, 'repertorios');
   await source.getByLabel('Nome do repertório').fill('Pacote grande');
   await source.getByRole('button', { name: 'Criar repertório' }).click();
   await source.getByLabel('Acrescentar louvor').selectOption({ label: 'Em União — Culto' });

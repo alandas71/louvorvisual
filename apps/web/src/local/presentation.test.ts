@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { emptyOverrides, ManualClock, prepareSnapshot, PresentationEngine } from '@louvorvisual/presentation';
 import { describe, expect, it } from 'vitest';
-import { createPresentationSession, endPresentationSession, findRecoverableSession, readOutputRotation, saveCheckpoint, saveOutputRotation } from './presentation';
+import { createPresentationSession, endPresentationSession, findRecoverableSession, readOperatorPreferences, readOutputRotation, saveCheckpoint, saveOperatorPreferences, saveOutputRotation } from './presentation';
 import { sampleSong, testDatabase } from './testing';
 
 function prepared(id: string, now = '2026-10-05T12:00:00.000Z') {
@@ -91,6 +91,23 @@ describe('sessões de apresentação no banco local', () => {
     expect(await readOutputRotation(db)).toBe(0);
     await saveOutputRotation(db, 270);
     expect(await readOutputRotation(db)).toBe(270);
+    db.close();
+  });
+
+  it('preferências do operador: automático por padrão; modo e aparência ficam para a próxima apresentação', async () => {
+    const db = testDatabase();
+    expect(await readOperatorPreferences(db)).toEqual({ mode: 'automatic', appearance: {} });
+    await saveOutputRotation(db, 90);
+    await saveOperatorPreferences(db, { mode: 'manual' });
+    await saveOperatorPreferences(db, { appearance: { themePresetId: 'violeta', fontSizePx: 80 } });
+    expect(await readOperatorPreferences(db)).toEqual({ mode: 'manual', appearance: { themePresetId: 'violeta', fontSizePx: 80 } });
+    // Rotação e preferências dividem o mesmo registro sem se apagar.
+    await saveOutputRotation(db, 180);
+    expect(await readOutputRotation(db)).toBe(180);
+    expect((await readOperatorPreferences(db)).mode).toBe('manual');
+    // Um ajuste que deixou de ser válido é descartado, não aplicado pela metade.
+    await db.outputPreferences.put({ outputId: 'public', rotation: 0, appearance: { fontSizePx: 99999 } });
+    expect(await readOperatorPreferences(db)).toEqual({ mode: 'automatic', appearance: {} });
     db.close();
   });
 });

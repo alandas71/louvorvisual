@@ -21,10 +21,9 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
       { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
-    // Atalhos do ícone instalado; os três abrem documentos guardados para uso offline.
+    // Atalhos do ícone instalado; os dois abrem documentos guardados para uso offline.
     shortcuts: [
       { name: 'Novo louvor', short_name: 'Novo', url: '/app?view=novo', icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }] },
-      { name: 'Repertórios', short_name: 'Repertórios', url: '/app?view=repertorios', icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }] },
       { name: 'Janela de projeção', short_name: 'Projeção', url: '/projecao', icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }] },
     ],
   };

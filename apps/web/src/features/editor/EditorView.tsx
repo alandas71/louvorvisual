@@ -420,10 +420,7 @@ function LrclibImport({ song, actions, onApplied }: { song: ReadyState['song']; 
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent/5 p-3" data-testid="lrclib-import">
-      <div>
-        <h3 className="font-semibold">Buscar letra sincronizada (LRCLIB)</h3>
-        <p className="text-xs text-muted">Importe os versos com seus tempos, confira na apresentação e salve o padrão ao final.</p>
-      </div>
+      <h3 className="font-semibold">Buscar letra sincronizada (LRCLIB)</h3>
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
           <Label htmlFor="lrclib-title">Música</Label>

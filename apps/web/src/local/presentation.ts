@@ -1,5 +1,5 @@
-import type { Arrangement, IsoInstant, Uuid } from '@louvorvisual/domain';
-import { isRotation, type Rotation, type SessionCheckpoint, type SessionSnapshot } from '@louvorvisual/presentation';
+import type { Arrangement, IsoInstant, PresentationMode, Uuid } from '@louvorvisual/domain';
+import { isRotation, visualPatchIssues, type Rotation, type SessionCheckpoint, type SessionSnapshot, type VisualPatch } from '@louvorvisual/presentation';
 import type { LocalDatabase } from './db';
 import type { PresentationSessionRow } from './schema';
 
@@ -77,5 +77,28 @@ export async function readOutputRotation(db: LocalDatabase): Promise<Rotation> {
 }
 
 export async function saveOutputRotation(db: LocalDatabase, rotation: Rotation): Promise<void> {
-  await db.outputPreferences.put({ outputId: 'public', rotation });
+  await db.transaction('rw', db.outputPreferences, async () => {
+    await db.outputPreferences.put({ ...(await db.outputPreferences.get('public')), outputId: 'public', rotation });
+  });
+}
+
+/** Como o operador deixou a última apresentação: vale para a próxima, de qualquer louvor. */
+export type OperatorPreferences = { mode: PresentationMode; appearance: VisualPatch };
+
+/** Sem escolha guardada, a apresentação abre no automático e com a aparência de cada louvor. */
+export async function readOperatorPreferences(db: LocalDatabase): Promise<OperatorPreferences> {
+  const saved = await db.outputPreferences.get('public');
+  const appearance = saved?.appearance;
+  return {
+    mode: saved?.mode === 'manual' ? 'manual' : 'automatic',
+    // Um ajuste que este aplicativo não reconhece (tema ou fonte que deixou de existir) é descartado por inteiro.
+    appearance: appearance && typeof appearance === 'object' && visualPatchIssues(appearance).length === 0 ? appearance : {},
+  };
+}
+
+export async function saveOperatorPreferences(db: LocalDatabase, preferences: Partial<OperatorPreferences>): Promise<void> {
+  await db.transaction('rw', db.outputPreferences, async () => {
+    const saved = await db.outputPreferences.get('public');
+    await db.outputPreferences.put({ rotation: 0, ...saved, outputId: 'public', ...preferences });
+  });
 }

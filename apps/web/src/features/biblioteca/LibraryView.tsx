@@ -88,7 +88,6 @@ function Library({ session }: { session: LocalSession }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Biblioteca"
-        description={<>{session.team ? `Biblioteca da equipe ${session.team.workspaceName} neste dispositivo.` : 'Louvores gravados neste dispositivo.'} Tudo aqui funciona sem conexão.</>}
         actions={
           <button type="button" className={buttonClass('primary')} onClick={() => setLocalQuery({ view: 'novo', song: null, arranjo: null })}>
             <PlusIcon />

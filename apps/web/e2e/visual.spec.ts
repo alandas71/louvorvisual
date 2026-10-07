@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { BrowserProfile, ORIGIN, ProductionServer } from './helpers';
-import { createSong, openOperator } from './presentation.helpers';
+import { createSong, openOperator, startShow } from './presentation.helpers';
 
 // Passeio visual: abre cada tela nos tamanhos de computador e de celular, grava
 // a captura em test-results/visual e confere o que nenhuma tela pode ter —
@@ -101,7 +101,7 @@ for (const size of SIZES) {
     await page.getByRole('link', { name: /Em União/ }).first().click();
     await openOperator(page);
     await capture(page, size.name, '15-operador');
-    await page.getByRole('button', { name: '▶ Iniciar' }).click();
+    await startShow(page);
     await capture(page, size.name, '16-operador-em-andamento');
     await page.getByRole('button', { name: 'Modo interativo' }).click();
     await expect(page.getByTestId('interactive-stage')).toBeVisible();
@@ -138,9 +138,11 @@ test('celular: barra inferior, menu "Mais" e manifesto do aplicativo instalável
   const barTop = (await bar.boundingBox())!.y;
   expect(barTop).toBeGreaterThan(700);
 
-  await bar.getByRole('link', { name: 'Repertórios' }).click();
-  await expect(page.locator('main')).toHaveAttribute('data-view', 'repertorios');
-  await expect(bar.getByRole('link', { name: 'Repertórios' })).toHaveAttribute('aria-current', 'page');
+  await bar.getByRole('link', { name: 'Conta' }).click();
+  await expect(page.locator('main')).toHaveAttribute('data-view', 'conta');
+  await expect(bar.getByRole('link', { name: 'Conta' })).toHaveAttribute('aria-current', 'page');
+  // Repertórios e temas estão ocultos: fora da barra e do menu, mas abrem pelo endereço.
+  await expect(bar.getByRole('link', { name: 'Repertórios' })).toHaveCount(0);
 
   // "Mais" abre o menu completo, com foco dentro dele; Esc fecha e devolve o foco.
   const more = bar.getByRole('button', { name: 'Mais' });
@@ -164,7 +166,7 @@ test('celular: barra inferior, menu "Mais" e manifesto do aplicativo instalável
   // Manifesto: instalável, com atalhos e ícones que existem.
   const manifest = await (await context.request.get(`${ORIGIN}/manifest.webmanifest`)).json();
   expect(manifest).toMatchObject({ display: 'standalone', start_url: '/app', scope: '/' });
-  expect(manifest.shortcuts.map((shortcut: { url: string }) => shortcut.url)).toEqual(['/app?view=novo', '/app?view=repertorios', '/projecao']);
+  expect(manifest.shortcuts.map((shortcut: { url: string }) => shortcut.url)).toEqual(['/app?view=novo', '/projecao']);
   const icons = [...manifest.icons.map((icon: { src: string }) => icon.src), '/icons/apple-touch-icon.png'];
   for (const src of icons) expect((await context.request.get(`${ORIGIN}${src}`)).status(), src).toBe(200);
   expect(manifest.icons.some((icon: { purpose?: string }) => icon.purpose === 'maskable')).toBe(true);

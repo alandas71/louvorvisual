@@ -51,6 +51,8 @@ export type SessionState = {
   currentIndex: number;
   elapsedInSlideMs: number;
   awaitingManualAdvance: boolean;
+  /** Abertura em exibição: iniciada, mas ainda antes do primeiro slide da letra. */
+  cover: boolean;
   overridesRevision: number;
   clockSource: 'monotonic' | 'audio';
   audioPolicy: 'none' | 'independent' | 'linked';
@@ -68,6 +70,8 @@ export type OutputFrame = {
   visualMode: VisualMode;
   slide: ResolvedSlide;
   overridesRevision: number;
+  /** Abertura: a saída desenha o slide de abertura, com o título, no lugar da letra. Ausente fora dela. */
+  cover?: { title: string; artist: string | null };
 };
 
 /** Elementos que só existem quando há o que controlar (planejamento/20). */
@@ -106,6 +110,8 @@ export type ControlsState = {
   label: string;
   durationMs: number | null;
   awaitingManualAdvance: boolean;
+  /** A sessão está na abertura, antes do primeiro slide da letra. */
+  cover?: boolean;
   capabilities: Capabilities;
   visualMode: VisualMode;
   frozen: boolean;
@@ -223,6 +229,8 @@ export type SessionCheckpoint = {
   rotation: Rotation;
   overrides: SessionOverrides;
   undo: SessionOverrides[];
+  /** Ausente em checkpoints anteriores à abertura. */
+  cover?: boolean;
   /** Ausente em checkpoints anteriores ao áudio e em sessões sem faixa. */
   audio?: { policy: SessionAudioPolicy; positionMs: number; volume: number; followsPause: boolean; cues: AudioCue[] } | null;
 };
@@ -237,6 +245,10 @@ export type EngineOptions = {
   checkpoint?: SessionCheckpoint;
   /** Player único da faixa do snapshot. Sem ele, a sessão segue sem áudio. */
   transport?: AudioTransport | null;
+  /** Iniciar mostra primeiro a abertura; a letra só aparece quando o operador avança. */
+  cover?: boolean;
+  /** Ajustes de aparência para o louvor inteiro já aplicados ao abrir (preferências do operador). */
+  appearance?: VisualPatch;
 };
 
 /**
@@ -281,6 +293,9 @@ export class PresentationEngine {
   private manualTiming = new Map<Uuid, number>();
   private manualTimingAnchor: number | null = null;
   private manualTimingComplete = false;
+  private readonly withCover: boolean;
+  /** Abertura em exibição: nenhum relógio de slide corre até o operador avançar. */
+  private cover = false;
 
   private readonly transport: AudioTransport | null;
   private audioPolicy: SessionAudioPolicy = 'none';
@@ -305,6 +320,10 @@ export class PresentationEngine {
     this.clock = options.clock;
     this.mode = options.mode ?? options.snapshot.arrangement.defaultMode;
     this.rotation = options.rotation ?? 0;
+    this.withCover = options.cover ?? false;
+    if (options.appearance && Object.keys(options.appearance).length > 0 && visualPatchIssues(options.appearance).length === 0) {
+      this.overrides = { current: { revision: 0, song: { ...options.appearance }, occurrences: {} }, undo: [] };
+    }
     const audio = options.snapshot.audio;
     this.transport = audio ? (options.transport ?? null) : null;
     if (audio && this.transport) {
@@ -330,6 +349,7 @@ export class PresentationEngine {
     // Recuperação nunca volta tocando: quem estava em execução retorna em pausa.
     this.status = checkpoint.status === 'running' ? 'paused' : checkpoint.status === 'error' ? 'paused' : checkpoint.status;
     this.accumulatedMs = index >= 0 && this.status === 'paused' ? Math.max(0, checkpoint.elapsedInSlideMs) : 0;
+    this.cover = checkpoint.cover === true && this.status === 'paused';
     const audio = checkpoint.audio;
     if (!this.transport || !audio) return;
     // A faixa volta parada, na posição guardada; quem retoma é o operador.
@@ -431,7 +451,8 @@ export class PresentationEngine {
 
   /** Seleciona a ocorrência cujo intervalo contém a posição da faixa. */
   private followAudio(): void {
-    if (this.disposed || !this.audioClock || this.status !== 'running' || this.pendingSeek !== null) return;
+    // Na abertura a faixa toca, mas a letra só passa a segui-la quando o operador avança.
+    if (this.disposed || this.cover || !this.audioClock || this.status !== 'running' || this.pendingSeek !== null) return;
     const transport = this.transport as AudioTransport;
     const at = cueIndexAt(this.cues, transport.positionMs());
     if (at >= this.cues.length) {
@@ -532,6 +553,7 @@ export class PresentationEngine {
   }
 
   private elapsed(): number {
+    if (this.cover) return 0;
     if (this.audioClock) {
       const cue = this.cueAt(this.index);
       return Math.min(cue.endMs - cue.startMs, Math.max(0, (this.transport as AudioTransport).positionMs() - cue.startMs));
@@ -544,7 +566,7 @@ export class PresentationEngine {
   }
 
   private beginManualTiming(): void {
-    if (this.mode === 'manual' && this.status === 'running' && !this.manualTimingComplete && this.manualTimingAnchor === null) this.manualTimingAnchor = this.clock.now();
+    if (this.mode === 'manual' && this.status === 'running' && !this.cover && !this.manualTimingComplete && this.manualTimingAnchor === null) this.manualTimingAnchor = this.clock.now();
   }
 
   private pauseManualTiming(): void {
@@ -582,7 +604,8 @@ export class PresentationEngine {
       currentOccurrenceId: current.occurrenceId,
       currentIndex: this.index,
       elapsedInSlideMs: timed ? Math.min(this.elapsed(), current.durationMs ?? 0) : 0,
-      awaitingManualAdvance: this.mode === 'automatic' && current.durationMs === null && this.status !== 'finished',
+      awaitingManualAdvance: this.cover || (this.mode === 'automatic' && current.durationMs === null && this.status !== 'finished'),
+      cover: this.cover,
       overridesRevision: this.overrides.current.revision,
       clockSource: this.audioClock ? 'audio' : 'monotonic',
       audioPolicy: this.transport ? this.audioPolicy : 'none',
@@ -596,7 +619,7 @@ export class PresentationEngine {
   /** Tempo que falta no slide atual; `null` sem duração ou fora do automático. */
   remainingMs(): number | null {
     const duration = this.currentDuration();
-    if (duration === null || this.mode !== 'automatic') return null;
+    if (duration === null || this.mode !== 'automatic' || this.cover) return null;
     if (this.audioClock) return Math.max(0, this.cueAt(this.index).endMs - (this.transport as AudioTransport).positionMs());
     return Math.max(0, duration - this.elapsed());
   }
@@ -610,6 +633,7 @@ export class PresentationEngine {
       visualMode: this.status === 'ready' ? 'black' : this.visualMode,
       slide,
       overridesRevision: this.overrides.current.revision,
+      ...(this.cover ? { cover: { title: this.snapshot.song.title, artist: this.snapshot.song.artist } } : {}),
     };
   }
 
@@ -645,9 +669,10 @@ export class PresentationEngine {
       label: current.label,
       durationMs: current.durationMs,
       awaitingManualAdvance: state.awaitingManualAdvance,
+      ...(this.withCover ? { cover: this.cover } : {}),
       capabilities: {
         timerIndicator: hasDuration,
-        countdown: hasDuration && this.mode === 'automatic' && this.status === 'running',
+        countdown: hasDuration && this.mode === 'automatic' && this.status === 'running' && !this.cover,
         // Faixa pronta mantém o play/pause mesmo em slide sem temporizador.
         transport: (timed || audio !== null) && this.status !== 'ready',
       },
@@ -703,6 +728,7 @@ export class PresentationEngine {
       rotation: this.rotation,
       overrides: this.overrides.current,
       undo: this.overrides.undo,
+      ...(this.cover ? { cover: true } : {}),
       audio: this.transport
         ? { policy: this.audioPolicy, positionMs: Math.round(this.transport.positionMs()), volume: this.volume, followsPause: this.followsPause, cues: this.cues }
         : null,
@@ -738,6 +764,7 @@ export class PresentationEngine {
   /** Arma o despertador do slide atual, se há o que esperar. Sem duração, só aguarda. */
   private arm(): void {
     this.disarm();
+    if (this.cover) return;
     if (this.audioClock) {
       // O despertador só acorda o motor perto do fim do intervalo; quem decide é a posição da faixa.
       if (this.status !== 'running' || this.pendingSeek !== null) return;
@@ -832,8 +859,23 @@ export class PresentationEngine {
 
   // ── comandos ─────────────────────────────────────────────────────────────
 
+  /** Sai da abertura para o slide escolhido; é aqui que o tempo do slide começa a contar. */
+  private leaveCover(): CommandResult {
+    this.cover = false;
+    if (this.linked) {
+      // A faixa não é reposicionada: no automático a letra entra onde a música está.
+      this.followAudio();
+      this.arm();
+      return OK;
+    }
+    this.restartInterval();
+    this.beginManualTiming();
+    return OK;
+  }
+
   private select(index: number): CommandResult {
     if (index < 0 || index >= this.snapshot.occurrences.length) return fail('at-limit');
+    this.cover = false;
     if (this.linked) {
       // Faixa vinculada: o destino só aparece depois de o player confirmar a posição.
       if (this.status === 'finished') this.status = 'running';
@@ -913,21 +955,20 @@ export class PresentationEngine {
         if (this.status !== 'ready') return fail('invalid-state');
         this.status = 'running';
         this.notice = null;
+        this.cover = this.withCover;
         if (this.linked) {
           // A faixa parte do início do slide escolhido e a sessão segue a posição confirmada.
           this.requestSeek(this.cueAt(this.index).startMs, this.index);
           return OK;
         }
         if (this.audioActive) {
-          // Independente: volta ao ponto de partida (um teste de som pode ter andado) e,
-          // no automático, começa a tocar; no manual, espera o play do operador.
+          // Independente: volta ao ponto de partida (um teste de som pode ter andado) e
+          // começa a tocar, em qualquer modo de avanço.
           const transport = this.transport as AudioTransport;
-          const play = this.mode === 'automatic';
-          if (!play) transport.pause();
           const generation = ++this.seekGeneration;
           void transport.seek(this.initialAudioPosition()).then(
             () => {
-              if (!this.disposed && generation === this.seekGeneration && play && this.status === 'running') this.playAudio();
+              if (!this.disposed && generation === this.seekGeneration && this.status === 'running') this.playAudio();
             },
             () => undefined,
           );
@@ -977,9 +1018,11 @@ export class PresentationEngine {
         return fail('invalid-state');
       }
       case 'next':
+        if (this.cover) return this.leaveCover();
         this.captureManualTiming(this.index + 1);
         return this.select(this.index + 1);
       case 'previous':
+        if (this.cover) return fail('at-limit');
         return this.select(this.index - 1);
       case 'first':
         return this.select(0);
@@ -1028,6 +1071,7 @@ export class PresentationEngine {
         }
         this.disarm();
         this.status = 'ready';
+        this.cover = false;
         this.index = 0;
         this.accumulatedMs = 0;
         this.anchor = null;

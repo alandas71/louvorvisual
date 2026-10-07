@@ -87,10 +87,6 @@ function Trash({ session }: { session: LocalSession }) {
     <div className="flex flex-col gap-8" data-testid="trash">
       <header>
         <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Lixeira e histórico</h1>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
-          O que foi excluído e as versões anteriores guardadas neste dispositivo. Nada aqui depende de conexão.
-          {session.team ? ' Restaurar é publicado para a equipe como qualquer alteração.' : ''}
-        </p>
       </header>
 
       {message && (
@@ -146,9 +142,6 @@ function Trash({ session }: { session: LocalSession }) {
         <h2 id="historico" className="text-lg font-bold">
           Versões anteriores
         </h2>
-        <p className="text-sm text-muted">
-          Uma cópia é guardada antes de excluir, de regenerar os slides, de resolver um conflito e, ao editar, no máximo a cada dez minutos por documento.
-        </p>
         {history === null ? (
           <Loading>Carregando…</Loading>
         ) : history.length === 0 ? (

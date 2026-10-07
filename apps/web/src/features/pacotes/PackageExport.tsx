@@ -70,10 +70,6 @@ export function PackageExport({ session, setlistId, refreshKey }: { session: Loc
       <h2 id="pacote" className="text-lg font-bold">
         Pacote de segurança
       </h2>
-      <p className="text-sm text-muted">
-        Um arquivo <code>.louvorvisual.zip</code> com este repertório: louvores, slides, tempos e, se você quiser, os áudios. Serve para guardar uma cópia fora do navegador e para levar o
-        repertório a outro computador ou ao projetor. Senhas e dados de acesso nunca entram no arquivo.
-      </p>
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-64">
           <Label htmlFor="pacote-audio">Áudio no pacote</Label>

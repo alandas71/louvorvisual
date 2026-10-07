@@ -86,10 +86,7 @@ function NewSongForm({ session }: { session: LocalSession }) {
 
   return (
     <form onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-6" noValidate>
-      <PageHeader
-        title="Novo louvor"
-        description="Cole a letra como ela é. O aplicativo guarda o texto original e sugere seções e slides, que você revisa em seguida."
-      />
+      <PageHeader title="Novo louvor" />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className={cn(cardClass, 'flex flex-col gap-5 p-4 sm:p-6')}>

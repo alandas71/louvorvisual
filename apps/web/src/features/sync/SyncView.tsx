@@ -61,9 +61,6 @@ function Sync({ session, engine }: { session: LocalSession; engine: SyncEngine }
     <div className="flex flex-col gap-8" data-testid="sync-view">
       <header>
         <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Sincronização</h1>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted">
-          {team ? `Equipe ${team.workspaceName}, como ${team.userName} (${team.userEmail}).` : 'Perfil pessoal deste dispositivo.'} O que você grava fica primeiro aqui; o envio acontece quando há conexão.
-        </p>
       </header>
 
       <section aria-labelledby="sync-estado" className={sectionClass}>
@@ -175,7 +172,6 @@ function Sync({ session, engine }: { session: LocalSession; engine: SyncEngine }
         <h2 id="sync-pendencias" className="text-lg font-bold">
           Pendências
         </h2>
-        {!team && <p className="text-sm text-muted">No perfil pessoal, as alterações ficam só neste dispositivo. Para compartilhar, entre em uma equipe em &ldquo;Conta e equipe&rdquo;.</p>}
         {pending === null ? (
           <Loading>Carregando…</Loading>
         ) : waiting.length === 0 ? (

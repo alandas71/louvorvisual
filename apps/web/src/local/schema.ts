@@ -1,5 +1,5 @@
-import type { Arrangement, Asset, AudioMimeType, IsoInstant, Setlist, Song, SongSearchEntry, Theme, Uuid } from '@louvorvisual/domain';
-import type { Rotation, SessionCheckpoint, SessionSnapshot } from '@louvorvisual/presentation';
+import type { Arrangement, Asset, AudioMimeType, IsoInstant, PresentationMode, Setlist, Song, SongSearchEntry, Theme, Uuid } from '@louvorvisual/domain';
+import type { Rotation, SessionCheckpoint, SessionSnapshot, VisualPatch } from '@louvorvisual/presentation';
 import type { ArchiveReason, ConflictRecord, EntityState, QueuedOperation, StagedDocument, SyncEntityType, SyncMeta } from '@louvorvisual/sync';
 
 /** Nome fixo: IndexedDB pertence à origem, e trocar o nome abandonaria a biblioteca. */
@@ -104,6 +104,10 @@ export type PresentationCheckpointRow = {
 export type OutputPreferencesRow = {
   outputId: 'public';
   rotation: Rotation;
+  /** Modo de avanço escolhido pelo operador na última apresentação; ausente antes da primeira escolha. */
+  mode?: PresentationMode;
+  /** Ajustes de aparência "para o louvor inteiro" que valem em toda apresentação aberta neste dispositivo. */
+  appearance?: VisualPatch;
 };
 
 /** Chave dos bytes de um arquivo: privados por espaço, identificados pelo hash. */

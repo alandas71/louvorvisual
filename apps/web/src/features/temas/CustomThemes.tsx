@@ -84,15 +84,9 @@ function CustomThemesReady({ session }: { session: LocalSession }) {
 
   return (
     <section aria-labelledby="temas-personalizados" className="flex flex-col gap-4" data-testid="custom-themes">
-      <div>
-        <h2 id="temas-personalizados" className="text-lg font-bold">
-          Temas personalizados
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          Um tema personalizado começa como cópia de um tema de fábrica. Para usar, abra o louvor no editor e escolha o tema em &ldquo;Tema
-          escuro&rdquo;: o louvor guarda a própria cópia, então mudar ou excluir o tema depois não altera o que já foi preparado.
-        </p>
-      </div>
+      <h2 id="temas-personalizados" className="text-lg font-bold">
+        Temas personalizados
+      </h2>
 
       <div className="flex flex-wrap items-end gap-3">
         <div>

@@ -2,8 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { BrowserProfile, ORIGIN, ProductionServer } from './helpers';
-import { createSong, openOperator, openProjection } from './presentation.helpers';
+import { BrowserProfile, openHiddenView, ORIGIN, ProductionServer } from './helpers';
+import { createSong, openOperator, openProjection, startShow } from './presentation.helpers';
 
 // Auditoria de acessibilidade (RNF-06) sobre o build de produção: regras WCAG 2.1 A/AA
 // do axe-core em cada tela do operador, mais a operação principal só pelo teclado.
@@ -85,7 +85,7 @@ test('RNF-06: nenhuma violação WCAG 2.1 A/AA nas telas do aplicativo, do opera
   await expect(page.locator('main')).toHaveAttribute('data-view', 'biblioteca');
   expectClean(await audit(page, 'biblioteca (com louvor)'));
 
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByLabel('Nome do repertório').fill('Culto de domingo');
   await page.getByRole('button', { name: 'Criar repertório' }).click();
   await page.getByLabel('Acrescentar louvor').selectOption({ index: 1 });
@@ -119,7 +119,7 @@ test('RNF-06: nenhuma violação WCAG 2.1 A/AA nas telas do aplicativo, do opera
   await projection.getByRole('button', { name: 'Armar saída' }).click();
   await expect(projection.getByTestId('public-output')).toHaveAttribute('data-armed', 'true');
   expectClean(await audit(projection, 'projeção (saída limpa)'));
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   expectClean(await audit(page, 'operador (painel, em andamento)'));
 
   await page.getByRole('button', { name: 'Modo interativo' }).click();

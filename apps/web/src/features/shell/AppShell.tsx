@@ -26,15 +26,18 @@ import { DataNoticeBanner } from './DataNoticeBanner';
 
 type IconType = ComponentType<{ size?: number; className?: string }>;
 
+/** `hidden`: fora do menu e da barra inferior; a vista continua abrindo pelo endereço (`?view=`). */
 const VIEWS = [
-  { id: 'biblioteca', label: 'Biblioteca', short: 'Biblioteca', group: 'culto', Icon: LibraryIcon as IconType, Component: LibraryView },
-  { id: 'repertorios', label: 'Repertórios', short: 'Repertórios', group: 'culto', Icon: SetlistIcon as IconType, Component: SetlistsView },
-  { id: 'temas', label: 'Temas e fontes', short: 'Temas', group: 'culto', Icon: ThemesIcon as IconType, Component: ThemesView },
-  { id: 'lixeira', label: 'Lixeira e histórico', short: 'Lixeira', group: 'dispositivo', Icon: TrashIcon as IconType, Component: TrashView },
-  { id: 'offline', label: 'Disponível offline', short: 'Offline', group: 'dispositivo', Icon: OfflineIcon as IconType, Component: OfflineView },
-  { id: 'sync', label: 'Sincronização', short: 'Sincronizar', group: 'dispositivo', Icon: SyncIcon as IconType, Component: SyncView },
-  { id: 'conta', label: 'Conta e equipe', short: 'Conta', group: 'dispositivo', Icon: AccountIcon as IconType, Component: AccountView },
+  { id: 'biblioteca', label: 'Biblioteca', short: 'Biblioteca', group: 'culto', hidden: false, Icon: LibraryIcon as IconType, Component: LibraryView },
+  { id: 'repertorios', label: 'Repertórios', short: 'Repertórios', group: 'culto', hidden: true, Icon: SetlistIcon as IconType, Component: SetlistsView },
+  { id: 'temas', label: 'Temas e fontes', short: 'Temas', group: 'culto', hidden: true, Icon: ThemesIcon as IconType, Component: ThemesView },
+  { id: 'lixeira', label: 'Lixeira e histórico', short: 'Lixeira', group: 'dispositivo', hidden: false, Icon: TrashIcon as IconType, Component: TrashView },
+  { id: 'offline', label: 'Disponível offline', short: 'Offline', group: 'dispositivo', hidden: false, Icon: OfflineIcon as IconType, Component: OfflineView },
+  { id: 'sync', label: 'Sincronização', short: 'Sincronizar', group: 'dispositivo', hidden: false, Icon: SyncIcon as IconType, Component: SyncView },
+  { id: 'conta', label: 'Conta e equipe', short: 'Conta', group: 'dispositivo', hidden: false, Icon: AccountIcon as IconType, Component: AccountView },
 ] as const;
+
+const MENU_VIEWS = VIEWS.filter((view) => !view.hidden);
 
 const GROUPS = [
   { id: 'culto', label: 'Culto' },
@@ -42,7 +45,7 @@ const GROUPS = [
 ] as const;
 
 /** As áreas que cabem na barra inferior do celular; as demais ficam em "Mais". */
-const TAB_BAR = ['biblioteca', 'repertorios', 'temas'];
+const TAB_BAR = ['biblioteca', 'sync', 'conta'];
 
 /** Vistas abertas a partir da biblioteca; na navegação contam como parte dela. */
 const LIBRARY_VIEWS = [
@@ -175,7 +178,7 @@ export function AppShell() {
               <div key={group.id} className="flex flex-col gap-1">
                 <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">{group.label}</p>
                 <ul className="flex flex-col gap-0.5">
-                  {VIEWS.filter((view) => view.group === group.id).map((view) => {
+                  {MENU_VIEWS.filter((view) => view.group === group.id).map((view) => {
                     const active = view.id === current.id;
                     return (
                       <li key={view.id}>
@@ -239,7 +242,7 @@ export function AppShell() {
 
         <nav aria-label="Navegação rápida" className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface-raised/95 pb-safe backdrop-blur-md lg:hidden">
           <ul className="mx-auto grid max-w-lg grid-cols-4">
-            {VIEWS.filter((view) => TAB_BAR.includes(view.id)).map((view) => {
+            {MENU_VIEWS.filter((view) => TAB_BAR.includes(view.id)).map((view) => {
               const active = view.id === current.id;
               return (
                 <li key={view.id}>

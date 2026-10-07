@@ -32,10 +32,8 @@ describe('faixa independente', () => {
     await flush();
     engine.execute({ type: 'start' });
     await flush();
-    // No manual, a faixa espera o play do operador.
-    expect(transport.isPlaying()).toBe(false);
-    engine.execute({ type: 'audioPlay' });
-    await flush();
+    // Iniciar toca a faixa em qualquer modo de avanço.
+    expect(transport.isPlaying()).toBe(true);
     await play(3000);
     const seeksBefore = transport.seekLog.length;
     engine.execute({ type: 'next' });
@@ -97,14 +95,15 @@ describe('faixa independente', () => {
     await flush();
     engine.execute({ type: 'start' });
     await flush();
-    expect(engine.getView().controls).toMatchObject({ playing: false, capabilities: { transport: true } });
+    // Iniciar já toca a faixa; o play/pause compacto pausa e retoma só ela.
+    expect(engine.getView().controls).toMatchObject({ playing: true, capabilities: { transport: true } });
+    engine.execute({ type: 'toggle' });
+    expect(transport.isPlaying()).toBe(false);
+    expect(engine.getView().controls.playing).toBe(false);
+    expect(engine.getState().status).toBe('running');
     engine.execute({ type: 'toggle' });
     await flush();
     expect(transport.isPlaying()).toBe(true);
-    expect(engine.getView().controls.playing).toBe(true);
-    expect(engine.getState().status).toBe('running');
-    engine.execute({ type: 'toggle' });
-    expect(transport.isPlaying()).toBe(false);
     expect(engine.getState().status).toBe('running');
   });
 
@@ -557,5 +556,41 @@ describe('preparação, recuperação e suspensão', () => {
       await flush();
       expect(transport.isPlaying(), policy).toBe(true);
     }
+  });
+});
+
+describe('abertura com faixa', () => {
+  it('independente: Iniciar toca a faixa na abertura e avançar não a reposiciona', async () => {
+    const { engine, transport, play } = session([2000, 2000], { policy: 'independent' }, { mode: 'automatic', cover: true });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    expect(transport.isPlaying()).toBe(true);
+    await play(5000);
+    // O tempo do slide não corre na abertura: a sessão continua no primeiro slide.
+    expect(engine.getState()).toMatchObject({ status: 'running', cover: true, currentIndex: 0 });
+    const seeks = transport.seekLog.length;
+    engine.execute({ type: 'next' });
+    expect(engine.getState()).toMatchObject({ cover: false, currentIndex: 0 });
+    await play(2000);
+    expect(engine.getState().currentIndex).toBe(1);
+    expect(transport.seekLog).toHaveLength(seeks);
+    expect(transport.isPlaying()).toBe(true);
+  });
+
+  it('vinculada: a letra só segue a faixa depois de avançar, e entra onde a música está', async () => {
+    const { engine, transport, play } = session([2000, 2000, 2000], { policy: 'linked' }, { mode: 'automatic', cover: true });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    expect(transport.isPlaying()).toBe(true);
+    await play(2500);
+    expect(engine.getState()).toMatchObject({ cover: true, currentIndex: 0 });
+    const seeks = transport.seekLog.length;
+    engine.execute({ type: 'next' });
+    expect(engine.getState()).toMatchObject({ cover: false, currentIndex: 1, clockSource: 'audio' });
+    expect(transport.seekLog).toHaveLength(seeks);
+    await play(2000);
+    expect(engine.getState().currentIndex).toBe(2);
   });
 });

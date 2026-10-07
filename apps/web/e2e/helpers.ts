@@ -102,6 +102,17 @@ export async function waitUntilInstalled(page: Page): Promise<SwStatus> {
   });
 }
 
+/**
+ * Abre uma vista que não está no menu (repertórios, temas) como um link do
+ * aplicativo abriria: troca a query sem recarregar o documento.
+ */
+export async function openHiddenView(page: Page, view: 'repertorios' | 'temas'): Promise<void> {
+  await page.evaluate((target) => {
+    window.history.pushState(null, '', `/app?view=${target}`);
+    window.dispatchEvent(new Event('lv:querychange'));
+  }, view);
+}
+
 export function cacheNames(page: Page): Promise<string[]> {
   return page.evaluate(() => caches.keys());
 }

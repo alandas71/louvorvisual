@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { BrowserProfile, ORIGIN, ProductionServer } from './helpers';
-import { createSong, drawn, expectConfirmed, openOperator, openProjection } from './presentation.helpers';
+import { createSong, drawn, expectConfirmed, openOperator, openProjection, startShow } from './presentation.helpers';
 
 const EVIDENCE = join(__dirname, '..', '..', '..', 'execucao', 'etapas', '15-evidencias');
 const server = new ProductionServer();
@@ -98,7 +98,7 @@ test('AT-26: personalizar uma cópia de tema, recusas de fundo claro e contraste
 
   await openOperator(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectConfirmed(page, projection);
   // Fundo e letra chegam juntos à saída pública; a fonte manual permanece.
   expect(await drawn(projection)).toMatchObject({ background: 'rgb(16, 16, 16)', color: 'rgb(255, 233, 168)', family: 'Lato', align: 'left' });
@@ -112,7 +112,7 @@ test('AT-26: personalizar uma cópia de tema, recusas de fundo claro e contraste
   await expect(page.getByTestId('save-status')).toHaveAttribute('data-state', 'saved');
   await openOperator(page);
   const second = await openProjection(context, page);
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectConfirmed(page, second);
   expect(await drawn(second)).toMatchObject({ background: 'rgb(33, 24, 9)', color: 'rgb(253, 230, 138)', family: 'Lato', align: 'center' });
   await page.getByRole('button', { name: 'Encerrar' }).click();
@@ -131,7 +131,7 @@ test('AT-26: personalizar uma cópia de tema, recusas de fundo claro e contraste
   await expect(page.getByLabel('Tema escuro').locator('option:checked')).toHaveText('Personalizado (cópia guardada neste louvor)');
   await openOperator(page);
   const third = await openProjection(context, page);
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectConfirmed(page, third);
   expect(await drawn(third)).toMatchObject({ background: 'rgb(16, 16, 16)', color: 'rgb(255, 233, 168)', family: 'Lato' });
 

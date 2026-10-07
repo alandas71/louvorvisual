@@ -23,9 +23,9 @@ import { Select } from '@/components/ui/Select';
 import { assetPresent, getAsset, importAudioFile, readAssetBlob, type ImportProgress, type LocalSession } from '@/local';
 import { estimateFreeSpace, formatBytes, formatClock, probeAudio } from '../audio/htmlTransport';
 
-const KIND_TEXT: Record<AudioKind, { title: string; importLabel: string; help: string }> = {
-  original: { title: 'Áudio original', importLabel: 'Importar o áudio original', help: 'A gravação com voz, para ensaio ou para tocar junto.' },
-  playback: { title: 'Playback', importLabel: 'Importar o playback', help: 'A base instrumental para a igreja cantar.' },
+const KIND_TEXT: Record<AudioKind, { title: string; importLabel: string }> = {
+  original: { title: 'Áudio original', importLabel: 'Importar o áudio original' },
+  playback: { title: 'Playback', importLabel: 'Importar o playback' },
 };
 
 const PHASE_TEXT: Record<ImportProgress['phase'], string> = {
@@ -122,12 +122,9 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
 
   return (
     <section aria-labelledby="audio" className="flex flex-col gap-4" data-testid="audio-section">
-      <div>
-        <h2 id="audio" className="text-lg font-bold">
-          Áudio
-        </h2>
-        <p className="text-sm text-muted">Os arquivos ficam guardados neste dispositivo e tocam sem conexão. Na apresentação toca uma faixa por vez.</p>
-      </div>
+      <h2 id="audio" className="text-lg font-bold">
+        Áudio
+      </h2>
 
       {arrangement.audioBindings.length > 0 && (
         <fieldset className="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-testid="active-track">
@@ -150,10 +147,7 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
           const binding = arrangement.audioBindings.find((item) => item.kind === kind);
           return (
             <div key={kind} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card" data-testid={`audio-${kind}`} data-state={binding ? 'bound' : 'empty'}>
-              <div>
-                <h3 className="font-semibold">{KIND_TEXT[kind].title}</h3>
-                <p className="text-xs text-muted">{KIND_TEXT[kind].help}</p>
-              </div>
+              <h3 className="font-semibold">{KIND_TEXT[kind].title}</h3>
               {binding ? (
                 <Track session={session} arrangement={arrangement} binding={binding} info={info[binding.assetId]} onUpdate={(fields) => update(binding.id, fields)} onRemove={() => remove(binding.id)} />
               ) : null}

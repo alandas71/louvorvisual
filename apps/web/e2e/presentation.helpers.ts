@@ -43,10 +43,29 @@ export async function createSong(page: Page, options: { title?: string; duration
 export const operator = (page: Page): Locator => page.getByTestId('operator');
 export const output = (page: Page): Locator => page.getByTestId('public-output');
 
-/** Do editor para a área do operador, com a sessão preparada. */
-export async function openOperator(page: Page): Promise<void> {
+/**
+ * Do editor para a área do operador, com a sessão preparada. Por padrão escolhe
+ * o avanço manual, ponto de partida da maioria das provas; a escolha fica nas
+ * preferências, então as sessões seguintes do mesmo perfil abrem no manual.
+ * `mode: 'preference'` mantém o que o aplicativo abriu (automático na primeira vez).
+ */
+export async function openOperator(page: Page, options: { mode?: 'manual' | 'preference' } = {}): Promise<void> {
   await page.getByRole('button', { name: '▶ Apresentar' }).click();
   await expect(operator(page)).toHaveAttribute('data-status', 'ready');
+  if ((options.mode ?? 'manual') === 'manual' && (await operator(page).getAttribute('data-mode')) !== 'manual') {
+    await page.getByRole('button', { name: 'Manual', exact: true }).first().click();
+    await expect(operator(page)).toHaveAttribute('data-mode', 'manual');
+  }
+}
+
+/** Inicia e sai da abertura: o primeiro slide da letra fica na tela, como as provas esperam depois de "Iniciar". */
+export async function startShow(page: Page): Promise<void> {
+  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await expect(operator(page)).toHaveAttribute('data-cover', 'true');
+  await page.getByTestId('advance').click();
+  await expect(operator(page)).toHaveAttribute('data-cover', 'false');
+  // O foco não fica no botão: as provas usam Espaço logo depois, e em um botão ele seria o clique do botão.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 }
 
 /** Abre a janela pública pelo botão do operador (clique direto) e, por padrão, arma a saída. */

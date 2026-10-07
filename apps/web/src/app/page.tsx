@@ -1,16 +1,10 @@
-import { ChevronRightIcon, LibraryIcon, OfflineIcon, ProjectorIcon, ShieldIcon, SparkIcon } from '@/components/ui/icons';
+import { ChevronRightIcon, LibraryIcon, ProjectorIcon } from '@/components/ui/icons';
 import { SkipToContent } from '@/components/ui/SkipToContent';
 import { BrandMark } from '@/features/shell/BrandMark';
 
 const entryClass =
   'group flex items-center gap-4 rounded-2xl border p-5 transition-[border-color,background-color,transform] duration-150 active:scale-[0.99] ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
-
-const FEATURES = [
-  { Icon: SparkIcon, title: 'Da letra ao slide', text: 'Cole a letra como ela é. As seções e os slides são sugeridos e você revisa cada um.' },
-  { Icon: OfflineIcon, title: 'Funciona sem internet', text: 'Louvores, temas, fontes e áudios ficam neste dispositivo. O culto não depende do Wi-Fi.' },
-  { Icon: ShieldIcon, title: 'Seguro ao vivo', text: 'O público só vê o slide. Ajustes, notas e o próximo slide ficam no painel do operador.' },
-] as const;
 
 // As entradas são documentos independentes guardados para uso offline. Links
 // comuns carregam o documento inteiro; a navegação do Next pediria dados ao
@@ -30,7 +24,6 @@ export default function HomePage() {
               <h1 className="text-4xl font-bold leading-[1.08] sm:text-5xl">
                 A letra certa na tela, <span className="text-accent">na hora certa.</span>
               </h1>
-              <p className="max-w-xl text-lg leading-relaxed text-muted">Prepare letras, gere slides e apresente louvores mesmo sem conexão.</p>
               <nav aria-label="Entradas do aplicativo" className="grid max-w-xl gap-3">
                 <a href="/app" className={`${entryClass} border-accent bg-accent text-accent-ink shadow-glow hover:bg-accent-strong`}>
                   <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-ink/10">
@@ -38,7 +31,7 @@ export default function HomePage() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-base font-bold">Abrir o aplicativo</span>
-                    <span className="block text-sm">Biblioteca, repertórios e operador</span>
+                    <span className="block text-sm">Biblioteca e operador</span>
                   </span>
                   <ChevronRightIcon className="shrink-0 transition-transform group-hover:translate-x-1" />
                 </a>
@@ -74,18 +67,6 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-
-          <ul className="grid gap-4 md:grid-cols-3">
-            {FEATURES.map(({ Icon, title, text }) => (
-              <li key={title} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised/70 p-5">
-                <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
-                  <Icon size={20} />
-                </span>
-                <h2 className="text-base font-bold">{title}</h2>
-                <p className="text-sm leading-relaxed text-muted">{text}</p>
-              </li>
-            ))}
-          </ul>
         </main>
       </div>
     </>

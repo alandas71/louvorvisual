@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { chromium, expect, test, type Page } from '@playwright/test';
 import { audioState, chooseAudio, expectAudioPlaying, importAudio, mp3File, setPolicy, tamperAudioBlobs, waitAudioAt, watchAudio, wavFile } from './audio.helpers';
-import { BrowserProfile, isReachable, ORIGIN, ProductionServer } from './helpers';
-import { createSong, drawn, expectConfirmed, mediaElements, openOperator, openProjection, operator, output, readStore, SLIDE_TEXTS } from './presentation.helpers';
+import { BrowserProfile, isReachable, openHiddenView, ORIGIN, ProductionServer } from './helpers';
+import { createSong, drawn, expectConfirmed, mediaElements, openOperator, openProjection, operator, output, readStore, SLIDE_TEXTS, startShow } from './presentation.helpers';
 
 const EVIDENCE = join(__dirname, '..', '..', '..', 'execucao', 'etapas', '07-evidencias');
 
@@ -72,24 +72,21 @@ test('AT-07 (independente), AT-08 e AT-28: player único, sem seek ao trocar de 
   // Antes de iniciar: teste de som; iniciar volta ao ponto de partida.
   await page.getByTestId('audio-toggle').click();
   await waitAudioAt(page, 600);
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
-  // Manual: a faixa espera o play do operador, parada no começo.
-  await expectAudioPlaying(page, false);
-  expect((await audioState(page)).positionMs).toBe(0);
+  // Iniciar toca a faixa desde o ponto de partida, também no manual.
+  await expectAudioPlaying(page, true);
 
   // AT-28: sem temporizador, o play/pause existe porque há faixa; o indicador de tempo, não.
   await expect(page.getByTestId('transport')).toBeVisible();
   await expect(page.getByTestId('timer-indicator')).toHaveCount(0);
   await expect(page.getByTestId('countdown')).toHaveCount(0);
 
-  await page.getByTestId('audio-toggle').click();
-  await expectAudioPlaying(page, true);
   await waitAudioAt(page, 1000);
   const before = await audioState(page);
 
   // ── AT-07: trocar de slide por botão, teclado, miniatura e pela janela pública não faz seek ──
-  await page.getByRole('button', { name: 'Avançar →' }).click();
+  await page.getByTestId('advance').click();
   await page.keyboard.press('ArrowRight');
   await expect(operator(page)).toHaveAttribute('data-index', '2');
   await thumbnail(page, 0).click();
@@ -254,7 +251,7 @@ test('AT-07 (vinculada): os slides acompanham a posição da faixa e os saltos r
   await expect(operator(page)).toHaveAttribute('data-clock-source', 'audio');
 
   // ── automático vinculado: a faixa é o relógio ───────────────────────────
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
   await expectAudioPlaying(page, true);
   expect((await audioState(page)).positionMs).toBeGreaterThanOrEqual(2000);
@@ -336,7 +333,7 @@ test('AT-07 (vinculada): os slides acompanham a posição da faixa e os saltos r
   // O slide 2 vai de 5 a 9 s; a faixa passa de 9,5 s e o slide continua o mesmo.
   await waitAudioAt(page, 9500);
   await expect(operator(page)).toHaveAttribute('data-index', '1');
-  await page.getByRole('button', { name: 'Avançar →' }).click();
+  await page.getByTestId('advance').click();
   await expect(operator(page)).toHaveAttribute('data-index', '2');
   state = await audioState(page);
   expect(state.positionMs).toBeGreaterThanOrEqual(9000);
@@ -365,7 +362,7 @@ test('AT-31: rascunho de tempo com faixa vinculada não faz seek; aplicar pede p
   await watchAudio(page);
   const projection = await openProjection(context, page);
   await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectAudioPlaying(page, true);
   await waitAudioAt(page, 1500);
 
@@ -474,7 +471,7 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   await page.getByRole('button', { name: '← Biblioteca' }).click();
 
   // ── repertório ordenado ─────────────────────────────────────────────────
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await expect(page.getByTestId('setlists-empty')).toBeVisible();
   await page.getByLabel('Nome do repertório').fill('Culto de domingo');
   await page.getByLabel('Data do culto').fill('2026-10-11');
@@ -516,7 +513,7 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   expect(await readStore(page, 'assets')).toHaveLength(1);
 
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByRole('link', { name: 'Culto de domingo' }).click();
   await page.getByRole('button', { name: 'Preparar para uso offline' }).click();
   await expect(page.getByTestId('package-state')).toHaveAttribute('data-state', 'ready');
@@ -536,7 +533,7 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   await page.getByLabel('Artista').fill('Coral da Vila e convidados');
   await expect(page.getByTestId('save-status')).toHaveAttribute('data-state', 'saved');
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByRole('link', { name: 'Culto de domingo' }).click();
   await expect(page.getByTestId('package-state')).toHaveAttribute('data-state', 'stale');
   await expect(page.getByTestId('package-stale')).toContainText('"Manhã de Gratidão": o louvor foi editado.');
@@ -565,14 +562,14 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   expect(await page.getByTestId('audio-listen').evaluate((element: HTMLAudioElement) => new Promise((resolve) => (element.readyState >= 1 ? resolve(element.duration) : element.addEventListener('loadedmetadata', () => resolve(element.duration)))))).toBe(12);
   await page.getByRole('button', { name: '← Biblioteca' }).click();
   // Temas e a vista offline, com o uso de áudio.
-  await page.getByRole('link', { name: 'Temas e fontes' }).click();
+  await openHiddenView(page, 'temas');
   await expect(page.getByRole('heading', { name: 'Temas e fontes' })).toBeVisible();
   await page.getByRole('link', { name: 'Disponível offline' }).click();
   await expect(page.getByTestId('audio-usage')).toHaveAttribute('data-files', '1');
   await expect(page.getByTestId('audio-usage')).toHaveAttribute('data-unused-files', '0');
 
   // Repertório pronto, conferido de novo sem rede (fontes do cache, bytes do banco).
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByRole('link', { name: 'Culto de domingo' }).click();
   await expect(page.getByTestId('package-state')).toHaveAttribute('data-state', 'ready');
   await page.getByRole('button', { name: 'Conferir de novo' }).click();
@@ -587,7 +584,7 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   await watchAudio(page);
   const projection = await openProjection(context, page);
   await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectAudioPlaying(page, true);
   await expectConfirmed(page, projection);
   expect((await drawn(projection))!.text).toBe(SLIDE_TEXTS[0]);
@@ -611,7 +608,7 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   await expect(output(projection)).toHaveAttribute('data-armed', 'true');
   await expect(projection.getByTestId('projection-setup')).toHaveCount(0);
   expect(await drawn(projection)).toMatchObject({ text: '', visualMode: 'black' });
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expectConfirmed(page, projection);
   expect((await drawn(projection))!.text).toBe(SLIDE_TEXTS[0]);
   expect(await mediaElements(projection)).toBe(0);
@@ -648,7 +645,7 @@ test('AT-22 (mídia): arquivo inválido ou corrompido não produz falso "salvo" 
 
   // ── mídia corrompida no dispositivo ─────────────────────────────────────
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByLabel('Nome do repertório').fill('Ensaio');
   await page.getByRole('button', { name: 'Criar repertório' }).click();
   await page.getByLabel('Acrescentar louvor').selectOption({ index: 1 });
@@ -677,7 +674,7 @@ test('AT-22 (mídia): arquivo inválido ou corrompido não produz falso "salvo" 
   await expect(operator(page)).toHaveAttribute('data-status', 'ready');
   await expect(operator(page)).toHaveAttribute('data-audio-policy', 'none');
   await expect(page.getByTestId('session-warning').filter({ hasText: 'A faixa de áudio não está disponível' })).toBeVisible();
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
   await page.getByRole('button', { name: 'Encerrar' }).click();
 
@@ -686,7 +683,7 @@ test('AT-22 (mídia): arquivo inválido ou corrompido não produz falso "salvo" 
   await page.getByRole('link', { name: 'Em União' }).click();
   await importAudio(page, 'playback', good);
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByRole('link', { name: 'Ensaio' }).click();
   await page.getByRole('button', { name: 'Preparar de novo' }).click();
   await expect(page.getByTestId('package-state')).toHaveAttribute('data-state', 'ready');
@@ -771,7 +768,7 @@ test('MP3, autoplay bloqueado e suspensão: a sessão não finge que toca e volt
     prototype.realPlay = prototype.play;
     prototype.play = () => Promise.reject(new DOMException('play() failed because the user did not interact with the document first.', 'NotAllowedError'));
   });
-  await page.getByRole('button', { name: '▶ Iniciar' }).click();
+  await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-notice', 'autoplay-blocked');
   await expect(operator(page)).toHaveAttribute('data-status', 'paused');
   await expect(page.getByTestId('audio-notice')).toContainText('bloqueou o som');
@@ -848,7 +845,7 @@ test('ensaio offline prolongado com áudio vinculado e projeção', async () => 
     await setPolicy(page, 'playback', 'linked', '1');
     await page.getByRole('button', { name: '← Biblioteca' }).click();
   }
-  await page.getByRole('link', { name: 'Repertórios' }).click();
+  await openHiddenView(page, 'repertorios');
   await page.getByLabel('Nome do repertório').fill('Ensaio prolongado');
   await page.getByRole('button', { name: 'Criar repertório' }).click();
   for (const [index, track] of tracks.entries()) {
@@ -892,7 +889,7 @@ test('ensaio offline prolongado com áudio vinculado e projeção', async () => 
     projection ??= await openProjection(context, page);
     await expect(operator(page)).toHaveAttribute('data-projection-armed', 'true');
     if ((await operator(page).getAttribute('data-mode')) !== 'automatic') await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
-    await page.getByRole('button', { name: '▶ Iniciar' }).click();
+    await startShow(page);
     await expect(operator(page)).toHaveAttribute('data-status', 'finished', { timeout: 90_000 });
     const run = await audioState(page);
     for (const [index, start] of [[1, 16_000], [2, 31_000], [3, 46_000]] as const) {

@@ -496,3 +496,100 @@ describe('publicação de estado', () => {
     expect(run({ type: 'next' })).toEqual({ ok: false, reason: 'invalid-state' });
   });
 });
+
+describe('abertura', () => {
+  function withCover(durations: readonly (number | null)[], mode: 'manual' | 'automatic' = 'automatic') {
+    const { snapshot } = timedSong(durations);
+    const clock = new ManualClock();
+    const engine = new PresentationEngine({ snapshot, clock, sessionId: 'session-1', mode, cover: true });
+    return { snapshot, clock, engine, run: (command: OperatorCommand) => engine.execute(command), at: () => engine.getState() };
+  }
+
+  it('iniciar mostra a abertura e nenhum tempo corre até avançar', () => {
+    const { clock, engine, run, at } = withCover([8 * S, 12 * S]);
+    expect(engine.getView().output.cover).toBeUndefined();
+    run({ type: 'start' });
+    expect(at()).toMatchObject({ status: 'running', cover: true, currentIndex: 0, awaitingManualAdvance: true });
+    expect(engine.getView().output).toMatchObject({ cover: { title: 'Em União', artist: 'Coral da Vila' }, visualMode: 'normal' });
+    expect(engine.getView().controls).toMatchObject({ cover: true, capabilities: { countdown: false } });
+    clock.advance(600 * S);
+    expect(at()).toMatchObject({ cover: true, currentIndex: 0, elapsedInSlideMs: 0 });
+    expect(clock.armed).toBe(0);
+  });
+
+  it('avançar sai da abertura para o primeiro slide da letra, com o intervalo inteiro', () => {
+    const { clock, engine, run, at } = withCover([8 * S, 12 * S]);
+    run({ type: 'start' });
+    clock.advance(30 * S);
+    run({ type: 'next' });
+    expect(at()).toMatchObject({ cover: false, currentIndex: 0, awaitingManualAdvance: false });
+    expect(engine.getView().output.cover).toBeUndefined();
+    expect(engine.remainingMs()).toBe(8 * S);
+    clock.advance(8 * S);
+    expect(at().currentIndex).toBe(1);
+  });
+
+  it('voltar não sai da abertura; saltar para um slide sai', () => {
+    const { snapshot, run, at } = withCover([null, null, null], 'manual');
+    run({ type: 'start' });
+    expect(run({ type: 'previous' })).toEqual({ ok: false, reason: 'at-limit' });
+    expect(at().cover).toBe(true);
+    run({ type: 'goTo', occurrenceId: snapshot.occurrences[2]!.id });
+    expect(at()).toMatchObject({ cover: false, currentIndex: 2 });
+  });
+
+  it('parar volta ao preto de antes de iniciar; iniciar de novo mostra a abertura', () => {
+    const { engine, run, at } = withCover([null, null], 'manual');
+    run({ type: 'start' });
+    run({ type: 'next' });
+    run({ type: 'stop' });
+    expect(at()).toMatchObject({ status: 'ready', cover: false });
+    expect(engine.getView().output.visualMode).toBe('black');
+    run({ type: 'start' });
+    expect(at().cover).toBe(true);
+  });
+
+  it('o ensaio assistido só começa a contar ao sair da abertura', () => {
+    const { clock, engine, run } = withCover([null, null], 'manual');
+    run({ type: 'start' });
+    clock.advance(40 * S);
+    run({ type: 'next' });
+    clock.advance(3 * S);
+    run({ type: 'next' });
+    clock.advance(2 * S);
+    expect(run({ type: 'completeManualTiming' })).toEqual({ ok: true });
+    expect(engine.getView().slides.map((slide) => slide.durationMs)).toEqual([3 * S, 2 * S]);
+  });
+
+  it('a abertura é recuperada em pausa', () => {
+    const first = withCover([8 * S, 12 * S]);
+    first.run({ type: 'start' });
+    const checkpoint = first.engine.checkpoint();
+    expect(checkpoint.cover).toBe(true);
+    const restored = new PresentationEngine({ snapshot: first.snapshot, clock: new ManualClock(), sessionId: 'session-1', checkpoint, cover: true });
+    expect(restored.getState()).toMatchObject({ status: 'paused', cover: true, currentIndex: 0 });
+  });
+
+  it('sem a opção, iniciar vai direto ao primeiro slide', () => {
+    const { run, at } = session([8 * S]);
+    run({ type: 'start' });
+    expect(at().cover).toBe(false);
+  });
+});
+
+describe('aparência inicial (preferências do operador)', () => {
+  it('vale para o louvor inteiro desde a abertura da sessão, sem contar como ajuste da sessão', () => {
+    const { snapshot } = timedSong([null, null]);
+    const engine = new PresentationEngine({ snapshot, clock: new ManualClock(), sessionId: 'session-1', appearance: { themePresetId: 'violeta', fontSizePx: 80 } });
+    expect(engine.getView().slides.map((slide) => [slide.themePresetId, slide.style.fontSizePx])).toEqual([['violeta', 80], ['violeta', 80]]);
+    expect(engine.getState().overridesRevision).toBe(0);
+    expect(engine.getView().controls.canUndo).toBe(false);
+  });
+
+  it('valores inválidos são ignorados por inteiro', () => {
+    const { snapshot } = timedSong([null]);
+    const plain = new PresentationEngine({ snapshot, clock: new ManualClock(), sessionId: 'session-1' });
+    const engine = new PresentationEngine({ snapshot, clock: new ManualClock(), sessionId: 'session-1', appearance: { fontSizePx: 9999 } });
+    expect(engine.getView().current.style).toEqual(plain.getView().current.style);
+  });
+});
