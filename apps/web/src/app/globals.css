@@ -153,7 +153,21 @@
  * slide) e a luz usa a cor da letra do tema, então a abertura acompanha
  * qualquer tema. Medidas em unidades da composição (cqw/cqh): vale igual em
  * miniaturas, prévia e projeção, girada ou não.
+ *
+ * As luzes ficam numa camada própria, atrás da letra, que não é trocada a cada
+ * slide: depois da abertura elas continuam, bem mais fracas, sem recomeçar.
  */
+.lv-lights {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 3s ease-in-out;
+}
+.lv-lights-soft {
+  opacity: 0.28;
+}
 .lv-cover {
   position: absolute;
   inset: 0;

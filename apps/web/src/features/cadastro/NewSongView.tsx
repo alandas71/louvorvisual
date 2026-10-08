@@ -11,6 +11,8 @@ import {
   parseLyrics,
   songInputIssues,
   themePreset,
+  type AudioBinding,
+  type AudioKind,
 } from '@louvorvisual/domain';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
@@ -21,7 +23,8 @@ import { cardClass, Loading, noticeClass, PageHeader } from '@/components/ui/Pag
 import { Textarea } from '@/components/ui/Textarea';
 import { setLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
-import { listSongIndex, saveDocuments, useLocalSession, type LocalSession, type SongIndexRow } from '@/local';
+import { importAudioFile, listSongIndex, saveDocuments, useLocalSession, type LocalSession, type SongIndexRow } from '@/local';
+import { estimateFreeSpace, probeAudio } from '../audio/htmlTransport';
 import { lyricsFromLrclib, searchLrclib, type LrclibTrack } from '../editor/lrclib';
 
 const SPLIT = { maxLines: maxLinesForStyle(themePreset(DEFAULT_THEME_PRESET_ID).style) };
@@ -52,6 +55,7 @@ function NewSongForm({ session }: { session: LocalSession }) {
   const [lyricMatches, setLyricMatches] = useState<LrclibTrack[] | null>(null);
   const [lookingForLyrics, setLookingForLyrics] = useState(false);
   const [lyricsLookupError, setLyricsLookupError] = useState<string | null>(null);
+  const [audioFiles, setAudioFiles] = useState<Partial<Record<AudioKind, File>>>({});
 
   useEffect(() => {
     void listSongIndex(session.db, session.profile.workspaceId).then(setExisting);
@@ -101,9 +105,45 @@ function NewSongForm({ session }: { session: LocalSession }) {
         themeRef: { kind: 'builtin', presetId: DEFAULT_THEME_PRESET_ID },
         ...SPLIT,
       });
+      const imported = await Promise.all(
+        (['original', 'playback'] as const).flatMap((kind) => {
+          const file = audioFiles[kind];
+          if (!file) return [];
+          return [
+            importAudioFile(session.db, {
+              file,
+              filename: file.name,
+              kind,
+              profileId: session.profile.profileId,
+              workspaceId: session.profile.workspaceId,
+              now: () => new Date().toISOString(),
+              newId: context.newId,
+              probe: probeAudio,
+              freeSpace: estimateFreeSpace,
+            }).then(({ asset }) => ({ kind, asset })),
+          ];
+        }),
+      );
+      const audioBindings: AudioBinding[] = imported.map(({ kind, asset }) => ({
+        id: context.newId(),
+        assetId: asset.id,
+        kind,
+        policy: 'independent',
+        volume: 1,
+        offsetMs: 0,
+        cuesVersion: 0,
+        cues: [],
+      }));
+      const playback = audioBindings.find((binding) => binding.kind === 'playback');
+      const original = audioBindings.find((binding) => binding.kind === 'original');
+      const arrangementWithAudio = {
+        ...arrangement,
+        audioBindings,
+        selectedAudioBindingId: playback?.id ?? original?.id ?? null,
+      };
       await saveDocuments(session.db, [
         { entityType: 'song', document: song },
-        { entityType: 'arrangement', document: arrangement },
+        { entityType: 'arrangement', document: arrangementWithAudio },
       ]);
       setLocalQuery({ view: 'editor', song: song.id, arranjo: arrangement.id });
     } catch (reason) {
@@ -206,6 +246,13 @@ function NewSongForm({ session }: { session: LocalSession }) {
               [Introdução], [Instrumental]. &ldquo;[Refrão 2x]&rdquo; repete a parte.
             </p>
           </div>
+
+          <fieldset className="grid gap-4 rounded-xl border border-border p-4 sm:grid-cols-2">
+            <legend className="px-1 text-sm font-semibold">Áudio opcional</legend>
+            <AudioFileInput kind="original" file={audioFiles.original} onChange={(file) => setAudioFiles((previous) => ({ ...previous, original: file }))} />
+            <AudioFileInput kind="playback" file={audioFiles.playback} onChange={(file) => setAudioFiles((previous) => ({ ...previous, playback: file }))} />
+            <p className="sm:col-span-2 text-xs text-muted">Se houver playback, ele será a faixa padrão da apresentação. As faixas são independentes dos slides.</p>
+          </fieldset>
         </div>
 
         <div className="flex flex-col gap-4 lg:sticky lg:top-6">
@@ -257,5 +304,17 @@ function NewSongForm({ session }: { session: LocalSession }) {
         </div>
       </div>
     </form>
+  );
+}
+
+function AudioFileInput({ kind, file, onChange }: { kind: AudioKind; file: File | undefined; onChange: (file: File | undefined) => void }) {
+  const label = kind === 'playback' ? 'Playback' : 'Música original';
+  const id = `audio-${kind}`;
+  return (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} type="file" accept="audio/*" onChange={(event) => onChange(event.target.files?.[0])} />
+      <p className="mt-1 truncate text-xs text-muted">{file ? file.name : 'Nenhum arquivo escolhido'}</p>
+    </div>
   );
 }

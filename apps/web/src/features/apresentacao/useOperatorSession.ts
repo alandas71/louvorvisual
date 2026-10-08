@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createPresentationSession,
   endPresentationSession,
-  findRecoverableSession,
   getAsset,
   getEntityState,
   getSetlist,
@@ -54,14 +53,12 @@ export type OperatorSessionState =
   | { status: 'missing' }
   | { status: 'blocked' }
   | { status: 'invalid'; issues: SnapshotIssue[] }
-  | { status: 'recoverable'; savedAt: string | null; title: string; recover: () => void; restart: () => void }
   | { status: 'audio-problem'; problem: AudioProblem; filename: string | null; continueWithoutAudio: () => void }
   | {
       status: 'active';
       controller: SessionController;
       row: PresentationSessionRow;
       warnings: SessionWarning[];
-      recovered: boolean;
       /** Faixas que o arranjo oferece; a escolha só muda antes de iniciar. Vazio em cópia preparada. */
       audioChoices: AudioChoice[];
       chooseAudio: (bindingId: Uuid | null) => void;
@@ -123,8 +120,8 @@ export type OperatorSource = {
 };
 
 /**
- * Prepara ou recupera a sessão de um arranjo e mantém o controlador enquanto a
- * área do operador estiver aberta. Tudo vem do banco local; nada usa rede.
+ * Prepara uma sessão nova de um arranjo e mantém o controlador enquanto a área
+ * do operador estiver aberta. Tudo vem do banco local; nada usa rede.
  */
 export function useOperatorSession(local: LocalSession, source: OperatorSource): OperatorSessionState {
   const { songId, arrangementId, setlistId, itemId, sessionHint } = source;
@@ -186,7 +183,6 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
         controller,
         row,
         warnings: options.warnings,
-        recovered: options.checkpoint !== null,
         audioChoices: options.audioChoices,
         // Trocar de faixa encerra esta sessão (ainda não iniciada) e prepara outra, com o mesmo lock.
         chooseAudio: (bindingId) => {
@@ -270,7 +266,10 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       /** Prepara da biblioteca viva, com a faixa indicada (`undefined` = a selecionada no arranjo). */
       const prepare = async (bindingId?: Uuid | null) => {
         const live = await liveDocuments(local, song, arrangement);
-        const wanted = bindingId === undefined ? live.arrangement.selectedAudioBindingId : bindingId;
+        // O playback é sempre a opção padrão quando está disponível. A escolha
+        // explícita no painel da sessão ainda pode selecionar outra faixa.
+        const playback = live.arrangement.audioBindings.find((item) => item.kind === 'playback');
+        const wanted = bindingId === undefined ? (playback?.id ?? live.arrangement.selectedAudioBindingId) : bindingId;
         const binding = live.arrangement.audioBindings.find((item) => item.id === wanted) ?? null;
         const asset = binding ? await getAsset(local.db, binding.assetId) : null;
         const prepared = prepareSnapshot({
@@ -303,37 +302,6 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       /** Usa a cópia preparada do repertório: a base é a revisão que foi conferida, não a biblioteca viva. */
       const start = () => (copy ? open({ ...copy.item.snapshot, id: sessionHint ?? crypto.randomUUID(), createdAt: new Date().toISOString() }, copy.item.baseArrangement, fromSetlist, () => undefined) : prepare());
 
-      const found = await findRecoverableSession(local.db, arrangement.id);
-      if (!current) return;
-      // Só há o que recuperar se a sessão chegou a começar; uma sessão apenas
-      // preparada é refeita com o conteúdo atual da biblioteca.
-      if (found?.checkpoint && found.checkpoint.status !== 'ready') {
-        const recover = async () => {
-          const { session, checkpoint } = found;
-          let transport: HtmlAudioTransport | null = null;
-          const warnings: SessionWarning[] = [];
-          if (session.snapshot.audio) {
-            setState({ status: 'loading', detail: 'Conferindo o arquivo de áudio…' });
-            const loaded = await loadAudio(local, session.snapshot.audio, session.snapshot.workspaceId);
-            if (!current) {
-              if (loaded.ok) loaded.transport.dispose();
-              return;
-            }
-            // Sem a faixa, a sessão recuperada segue sem áudio, avisando o operador.
-            if (loaded.ok) transport = loaded.transport;
-            else warnings.push('audio-unavailable');
-          }
-          activate({ row: session, checkpoint, warnings, rotation, preferences, releaseLock, transport, audioChoices: [], chooseAudio: () => undefined, setlist });
-        };
-        setState({
-          status: 'recoverable',
-          savedAt: found.savedAt,
-          title: found.session.snapshot.song.title,
-          recover: () => void recover(),
-          restart: () => void start(),
-        });
-        return;
-      }
       await start();
     })();
     return () => {

@@ -27,10 +27,6 @@ function SlideLayer({ layer, animated, leaving = false, onGone }: { layer: Layer
   if (cover !== undefined && model.visualMode !== 'black') {
     return (
       <div className={cn('lv-cover', motion)} style={{ fontFamily: model.content.fontFamily as string }} aria-hidden={leaving || undefined} onAnimationEnd={leaving ? onGone : undefined} {...(leaving ? {} : { 'data-slide-cover': true })}>
-        <div className="lv-cover-rays" aria-hidden="true" />
-        <div className="lv-cover-rays lv-cover-rays-slow" aria-hidden="true" />
-        <div className="lv-cover-glow" aria-hidden="true" />
-        <div className="lv-cover-motes" aria-hidden="true" />
         {model.visualMode === 'normal' && (
           <div className="lv-cover-text">
             <p className="lv-cover-title" {...(leaving ? {} : { 'data-cover-title': true })}>
@@ -59,6 +55,8 @@ export function SlideView({ fit = 'ratio', className, cover, transitionKey, ...i
   const model = slideModel(input);
   // Tela preta cobre também a abertura; com a letra oculta ficam só as luzes, sem o título.
   const showCover = cover !== undefined && model.visualMode !== 'black';
+  // As luzes da abertura seguem atrás da letra nas saídas, bem mais fracas. Miniaturas e prévias de edição só as mostram na abertura.
+  const showLights = showCover || (transitionKey !== undefined && model.visualMode !== 'black');
   const layer: Layer = { model, cover };
 
   // Última camada desenhada: quando a identidade muda, ela vira a camada que sai.
@@ -80,6 +78,14 @@ export function SlideView({ fit = 'ratio', className, cover, transitionKey, ...i
   return (
     <div className={cn(fit === 'fill' && 'h-full w-full', className)} style={viewport} data-slide-frame data-visual-mode={model.visualMode} data-rotation={model.rotation} data-cover={showCover || undefined}>
       <div style={model.composition as CSSProperties} data-slide-composition>
+        {showLights && (
+          <div className={cn('lv-lights', !showCover && 'lv-lights-soft')} aria-hidden="true" data-slide-lights={showCover ? 'cover' : 'soft'}>
+            <div className="lv-cover-rays" />
+            <div className="lv-cover-rays lv-cover-rays-slow" />
+            <div className="lv-cover-glow" />
+            <div className="lv-cover-motes" />
+          </div>
+        )}
         <SlideLayer key={transitionKey ?? 'static'} layer={layer} animated={transitionKey !== undefined} />
         {leaving && model.visualMode === 'normal' && <SlideLayer key={`saindo:${leaving.key}`} layer={leaving.layer} animated leaving onGone={() => setLeaving(null)} />}
       </div>

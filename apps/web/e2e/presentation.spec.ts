@@ -647,7 +647,7 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
 
   // ── rascunho de texto com a saída congelada ─────────────────────────────
   await page.bringToFront();
-  await page.getByRole('button', { name: 'Painel completo' }).click();
+  await page.getByRole('button', { name: 'Sair' }).click();
   await page.getByRole('heading', { name: 'Em União' }).click();
   await page.locator('body').press('c');
   await expect(operator(page)).toHaveAttribute('data-frozen', 'true');
@@ -1030,7 +1030,7 @@ test('abertura, automático por padrão, indicador de avanço automático e pref
   // No modo interativo, o canto inferior direito mostra o mesmo indicador.
   await page.getByRole('button', { name: 'Modo interativo' }).click();
   await expect(page.getByTestId('corner-next').getByTestId('auto-spinner')).toBeVisible();
-  await page.getByRole('button', { name: 'Painel completo' }).click();
+  await page.getByRole('button', { name: 'Sair' }).click();
 
   // ── Preferências: tema, tamanho e modo valem para a próxima apresentação ──
   await page.locator('[data-theme="violeta"]').click();

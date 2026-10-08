@@ -169,7 +169,7 @@ test('AT-07 (independente), AT-08 e AT-28: player único, sem seek ao trocar de 
   await expectAudioPlaying(page, true);
   expect(await mediaElements(page)).toBe(1);
   await page.screenshot({ path: join(EVIDENCE, 'interativo-faixa-sem-temporizador.png') });
-  await page.getByRole('button', { name: 'Painel completo' }).click();
+  await page.getByRole('button', { name: 'Sair' }).click();
 
   // Controles na janela pública: o pedido vai ao player do operador; a saída continua sem mídia.
   await projection.bringToFront();

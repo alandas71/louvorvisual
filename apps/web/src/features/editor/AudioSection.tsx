@@ -2,16 +2,12 @@
 
 import {
   AUDIO_KINDS,
-  deriveCues,
   formatTimerSeconds,
-  linkIssues,
   type Arrangement,
   type ArrangementStructure,
   type Asset,
   type AudioBinding,
   type AudioKind,
-  type AudioPolicy,
-  type LinkIssue,
   type Uuid,
 } from '@louvorvisual/domain';
 import { useEffect, useRef, useState } from 'react';
@@ -19,7 +15,6 @@ import { AudioImport, type ImportStatus } from '@/components/ui/AudioImport';
 import { buttonClass } from '@/components/ui/buttonStyles';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
-import { Select } from '@/components/ui/Select';
 import { assetPresent, getAsset, importAudioFile, readAssetBlob, type ImportProgress, type LocalSession } from '@/local';
 import { estimateFreeSpace, formatBytes, formatClock, probeAudio } from '../audio/htmlTransport';
 
@@ -35,16 +30,6 @@ const PHASE_TEXT: Record<ImportProgress['phase'], string> = {
   verifying: 'Conferindo o que foi gravado…',
 };
 
-const LINK_ISSUE_TEXT: Record<LinkIssue, string> = {
-  'no-occurrences': 'O arranjo não tem slides.',
-  'missing-duration': 'Todos os slides precisam de tempo para vincular a faixa.',
-  'missing-cue': 'Faltam intervalos para alguns slides.',
-  'cues-out-of-order': 'Os intervalos não estão em ordem crescente.',
-  'negative-offset': 'O ponto de partida não pode ser negativo.',
-  'unknown-track-duration': 'A duração da gravação é desconhecida.',
-  'beyond-track-end': 'Os tempos dos slides passam do fim da gravação.',
-};
-
 type AssetInfo = { asset: Asset | null; present: boolean };
 
 type AudioSectionProps = {
@@ -57,11 +42,21 @@ type AudioSectionProps = {
 /**
  * Áudio do arranjo: áudio original e playback importados para este
  * dispositivo, a faixa ativa da apresentação e, por faixa, volume, ponto de
- * partida e política (independente ou vinculada aos slides).
+ * partida. As faixas sempre são independentes dos slides.
  */
 export function AudioSection({ session, arrangement, onChange }: AudioSectionProps) {
   const [info, setInfo] = useState<Record<Uuid, AssetInfo>>({});
   const assetIds = arrangement.audioBindings.map((binding) => binding.assetId).join(',');
+
+  // Arranjos antigos podiam guardar uma faixa vinculada. Ao abri-los no editor,
+  // convertemos a associação para o comportamento único atual.
+  useEffect(() => {
+    if (!arrangement.audioBindings.some((binding) => binding.policy === 'linked')) return;
+    onChange((structure) => ({
+      ...structure,
+      audioBindings: structure.audioBindings.map((binding) => (binding.policy === 'linked' ? { ...binding, policy: 'independent', cues: [] } : binding)),
+    }));
+  }, [arrangement.audioBindings, onChange]);
 
   useEffect(() => {
     let current = true;
@@ -106,11 +101,12 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
         ? { ...existing, assetId: asset.id, cues: [], cuesVersion: existing.cuesVersion + 1 }
         : { id: context.newId(), assetId: asset.id, kind, policy: 'independent', volume: 1, offsetMs: 0, cuesVersion: 0, cues: [] };
       const audioBindings = existing ? structure.audioBindings.map((item) => (item.id === existing.id ? binding : item)) : [...structure.audioBindings, binding];
-      return { ...structure, audioBindings, selectedAudioBindingId: structure.selectedAudioBindingId ?? binding.id };
+      // Quando há playback, ele é a escolha padrão da apresentação.
+      return { ...structure, audioBindings, selectedAudioBindingId: kind === 'playback' ? binding.id : (structure.selectedAudioBindingId ?? binding.id) };
     });
   }
 
-  const update = (bindingId: Uuid, fields: Partial<Pick<AudioBinding, 'volume' | 'policy' | 'offsetMs'>>) =>
+  const update = (bindingId: Uuid, fields: Partial<Pick<AudioBinding, 'volume' | 'offsetMs'>>) =>
     onChange((structure) => ({ ...structure, audioBindings: structure.audioBindings.map((binding) => (binding.id === bindingId ? { ...binding, ...fields } : binding)) }));
 
   const remove = (bindingId: Uuid) =>
@@ -165,7 +161,7 @@ type TrackProps = {
   arrangement: Arrangement;
   binding: AudioBinding;
   info: AssetInfo | undefined;
-  onUpdate: (fields: Partial<Pick<AudioBinding, 'volume' | 'policy' | 'offsetMs'>>) => void;
+  onUpdate: (fields: Partial<Pick<AudioBinding, 'volume' | 'offsetMs'>>) => void;
   onRemove: () => void;
 };
 
@@ -173,10 +169,6 @@ function Track({ session, arrangement, binding, info, onUpdate, onRemove }: Trac
   const [offset, setOffset] = useState(formatTimerSeconds(binding.offsetMs));
   const asset = info?.asset ?? null;
   const duration = asset?.durationMs ?? null;
-  // O que impediria (ou impede) o vínculo com os tempos atuais dos slides.
-  const derived = deriveCues(arrangement.occurrences, binding.offsetMs);
-  const issues = linkIssues(arrangement.occurrences, derived ?? [], duration);
-  const total = arrangement.occurrences.reduce((sum, occurrence) => sum + (occurrence.durationMs ?? 0), 0);
 
   function applyOffset(text: string) {
     setOffset(text);
@@ -217,28 +209,7 @@ function Track({ session, arrangement, binding, info, onUpdate, onRemove }: Trac
         <Input id={`partida-${binding.id}`} inputMode="decimal" value={offset} onChange={(event) => applyOffset(event.target.value)} className="px-2 py-1.5" />
         <p className="mt-1 text-xs text-muted">Iniciar no primeiro slide toca a partir daqui. Para tocar a introdução inteira, deixe zero e crie um slide instrumental.</p>
       </div>
-      <div>
-        <Label htmlFor={`politica-${binding.id}`}>Relação com os slides</Label>
-        <Select id={`politica-${binding.id}`} value={binding.policy} onChange={(event) => onUpdate({ policy: event.target.value as AudioPolicy })} className="py-1.5">
-          <option value="independent">Independente: trocar de slide não mexe na faixa</option>
-          <option value="linked" disabled={binding.policy !== 'linked' && issues.length > 0}>
-            Vinculada: slides e faixa seguem os mesmos intervalos
-          </option>
-        </Select>
-        {issues.length > 0 ? (
-          <div role={binding.policy === 'linked' ? 'alert' : undefined} className={binding.policy === 'linked' ? 'mt-1 text-xs text-danger' : 'mt-1 text-xs text-muted'} data-testid="link-issues">
-            {binding.policy === 'linked' ? 'O vínculo está impedido e a faixa tocará como independente até corrigir: ' : 'Para vincular: '}
-            {issues.map((issue) => LINK_ISSUE_TEXT[issue]).join(' ')}
-            {issues.includes('beyond-track-end') && duration !== null && ` Terminam em ${formatClock(binding.offsetMs + total)}; a gravação tem ${formatClock(duration)}.`}
-          </div>
-        ) : (
-          <p className="mt-1 text-xs text-muted" data-testid="link-ok">
-            {binding.policy === 'linked'
-              ? `Intervalos de ${formatClock(binding.offsetMs)} a ${formatClock(binding.offsetMs + total)} da gravação, calculados pelos tempos dos slides.`
-              : 'Os tempos dos slides cabem na gravação: a faixa pode ser vinculada.'}
-          </p>
-        )}
-      </div>
+      <p className="text-xs text-muted">A faixa é independente dos slides: trocar de slide não altera a reprodução.</p>
       <button type="button" className={buttonClass('danger', 'sm', 'self-start')} onClick={onRemove}>
         Remover esta faixa do arranjo
       </button>

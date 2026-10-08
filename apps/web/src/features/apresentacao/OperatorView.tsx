@@ -136,32 +136,12 @@ function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint
       </Notice>
     );
   }
-  if (state.status === 'recoverable') {
-    return (
-      <Notice title="Recuperar apresentação?">
-        <p data-testid="recover-prompt">
-          A apresentação de &ldquo;{state.title}&rdquo; foi interrompida{state.savedAt ? ` (último registro às ${new Date(state.savedAt).toLocaleTimeString('pt-BR')})` : ''}. Ela volta em
-          pausa, no mesmo slide e com os ajustes que já estavam guardados.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <button type="button" className={buttonClass('primary')} onClick={state.recover}>
-            Recuperar apresentação
-          </button>
-          <button type="button" className={buttonClass('secondary')} onClick={state.restart}>
-            Começar de novo
-          </button>
-        </div>
-        {back}
-      </Notice>
-    );
-  }
   return (
     <OperatorPanel
       local={local}
       controller={state.controller}
       row={state.row}
       warnings={state.warnings.map((warning) => SESSION_WARNING_TEXT[warning])}
-      recovered={state.recovered}
       audioChoices={state.audioChoices}
       onChooseAudio={state.chooseAudio}
       setlist={state.setlist}
@@ -269,7 +249,6 @@ type PanelProps = {
   controller: SessionController;
   row: PresentationSessionRow;
   warnings: string[];
-  recovered: boolean;
   audioChoices: AudioChoice[];
   onChooseAudio: (bindingId: Uuid | null) => void;
   setlist: SetlistPosition | null;
@@ -277,7 +256,7 @@ type PanelProps = {
   onNextSong: (next: NonNullable<SetlistPosition['next']>) => void;
 };
 
-function OperatorPanel({ local, controller, row, warnings, recovered, audioChoices, onChooseAudio, setlist, onEnd, onNextSong }: PanelProps) {
+function OperatorPanel({ local, controller, row, warnings, audioChoices, onChooseAudio, setlist, onEnd, onNextSong }: PanelProps) {
   const { view, link, checkpoint, wakeLock, lastConfirmMs } = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const { state, controls, current, next, slides, output } = view;
   const compact = useCompactLayout();
@@ -462,8 +441,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
           badge={
             <span className="flex items-center gap-2 text-xs text-[rgba(209,213,219,0.9)]">
               {state.frozenOutput && <span data-testid="stage-frozen">Saída congelada</span>}
-              <button type="button" className="rounded-lg border border-[rgba(209,213,219,0.35)] px-2 py-2 hover:border-[rgba(209,213,219,0.9)] focus-visible:outline-2 focus-visible:outline-[#D1D5DB]" onClick={() => setInteractive(false)}>
-                Painel completo
+              <button type="button" className="rounded-lg border border-danger px-2 py-2 text-danger hover:border-danger hover:text-danger focus-visible:outline-2 focus-visible:outline-danger" onClick={onEnd}>
+                Sair
               </button>
             </span>
           }
@@ -487,7 +466,6 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
           <h1 className="truncate text-xl font-bold max-lg:text-base">{row.snapshot.song.title}</h1>
           <p className="truncate text-sm text-muted max-lg:text-xs">
             {row.snapshot.arrangement.name} · {state.cover ? 'abertura' : `slide ${state.currentIndex + 1} de ${slides.length}`}
-            {recovered && ' · sessão recuperada'}
             {setlist && ` · ${setlist.title}: louvor ${setlist.index + 1} de ${setlist.total}`}
           </p>
         </div>
