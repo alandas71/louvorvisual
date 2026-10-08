@@ -376,15 +376,16 @@ test('texto digitado e ainda em debounce é gravado ao sair do editor; regenerar
   expect(stored.arrangements[0]!.occurrences.map((occurrence) => occurrence.durationMs)).toEqual([9000, null]);
   expect(stored.songs[0]!.rawLyrics).toBe('[Refrão 2x]\nCantamos juntos, gratidão');
 
-  // Duplicar e excluir na biblioteca.
+  // Editar e excluir na biblioteca.
   await page.getByRole('button', { name: '← Biblioteca' }).click();
-  await page.getByRole('button', { name: 'Duplicar Manhã de Gratidão' }).click();
-  await expect(page.getByTestId('library-item')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Excluir Manhã de Gratidão (cópia)' }).click();
+  await page.getByRole('button', { name: 'Editar Manhã de Gratidão' }).click();
+  await expect(page.getByTestId('editor')).toBeVisible();
+  await page.getByRole('button', { name: '← Biblioteca' }).click();
+  await page.getByRole('button', { name: 'Excluir Manhã de Gratidão' }).click();
   await page.getByRole('button', { name: 'Mover para a lixeira' }).click();
-  await expect(page.getByTestId('library-item')).toHaveCount(1);
+  await expect(page.getByTestId('library-empty')).toBeVisible();
   stored = await readStored(page);
-  expect(stored.songs).toHaveLength(2);
+  expect(stored.songs).toHaveLength(1);
   expect(stored.songs.filter((item) => item.deletedAt !== null)).toHaveLength(1);
   await context.close();
 

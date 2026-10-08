@@ -1,9 +1,9 @@
 'use client';
 
-import { duplicateSong, findSimilarSongs, searchSongEntries, type Uuid } from '@louvorvisual/domain';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { searchSongEntries, type Uuid } from '@louvorvisual/domain';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
-import { CheckIcon, CopyIcon, LibraryIcon, PlusIcon, SearchIcon, TrashIcon } from '@/components/ui/icons';
+import { CheckIcon, LibraryIcon, PlusIcon, SearchIcon, TrashIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { EmptyState, Loading, noticeClass, PageHeader, rowClass } from '@/components/ui/PageHeader';
@@ -11,10 +11,7 @@ import { setLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
 import {
   deleteSong,
-  getSong,
-  listArrangements,
   listSongIndex,
-  saveDocuments,
   useLocalSession,
   type LocalSession,
   type SongIndexRow,
@@ -22,13 +19,7 @@ import {
 import { useLibraryVersion } from '@/sync/hooks';
 
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-
-function copyTitle(title: string, rows: readonly SongIndexRow[]): string {
-  for (let count = 1; ; count += 1) {
-    const candidate = count === 1 ? `${title} (cópia)` : `${title} (cópia ${count})`;
-    if (findSimilarSongs(rows, candidate).length === 0) return candidate;
-  }
-}
+const PAGE_SIZE = 30;
 
 export function LibraryView() {
   const local = useLocalSession();
@@ -42,6 +33,8 @@ function Library({ session }: { session: LocalSession }) {
   const [query, setQuery] = useState('');
   const [confirming, setConfirming] = useState<Uuid | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(
     () => listSongIndex(session.db, session.profile.workspaceId).then(setRows),
@@ -54,23 +47,27 @@ function Library({ session }: { session: LocalSession }) {
   }, [reload, version]);
 
   const results = useMemo(() => (rows ? searchSongEntries(rows, query) : []), [rows, query]);
+  const visibleResults = results.slice(0, visibleCount);
+  const hasMore = visibleResults.length < results.length;
 
-  async function onDuplicate(row: SongIndexRow) {
-    setMessage(null);
-    try {
-      const song = await getSong(session.db, row.id);
-      if (!song || !rows) return;
-      const copy = duplicateSong(song, await listArrangements(session.db, song.id), session.context(), copyTitle(song.title, rows));
-      await saveDocuments(session.db, [
-        { entityType: 'song', document: copy.song },
-        ...copy.arrangements.map((document) => ({ entityType: 'arrangement' as const, document })),
-      ]);
-      await reload();
-      setMessage(`"${copy.song.title}" foi criado como cópia independente.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Não foi possível duplicar.');
-    }
-  }
+  const loadMore = useCallback(() => {
+    setVisibleCount((current) => Math.min(current + PAGE_SIZE, results.length));
+  }, [results.length]);
+
+  // O marcador entra na tela perto do fim da lista e libera o próximo bloco.
+  // O botão abaixo mantém a mesma ação acessível sem depender do observador.
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: '320px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, visibleResults.length]);
 
   async function onDelete(row: SongIndexRow) {
     setMessage(null);
@@ -101,7 +98,18 @@ function Library({ session }: { session: LocalSession }) {
           <Label htmlFor="busca" className="sr-only">
             Buscar por título, artista, etiqueta ou letra
           </Label>
-          <Input id="busca" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por título, artista, etiqueta ou letra" icon={<SearchIcon />} className="py-3" />
+          <Input
+            id="busca"
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            placeholder="Buscar por título, artista, etiqueta ou letra"
+            icon={<SearchIcon />}
+            className="py-3"
+          />
         </div>
       )}
 
@@ -122,11 +130,11 @@ function Library({ session }: { session: LocalSession }) {
         <>
           <p role="status" className="text-sm text-muted" data-testid="library-count">
             {query.trim() === ''
-              ? `${rows.length} ${rows.length === 1 ? 'louvor' : 'louvores'}`
-              : `${results.length} de ${rows.length} ${rows.length === 1 ? 'louvor' : 'louvores'}`}
+              ? `${visibleResults.length} de ${rows.length} ${rows.length === 1 ? 'louvor' : 'louvores'}`
+              : `${visibleResults.length} de ${results.length} resultados (${rows.length} ${rows.length === 1 ? 'louvor' : 'louvores'} na biblioteca)`}
           </p>
           <ul className="flex flex-col gap-3" aria-label="Louvores">
-            {results.map((row) => (
+            {visibleResults.map((row) => (
               <li key={row.id} data-testid="library-item" className={cn(rowClass, 'p-4')}>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
                   <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-lg font-bold uppercase text-accent">
@@ -152,9 +160,8 @@ function Library({ session }: { session: LocalSession }) {
                     <button type="button" className={buttonClass('secondary', 'sm', 'border-accent/50 text-accent hover:border-accent max-sm:flex-1')} onClick={() => setLocalQuery({ view: 'apresentar', song: row.id, arranjo: null })} aria-label={`Apresentar ${row.title}`}>
                       ▶ Apresentar
                     </button>
-                    <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void onDuplicate(row)} aria-label={`Duplicar ${row.title}`}>
-                      <CopyIcon size={15} />
-                      Duplicar
+                    <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setLocalQuery({ view: 'editor', song: row.id, arranjo: null })} aria-label={`Editar ${row.title}`}>
+                      Editar
                     </button>
                     <button type="button" className={buttonClass('danger', 'sm')} onClick={() => setConfirming(row.id)} aria-label={`Excluir ${row.title}`}>
                       <TrashIcon size={15} />
@@ -179,6 +186,13 @@ function Library({ session }: { session: LocalSession }) {
               </li>
             ))}
           </ul>
+          {hasMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-2" data-testid="library-load-more">
+              <button type="button" className={buttonClass('secondary', 'sm')} onClick={loadMore}>
+                Carregar mais louvores
+              </button>
+            </div>
+          )}
           {results.length === 0 && (
             <EmptyState icon={<SearchIcon size={26} />}>Nenhum louvor corresponde à busca.</EmptyState>
           )}

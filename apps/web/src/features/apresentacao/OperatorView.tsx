@@ -20,10 +20,9 @@ import { COMMAND_FAILURE_TEXT, formatSeconds, SAVE_FIELD_TEXT, SNAPSHOT_ISSUE_TE
 import { LiveMenu, MenuSection, ModeButtons } from './LiveMenu';
 import { useOperatorSession, type AudioChoice, type AudioProblem, type SessionWarning, type SetlistPosition } from './useOperatorSession';
 
-/** Volta para de onde a apresentação foi aberta: o repertório ou o editor do louvor. */
-function leave(songId: Uuid, arrangementId: Uuid | null, setlistId: Uuid | null) {
-  if (setlistId) setLocalQuery({ view: 'repertorios', repertorio: setlistId, song: null, arranjo: null, item: null, sessao: null });
-  else setLocalQuery({ view: 'editor', song: songId, arranjo: arrangementId, repertorio: null, item: null, sessao: null });
+/** Ao encerrar, a pessoa volta sempre à lista principal de louvores. */
+function leave() {
+  setLocalQuery({ view: 'biblioteca', song: null, arranjo: null, repertorio: null, item: null, sessao: null });
 }
 
 const SESSION_WARNING_TEXT: Record<SessionWarning, string> = {
@@ -87,8 +86,8 @@ type OperatorProps = { local: LocalSession; songId: Uuid; arrangementId: Uuid | 
 function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint }: OperatorProps) {
   const state = useOperatorSession(local, { songId, arrangementId, setlistId, itemId, sessionHint });
   const back = (
-    <button type="button" className={buttonClass('secondary', 'md', 'self-start')} onClick={() => leave(songId, arrangementId, setlistId)}>
-      {setlistId ? '← Voltar ao repertório' : '← Voltar ao editor'}
+    <button type="button" className={buttonClass('secondary', 'md', 'self-start')} onClick={leave}>
+      ← Biblioteca
     </button>
   );
 
@@ -166,7 +165,7 @@ function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint
       audioChoices={state.audioChoices}
       onChooseAudio={state.chooseAudio}
       setlist={state.setlist}
-      onEnd={() => void state.end().then(() => leave(songId, state.row.arrangementId, setlistId))}
+      onEnd={() => void state.end().then(leave)}
       onNextSong={(next) => {
         // A janela de projeção é avisada de qual sessão vem a seguir e continua armada, em preto, até ela começar.
         const nextSessionId = crypto.randomUUID();
@@ -604,7 +603,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
                 faltam <Countdown controller={controller} className="font-semibold" />
               </span>
             )}
-            {state.cover && <span data-testid="cover-status">{introTimed ? 'Abertura na tela: a letra entra sozinha no fim da introdução.' : 'Abertura na tela: avance para mostrar a letra.'}</span>}
+            {state.cover && <span data-testid="cover-status">{introTimed ? (controls.audio ? 'Abertura na tela: a letra entra sozinha quando a música chegar ao tempo da introdução.' : 'Abertura na tela: a letra entra sozinha no fim da introdução.') : 'Abertura na tela: avance para mostrar a letra.'}</span>}
             {state.awaitingManualAdvance && !state.cover && <span data-testid="awaiting-advance">Sem tempo neste slide: aguardando você avançar.</span>}
             {state.mode === 'manual' && state.status !== 'ready' && <span className="text-muted">Avanço manual.</span>}
             {state.status === 'ready' && <span className="text-muted">Pronta. O público vê preto até você iniciar.</span>}

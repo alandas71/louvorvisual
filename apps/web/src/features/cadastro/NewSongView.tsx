@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { setLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
 import { listSongIndex, saveDocuments, useLocalSession, type LocalSession, type SongIndexRow } from '@/local';
+import { lyricsFromLrclib, searchLrclib, type LrclibTrack } from '../editor/lrclib';
 
 const SPLIT = { maxLines: maxLinesForStyle(themePreset(DEFAULT_THEME_PRESET_ID).style) };
 
@@ -48,10 +49,40 @@ function NewSongForm({ session }: { session: LocalSession }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState<SongIndexRow[]>([]);
+  const [lyricMatches, setLyricMatches] = useState<LrclibTrack[] | null>(null);
+  const [lookingForLyrics, setLookingForLyrics] = useState(false);
+  const [lyricsLookupError, setLyricsLookupError] = useState<string | null>(null);
 
   useEffect(() => {
     void listSongIndex(session.db, session.profile.workspaceId).then(setExisting);
   }, [session]);
+
+  // A busca espera a pessoa terminar de digitar e cancela a anterior. O título
+  // e artista seguem sendo só pistas: a LRCLIB devolve candidatos parecidos.
+  useEffect(() => {
+    if (title.trim().length < 3) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setLookingForLyrics(true);
+      setLyricsLookupError(null);
+      void searchLrclib(title, artist, controller.signal)
+        .then((tracks) => {
+          if (!controller.signal.aborted) setLyricMatches(tracks.filter((track) => lyricsFromLrclib(track)).slice(0, 5));
+        })
+        .catch((reason: unknown) => {
+          if (controller.signal.aborted) return;
+          setLyricMatches(null);
+          setLyricsLookupError(reason instanceof Error ? reason.message : 'Não foi possível buscar sugestões de letra.');
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLookingForLyrics(false);
+        });
+    }, 550);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [title, artist]);
 
   const issues = songInputIssues({ title, rawLyrics });
   const suggestion = useMemo(() => preview(rawLyrics), [rawLyrics]);
@@ -128,6 +159,37 @@ function NewSongForm({ session }: { session: LocalSession }) {
 
           <div>
             <Label htmlFor="letra">Letra</Label>
+            {title.trim().length >= 3 && (lookingForLyrics || lyricMatches || lyricsLookupError) && (
+              <div className="mb-3 flex flex-col gap-2 rounded-xl border border-accent/30 bg-accent/5 p-3 text-sm" data-testid="lyrics-suggestions">
+                <div>
+                  <p className="font-semibold">Sugestões automáticas de letra</p>
+                  <p className="text-xs text-muted">Encontramos músicas parecidas com o título e artista informados; os nomes não precisam ser idênticos.</p>
+                </div>
+                {lookingForLyrics && <p role="status" className="text-muted">Buscando letra…</p>}
+                {lyricsLookupError && <p role="alert" className="text-danger">{lyricsLookupError}</p>}
+                {lyricMatches?.length === 0 && <p className="text-muted">Nenhuma letra sugerida. Você pode colar ou escrever a letra abaixo.</p>}
+                {lyricMatches && lyricMatches.length > 0 && (
+                  <ul className="flex flex-col gap-2" aria-label="Sugestões de letra">
+                    {lyricMatches.map((track) => (
+                      <li key={track.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-raised p-2">
+                        <span><strong>{track.trackName}</strong> · {track.artistName}{track.albumName ? ` · ${track.albumName}` : ''}</span>
+                        <button
+                          type="button"
+                          className={buttonClass('secondary', 'sm')}
+                          onClick={() => {
+                            setTitle(track.trackName);
+                            setArtist(track.artistName);
+                            setRawLyrics(lyricsFromLrclib(track) ?? '');
+                          }}
+                        >
+                          Usar louvor e letra
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <Textarea
               id="letra"
               value={rawLyrics}

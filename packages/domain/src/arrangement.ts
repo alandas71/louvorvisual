@@ -65,8 +65,9 @@ export type Arrangement = AggregateMeta & {
   selectedAudioBindingId: Uuid | null;
   defaultMode: PresentationMode;
   /**
-   * Temporizador da introdução: quanto a abertura fica na tela antes de a letra
-   * entrar sozinha (modo automático). Ausente ou `null`: a abertura espera o operador.
+   * Temporizador da introdução: o tempo da música (posição da faixa) em que a
+   * abertura dá lugar à letra sozinha, no modo automático; sem faixa, conta desde
+   * o início da apresentação. Ausente ou `null`: a abertura espera o operador.
    */
   introDurationMs?: number | null;
 };

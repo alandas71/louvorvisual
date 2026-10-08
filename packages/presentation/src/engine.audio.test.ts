@@ -594,3 +594,67 @@ describe('abertura com faixa', () => {
     expect(engine.getState().currentIndex).toBe(2);
   });
 });
+
+describe('temporizador da introdução com faixa', () => {
+  function intro(policy: 'independent' | 'linked', introDurationMs: number, audio: { offsetMs?: number } = {}) {
+    const prepared = audioSong([8000, 8000], { policy, ...audio });
+    const snapshot = { ...prepared.snapshot, arrangement: { ...prepared.snapshot.arrangement, introDurationMs } };
+    const clock = new ManualClock();
+    const transport = new ManualTransport(clock, snapshot.audio?.durationMs ?? null);
+    const engine = new PresentationEngine({ snapshot, clock, sessionId: 'sessao', transport, mode: 'automatic', cover: true });
+    const play = async (ms: number, stepMs = 250) => {
+      for (let done = 0; done < ms; done += stepMs) {
+        clock.advance(Math.min(stepMs, ms - done));
+        transport.tick();
+        await flush();
+      }
+    };
+    return { clock, transport, engine, play };
+  }
+
+  it('a letra entra quando a música chega ao tempo da introdução, não pelo relógio da sessão', async () => {
+    const { engine, transport, clock, play } = intro('independent', 5000);
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    expect(engine.getState().cover).toBe(true);
+    await play(2000);
+    expect(engine.remainingMs()).toBe(3000);
+    // A faixa para por fora: o relógio anda, a música não, e a abertura continua.
+    transport.pause();
+    clock.advance(60_000);
+    await flush();
+    expect(engine.getState().cover).toBe(true);
+    await transport.play();
+    await play(2750);
+    expect(engine.getState().cover).toBe(true);
+    await play(250);
+    expect(engine.getState()).toMatchObject({ cover: false, currentIndex: 0 });
+    // A faixa nunca é reposicionada para a letra entrar: só os pedidos de preparar e de iniciar.
+    expect(transport.seekLog).toEqual([0, 0]);
+  });
+
+  it('o tempo é o da música: com ponto de partida adiantado, falta só o que resta até lá', async () => {
+    const { engine, play } = intro('independent', 5000, { offsetMs: 3000 });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    expect(engine.remainingMs()).toBe(2000);
+    await play(1750);
+    expect(engine.getState().cover).toBe(true);
+    await play(250);
+    expect(engine.getState().cover).toBe(false);
+  });
+
+  it('reposicionar a faixa para depois da introdução mostra a letra', async () => {
+    const { engine, play } = intro('independent', 5000);
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    await play(1000);
+    engine.execute({ type: 'audioSeek', positionMs: 9000 });
+    await flush();
+    await play(250);
+    expect(engine.getState().cover).toBe(false);
+  });
+});

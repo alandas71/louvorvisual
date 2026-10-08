@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { ChevronRightIcon, LibraryIcon, ProjectorIcon } from '@/components/ui/icons';
 import { SkipToContent } from '@/components/ui/SkipToContent';
 import { BrandMark } from '@/features/shell/BrandMark';
@@ -48,22 +49,18 @@ export default function HomePage() {
               </nav>
             </div>
 
-            {/* Ilustração: um slide como o público vê. Não é conteúdo. */}
+            {/* Marca oficial do LouvorVisual. */}
             <div aria-hidden="true" className="relative mx-auto w-full max-w-md lg:max-w-none">
               <div className="absolute -inset-6 rounded-[2.5rem] bg-accent/10 blur-3xl" />
-              <div className="relative rounded-3xl border border-border-strong bg-surface-raised p-3 shadow-pop">
-                <div className="flex aspect-video items-center justify-center rounded-2xl bg-[#0f172a] px-6 text-center">
-                  <p className="text-xl font-bold leading-snug text-[#f8fafc] sm:text-2xl">
-                    Hoje cantamos em união
-                    <br />
-                    Com alegria no coração
-                  </p>
-                </div>
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {['#0f172a', '#1b1033', '#052e1c', '#3b0d18'].map((color, index) => (
-                    <div key={color} className={`aspect-video rounded-lg border ${index === 0 ? 'border-accent' : 'border-border'}`} style={{ backgroundColor: color }} />
-                  ))}
-                </div>
+              <div className="relative overflow-hidden rounded-3xl border border-border-strong bg-surface-raised shadow-pop">
+                <Image
+                  src="/brand/louvorvisual.png"
+                  alt=""
+                  width={1254}
+                  height={1254}
+                  priority
+                  className="h-auto w-full"
+                />
               </div>
             </div>
           </div>

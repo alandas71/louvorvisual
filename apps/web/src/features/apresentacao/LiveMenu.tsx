@@ -199,7 +199,7 @@ export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHi
         </div>
         <p className="text-xs text-muted" data-testid="intro-timer-info">
           {controls.intro
-            ? `Automático: a letra entra sozinha ${(controls.intro.durationMs / 1000).toLocaleString('pt-BR')} s depois de iniciar. O tempo da introdução é definido no editor.`
+            ? `Automático: a letra entra sozinha quando a ${controls.audio ? 'música' : 'apresentação'} chega a ${(controls.intro.durationMs / 1000).toLocaleString('pt-BR')} s. O tempo da introdução é definido no editor.`
             : 'O automático precisa do temporizador da introdução, definido no editor do louvor.'}
         </p>
         {controls.awaitingManualAdvance && (

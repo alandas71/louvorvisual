@@ -13,9 +13,9 @@ const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 /** Rotas de documento que abrem sem servidor e o HTML pré-renderizado de cada uma. */
 export const SHELLS = { '/': 'index.html', '/app': 'app.html', '/projecao': 'projecao.html' };
 /** Rotas de metadados geradas pelo Next. */
-const GENERATED = { '/manifest.webmanifest': 'manifest.webmanifest.body', '/icon.svg': 'icon.svg.body' };
+const GENERATED = { '/manifest.webmanifest': 'manifest.webmanifest.body', '/favicon.ico': 'favicon.ico.body' };
 /** Pastas de public/ que fazem parte do aplicativo offline. */
-const PUBLIC_DIRS = ['fonts', 'icons'];
+const PUBLIC_DIRS = ['brand', 'fonts', 'icons'];
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((item) =>

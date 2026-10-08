@@ -488,7 +488,8 @@ export class PresentationEngine {
     if (this.inCommand && (event.type === 'paused' || event.type === 'playing')) return;
     switch (event.type) {
       case 'time':
-        this.followAudio();
+        if (this.cover) this.reconcileIntro();
+        else this.followAudio();
         return;
       case 'playing':
         if (this.notice === 'audio-stalled' || this.notice === 'autoplay-blocked') this.notice = null;
@@ -561,9 +562,18 @@ export class PresentationEngine {
     return resolveSlide(this.snapshot, this.overrides.current, occurrence);
   }
 
-  /** A abertura está contando o temporizador da introdução: conta como um slide com tempo, pelo relógio da sessão. */
+  /** A abertura está esperando o temporizador da introdução: conta como um slide com tempo. */
   private get introTimed(): boolean {
     return this.cover && this.autoIntro && this.introDurationMs !== null && this.mode === 'automatic';
+  }
+
+  /**
+   * Com faixa, o temporizador da introdução é um ponto da música: a letra entra
+   * quando a faixa chega nele, esteja ela adiantada, atrasada ou reposicionada.
+   * Sem faixa, conta pelo relógio da sessão desde o início.
+   */
+  private get introByAudio(): boolean {
+    return this.introTimed && this.audioActive;
   }
 
   private currentDuration(): number | null {
@@ -573,6 +583,7 @@ export class PresentationEngine {
 
   private elapsed(): number {
     if (this.cover && !this.introTimed) return 0;
+    if (this.introByAudio) return Math.max(0, (this.transport as AudioTransport).positionMs());
     if (this.audioClock && !this.cover) {
       const cue = this.cueAt(this.index);
       return Math.min(cue.endMs - cue.startMs, Math.max(0, (this.transport as AudioTransport).positionMs() - cue.startMs));
@@ -785,6 +796,15 @@ export class PresentationEngine {
   private arm(): void {
     this.disarm();
     if (this.cover && !this.introTimed) return;
+    if (this.introByAudio) {
+      // Como na faixa vinculada: o despertador só acorda o motor; quem decide é a posição da faixa.
+      if (this.status !== 'running' || this.pendingSeek !== null) return;
+      this.timer = this.clock.setTimeout(() => {
+        this.timer = null;
+        this.reconcileIntro();
+      }, Math.max(AUDIO_WAKE_MIN_MS, (this.introDurationMs as number) - this.elapsed()));
+      return;
+    }
     if (this.audioClock && !this.cover) {
       // O despertador só acorda o motor perto do fim do intervalo; quem decide é a posição da faixa.
       if (this.status !== 'running' || this.pendingSeek !== null) return;
@@ -877,13 +897,15 @@ export class PresentationEngine {
 
   /** Temporizador da introdução vencido: a letra entra sozinha, como se o operador tivesse avançado. */
   private reconcileIntro(): void {
-    if (this.disposed || this.status !== 'running' || !this.introTimed || this.anchor === null) return;
+    if (this.disposed || this.status !== 'running' || !this.introTimed) return;
+    const byAudio = this.introByAudio;
+    if (byAudio ? this.pendingSeek !== null : this.anchor === null) return;
     const overshoot = this.elapsed() - (this.introDurationMs as number);
     if (overshoot < 0) {
       this.arm();
       return;
     }
-    if (overshoot > SUSPENSION_THRESHOLD_MS) {
+    if (!byAudio && overshoot > SUSPENSION_THRESHOLD_MS) {
       // Suspensão: fica na abertura, em pausa, com a introdução inteira pela frente.
       this.notifySuspension();
       return;

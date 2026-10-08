@@ -165,8 +165,8 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
         <div className="flex flex-col gap-2 border-t border-border pt-4" data-testid="intro-timer">
           <h3 className="text-sm font-bold">Temporizador da introdução</h3>
           <p className="text-xs text-muted">
-            Tempo da abertura até a letra entrar sozinha. Com ele definido, a apresentação pode rodar no modo Automático, sem o primeiro avanço manual; sem ele, o
-            Semi-automático espera você avançar na abertura.
+            Tempo da música em que a letra começa. No modo Automático, quando a faixa chega a esse ponto a abertura dá lugar à letra sozinha, sem o primeiro avanço
+            manual (sem faixa, o tempo conta desde o início da apresentação). Sem ele, o Semi-automático espera você avançar na abertura.
           </p>
           <TimerField target="início (introdução)" durationMs={arrangement.introDurationMs ?? null} onChange={(introDurationMs) => actions.updateArrangement({ introDurationMs })} />
         </div>
