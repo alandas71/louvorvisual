@@ -24,6 +24,9 @@ test-results/
 # Gerado depois do build por apps/web/scripts/generate-sw.mjs
 apps/web/public/sw.js
 
+# Copiado de node_modules por apps/web/scripts/copy-vad-assets.mjs
+apps/web/public/vad/
+
 # Material de referência e documentação fora do produto
 ReaproveitaRecursos/
 docs/

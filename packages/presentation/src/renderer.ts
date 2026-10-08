@@ -7,7 +7,8 @@ export const REFERENCE_SIZE: Record<AspectRatio, { width: number; height: number
   '4:3': { width: 1440, height: 1080 },
 };
 
-export const ROTATIONS = [0, 90, 180, 270] as const;
+/** A saída alterna somente entre paisagem e retrato. */
+export const ROTATIONS = [0, 90] as const;
 export type Rotation = (typeof ROTATIONS)[number];
 
 export function isRotation(value: unknown): value is Rotation {
@@ -15,7 +16,7 @@ export function isRotation(value: unknown): value is Rotation {
 }
 
 export function nextRotation(rotation: Rotation): Rotation {
-  return ((rotation + 90) % 360) as Rotation;
+  return rotation === 0 ? 90 : 0;
 }
 
 /** `normal` mostra a letra; `black` cobre tudo de preto; `lyricsHidden` mantém só o fundo do tema. */
@@ -63,7 +64,7 @@ export function slideModel(input: SlideInput): SlideModel {
   const rotation = input.rotation ?? 0;
   const visualMode = input.visualMode ?? 'normal';
   const reference = REFERENCE_SIZE[style.aspectRatio];
-  const sideways = rotation === 90 || rotation === 270;
+  const sideways = rotation === 90;
   // Largura da composição antes de girar: a maior que cabe inteira na saída.
   const width = sideways
     ? `min(100cqh, calc(100cqw * ${reference.width} / ${reference.height}))`

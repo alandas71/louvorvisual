@@ -53,8 +53,13 @@ export async function openOperator(page: Page, options: { mode?: 'manual' | 'pre
   await page.getByRole('button', { name: '▶ Apresentar' }).click();
   await expect(operator(page)).toHaveAttribute('data-status', 'ready');
   if ((options.mode ?? 'manual') === 'manual' && (await operator(page).getAttribute('data-mode')) !== 'manual') {
+    // No celular o modo de avanço fica atrás do menu de ajustes.
+    const menu = page.getByTestId('operator-menu');
+    const compact = await menu.isVisible();
+    if (compact) await menu.click();
     await page.getByRole('button', { name: 'Manual', exact: true }).first().click();
     await expect(operator(page)).toHaveAttribute('data-mode', 'manual');
+    if (compact) await page.getByRole('button', { name: 'Fechar', exact: true }).click();
   }
 }
 

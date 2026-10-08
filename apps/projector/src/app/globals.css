@@ -312,6 +312,12 @@ button {
   white-space: nowrap;
 }
 
+.button-value svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  vertical-align: middle;
+}
+
 .alert {
   color: var(--danger);
 }
@@ -399,6 +405,40 @@ button {
 .corner-br {
   bottom: 2rem;
   right: 2rem;
+}
+
+/* A interface acompanha a letra: em retrato cada canto avança 90° e os
+   controles giram com a saída. */
+[data-testid="quick-controls"][data-rotation="90"] .corner-tl {
+  top: 2rem;
+  right: 2rem;
+  bottom: auto;
+  left: auto;
+}
+
+[data-testid="quick-controls"][data-rotation="90"] .corner-tr {
+  right: 2rem;
+  bottom: 2rem;
+  top: auto;
+  left: auto;
+}
+
+[data-testid="quick-controls"][data-rotation="90"] .corner-bl {
+  top: 2rem;
+  left: 2rem;
+  right: auto;
+  bottom: auto;
+}
+
+[data-testid="quick-controls"][data-rotation="90"] .corner-br {
+  bottom: 2rem;
+  left: 2rem;
+  top: auto;
+  right: auto;
+}
+
+[data-testid="quick-controls"][data-rotation="90"] .control {
+  transform: rotate(90deg);
 }
 
 .control {

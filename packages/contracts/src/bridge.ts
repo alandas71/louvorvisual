@@ -115,7 +115,9 @@ export type Presentable = z.infer<typeof presentableSchema>;
 // ── preferências do aparelho e sessão ───────────────────────────────────────
 
 export const projectorPrefsSchema = z.object({
-  rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
+  // Valores das versões que aceitavam 180°/270° continuam legíveis, mas são
+  // normalizados à orientação equivalente agora que só há duas opções.
+  rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).transform<0 | 90>((value) => (value === 90 || value === 270 ? 90 : 0)),
   /** Margem de segurança em % de cada borda, para firmware que corta a imagem. */
   safeAreaPercent: z.number().min(0).max(10),
   recentSetlistId: uuidSchema.nullable(),

@@ -6,6 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { buttonClass, pressedClass } from '@/components/ui/buttonStyles';
 import { cn } from '@/lib/utils';
 import { TimerField } from '../editor/TimerField';
+import { LandscapeIcon, PortraitIcon } from './icons';
 
 export type Dispatch = (command: OperatorCommand) => void;
 
@@ -174,8 +175,8 @@ export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHi
       <Section title="Rotação desta saída">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Rotação da saída pública">
           {ROTATIONS.map((rotation) => (
-            <button key={rotation} type="button" className={pill(controls.rotation === rotation)} aria-pressed={controls.rotation === rotation} onClick={() => dispatch({ type: 'setRotation', rotation })}>
-              {rotation}°
+            <button key={rotation} type="button" className={pill(controls.rotation === rotation)} aria-label={rotation === 0 ? 'Horizontal (0°)' : 'Vertical (90°)'} aria-pressed={controls.rotation === rotation} onClick={() => dispatch({ type: 'setRotation', rotation })}>
+              {rotation === 0 ? <LandscapeIcon /> : <PortraitIcon />}
             </button>
           ))}
         </div>

@@ -377,7 +377,7 @@ describe('ajustes ao vivo (AT-29, AT-30)', () => {
       { type: 'adjust', scope: 'song', patch: { themePresetId: 'violeta' } },
       { type: 'adjust', scope: 'song', patch: { textAlign: 'left', lineHeight: 1.4 } },
       { type: 'rotate' },
-      { type: 'setRotation', rotation: 270 },
+      { type: 'setRotation', rotation: 0 },
       { type: 'applyText', occurrenceId: at().currentOccurrenceId, text: 'Novo texto' },
       { type: 'undo' },
       { type: 'restoreAppearance' },

@@ -6,6 +6,8 @@ const backendUrl = process.env.BACKEND_URL?.replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // A detecção de voz só usa o runtime WebAssembly de CPU: metade do tamanho do pacote padrão (WebGPU).
+  turbopack: { resolveAlias: { 'onnxruntime-web': 'onnxruntime-web/wasm' } },
   poweredByHeader: false,
   rewrites() {
     if (!backendUrl) return [];
@@ -35,6 +37,11 @@ const nextConfig: NextConfig = {
       {
         // O caminho inclui a versão do pacote; os arquivos nunca mudam.
         source: '/fonts/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      {
+        // Modelo e runtime da detecção de voz: também versionados no caminho.
+        source: '/vad/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },
     ];

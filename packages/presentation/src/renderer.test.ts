@@ -28,17 +28,14 @@ describe('slideModel', () => {
     expect(REFERENCE_SIZE['4:3'].height).toBe(REFERENCE_SIZE['16:9'].height);
   });
 
-  it('gira a composição nas quatro orientações e recalcula a escala para caber inteira', () => {
+  it('alterna a composição entre paisagem e retrato e recalcula a escala para caber inteira', () => {
     expect(ROTATIONS.map((rotation) => slideModel({ text: 'a', style, fontId: 'inter', rotation }).composition.transform)).toEqual([
       'translate(-50%, -50%) rotate(0deg)',
       'translate(-50%, -50%) rotate(90deg)',
-      'translate(-50%, -50%) rotate(180deg)',
-      'translate(-50%, -50%) rotate(270deg)',
     ]);
-    expect(slideModel({ text: 'a', style, fontId: 'inter', rotation: 180 }).composition.width).toBe('min(100cqw, calc(100cqh * 1920 / 1080))');
     // De lado, a largura da composição passa a caber na altura da saída.
     expect(slideModel({ text: 'a', style, fontId: 'inter', rotation: 90 }).composition.width).toBe('min(100cqh, calc(100cqw * 1920 / 1080))');
-    expect([0, 90, 180, 270].map((rotation) => nextRotation(rotation as 0))).toEqual([90, 180, 270, 0]);
+    expect([0, 90].map((rotation) => nextRotation(rotation as 0 | 90))).toEqual([90, 0]);
   });
 
   it('tela preta cobre o tema; ocultar letra mantém o fundo; nos dois o texto não sai', () => {

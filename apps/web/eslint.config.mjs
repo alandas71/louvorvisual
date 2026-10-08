@@ -29,6 +29,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Gerados: service worker e relatórios do Playwright.
     "public/sw.js",
+    // Copiado de node_modules: modelo e runtime da detecção de voz.
+    "public/vad/**",
     "playwright-report/**",
     "test-results/**",
   ]),

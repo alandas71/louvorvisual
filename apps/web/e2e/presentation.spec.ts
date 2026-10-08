@@ -574,9 +574,9 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
   await expectConfirmed(page, projection);
   expect((await drawn(projection))!.family).toBe('Montserrat');
 
-  // Giro: quatro orientações, composição inteira dentro da saída, controles direitos.
+  // Giro: paisagem e retrato, composição inteira dentro da saída e controles acompanhantes.
   const before = await look('corner-next');
-  for (const rotation of ['90', '180', '270', '0']) {
+  for (const rotation of ['90', '0']) {
     await page.getByTestId('corner-rotate').click();
     await expect(operator(page)).toHaveAttribute('data-rotation', rotation);
     await expectConfirmed(page, projection);
@@ -584,12 +584,14 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
     expect(turned, rotation).toMatchObject({ rotation, inside: true, clipped: false, text: SLIDE_TEXTS[0], background: 'rgb(33, 24, 9)' });
     if (rotation === '90') await projection.screenshot({ path: join(EVIDENCE, 'janela-publica-girada-90.png') });
     // De lado, a caixa da composição fica em pé e cabe na altura da janela.
-    const sideways = rotation === '90' || rotation === '270';
+    const sideways = rotation === '90';
     expect(turned.box.width / turned.box.height, rotation).toBeCloseTo(sideways ? 9 / 16 : 16 / 9, 2);
     expect(turned.fontSizeRatio, rotation).toBeCloseTo(100 / 1920, 4);
-    // O palco do operador gira igual e os botões não giram nem mudam de lugar.
+    // O palco do operador gira igual e os botões acompanham a orientação.
     expect(await drawn(page, '[data-testid="interactive-stage"]')).toMatchObject({ rotation, inside: true });
-    expect(await look('corner-next')).toMatchObject({ transform: 'none', left: before.left, top: before.top, width: before.width });
+    const button = await look('corner-next');
+    if (rotation === '90') expect(button).not.toMatchObject({ transform: 'none', left: before.left, top: before.top });
+    else expect(button).toMatchObject({ transform: 'none', left: before.left, top: before.top, width: before.width });
   }
 
   // ── AT-32: controles habilitados na própria janela pública ──────────────

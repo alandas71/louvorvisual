@@ -3,7 +3,7 @@
 import type { ControlsState, OperatorCommand } from '@louvorvisual/presentation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useFocusLayer } from '@/input/focus';
-import { LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, RotateIcon, SmallerIcon, TimerIcon } from '@/ui/icons';
+import { LandscapeIcon, LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PortraitIcon, PreviousIcon, SmallerIcon, TimerIcon } from '@/ui/icons';
 import { formatSeconds } from './labels';
 
 type Props = {
@@ -46,8 +46,8 @@ function TimerIndicator({ controls, remaining }: Pick<Props, 'controls' | 'remai
 }
 
 /**
- * Controles rápidos nos quatro cantos, sobre o slide e na orientação normal
- * mesmo com a letra girada. Abrem com cima/baixo e ficam até Voltar: com o
+ * Controles rápidos nos quatro cantos, acompanhando a orientação da saída.
+ * Abrem com cima/baixo e ficam até Voltar: com o
  * controle remoto sempre há um botão em foco, então nada some por inatividade.
  */
 export function QuickControls({ controls, remaining, dispatch, onMenu, onClose }: Props) {
@@ -71,7 +71,7 @@ export function QuickControls({ controls, remaining, dispatch, onMenu, onClose }
   const { transport } = controls.capabilities;
 
   return (
-    <div ref={ref} data-layer="controls" data-testid="quick-controls">
+    <div ref={ref} data-layer="controls" data-testid="quick-controls" data-rotation={controls.rotation}>
       <div className="corner corner-tl">
         <Control label="Ajustes" testId="control-menu" onSelect={onMenu}>
           <MenuIcon />
@@ -81,8 +81,8 @@ export function QuickControls({ controls, remaining, dispatch, onMenu, onClose }
         <span className="indicator" data-testid="slide-position">
           {controls.label} · {controls.index + 1} de {controls.total}
         </span>
-        <Control label={`Girar a letra (agora ${controls.rotation}°)`} testId="control-rotate" onSelect={() => dispatch({ type: 'rotate' })}>
-          <RotateIcon />
+        <Control label={controls.rotation === 0 ? 'Mudar para vertical (90°)' : 'Mudar para horizontal (0°)'} testId="control-rotate" onSelect={() => dispatch({ type: 'setRotation', rotation: controls.rotation === 0 ? 90 : 0 })}>
+          {controls.rotation === 0 ? <PortraitIcon /> : <LandscapeIcon />}
         </Control>
       </div>
       <div className="corner corner-bl">

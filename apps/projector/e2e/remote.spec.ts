@@ -98,14 +98,13 @@ test('fluxo completo só com o controle: abrir repertório, iniciar, passar slid
   await expectFocus(page, 'control-next', 'controls');
   await press(page, 'ok');
   expect(await slideIndex(page)).toBe(1);
-  // Girar a letra não gira os controles.
+  // Os controles acompanham a orientação da letra.
   await press(page, 'up');
   await expectFocus(page, 'control-rotate', 'controls');
-  const before = await page.getByTestId('control-rotate').boundingBox();
   await press(page, 'ok');
   await expect(page.locator('[data-slide-frame]')).toHaveAttribute('data-rotation', '90');
-  expect(await page.getByTestId('control-rotate').boundingBox()).toEqual(before);
-  await expect(page.getByTestId('control-rotate')).toHaveCSS('transform', 'none');
+  await expect(page.getByTestId('quick-controls')).toHaveAttribute('data-rotation', '90');
+  await expect(page.getByTestId('control-rotate')).not.toHaveCSS('transform', 'none');
   // Os controles ficam enquanto há foco neles (mais que os 3 s de inatividade da web).
   await page.waitForTimeout(3500);
   await expectFocus(page, 'control-rotate', 'controls');
@@ -122,7 +121,7 @@ test('fluxo completo só com o controle: abrir repertório, iniciar, passar slid
   await expect(page.locator('[data-focusable]:focus .row-title')).toHaveText('Em União');
 
   // Um comando por toque, nada repetido.
-  expect(sessionCommands).toEqual(['start', 'next', 'previous', 'previous!at-limit', 'adjust', 'stepFontSize', 'stepFontSize', 'stepFontSize', 'next', 'rotate']);
+  expect(sessionCommands).toEqual(['start', 'next', 'previous', 'previous!at-limit', 'adjust', 'stepFontSize', 'stepFontSize', 'stepFontSize', 'next', 'setRotation']);
   expect(await inputStats(page)).toMatchObject({ duplicate: 0, repeat: 0 });
   // Sessão encerrada no host, tela liberada, rotação guardada no aparelho.
   expect(await page.evaluate(() => window.__lvMock.keepAwake)).toBe(false);

@@ -38,7 +38,7 @@ export function PresentationScreen({ request }: { request: PresentationRequest }
     let current = true;
     let session: ProjectorSession | null = null;
     const { host, prefs } = latest.current;
-    const common = { host, rotation: prefs.rotation, onRotation: (rotation: 0 | 90 | 180 | 270) => latest.current.updatePrefs({ rotation }) };
+    const common = { host, rotation: prefs.rotation, onRotation: (rotation: 0 | 90) => latest.current.updatePrefs({ rotation }) };
     const opening = request.kind === 'recover' ? recoverSession(common, request.session) : openSession(common, request.arrangementId, request.context);
     void opening.then((result) => {
       if (!current) {

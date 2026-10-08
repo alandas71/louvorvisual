@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useApp } from '@/app-context';
 import { useFocusLayer } from '@/input/focus';
 import { Action, Adjust } from '@/ui/Action';
+import { LandscapeIcon, PortraitIcon } from '@/ui/icons';
 import { hostErrorText } from './shared';
 
 const SYNC_TEXT: Record<AccountStatus['sync']['state'], string> = { disabled: 'Só neste aparelho', idle: 'Em dia', syncing: 'Sincronizando…', error: 'A última sincronização falhou' };
@@ -84,8 +85,8 @@ export function SettingsScreen() {
           <p>Se o projetor corta as bordas, aumente a margem até o contorno desta tela aparecer inteiro.</p>
           <Adjust label="Margem de segurança" value={`${prefs.safeAreaPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} %`} testId="settings-safe-area" onStep={stepSafeArea} />
           <Action className="button" testId="settings-rotation" onSelect={() => app.updatePrefs({ rotation: nextRotation(prefs.rotation) })}>
-            <span>Girar a letra</span>
-            <span className="button-value">{prefs.rotation}°</span>
+            <span>{prefs.rotation === 0 ? 'Vertical' : 'Horizontal'}</span>
+            <span className="button-value">{prefs.rotation === 0 ? <PortraitIcon /> : <LandscapeIcon />}</span>
           </Action>
         </section>
 

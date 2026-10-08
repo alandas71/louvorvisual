@@ -136,7 +136,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       row: PresentationSessionRow;
       checkpoint: SessionCheckpoint | null;
       warnings: SessionWarning[];
-      rotation: 0 | 90 | 180 | 270;
+      rotation: 0 | 90;
       preferences: OperatorPreferences;
       releaseLock: () => void;
       transport: HtmlAudioTransport | null;

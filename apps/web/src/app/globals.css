@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Os comandos do palco acompanham a orientação da saída. */
+[data-ui-rotation="90"] [data-corner-button] {
+  transform: rotate(90deg);
+}
+
 /* Interface do aplicativo. As cores dos slides vêm dos temas, não daqui. */
 @theme {
   --color-surface: #0a0c11;
@@ -268,6 +273,21 @@
   border-right-color: transparent;
   border-radius: 50%;
   animation: lv-cover-spin 0.9s linear infinite;
+}
+
+/* "Letra →" chamando o operador: só as bordas piscam, 1 s antes da primeira voz da faixa. */
+.lv-cue-blink {
+  animation: lv-cue-blink 0.5s steps(1, end) infinite;
+}
+@keyframes lv-cue-blink {
+  0% {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+  50% {
+    border-color: transparent;
+    box-shadow: none;
+  }
 }
 
 /*

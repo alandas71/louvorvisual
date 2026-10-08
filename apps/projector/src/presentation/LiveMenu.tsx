@@ -5,6 +5,7 @@ import { fontStack, type AdjustScope, type ControlsState, type OperatorCommand }
 import { useState, type ReactNode } from 'react';
 import { useFocusLayer } from '@/input/focus';
 import { Action, Adjust } from '@/ui/Action';
+import { LandscapeIcon, PortraitIcon } from '@/ui/icons';
 import { formatSeconds } from './labels';
 
 type Dispatch = (command: OperatorCommand) => void;
@@ -111,9 +112,9 @@ export function LiveMenu({ controls, dispatch, onClose, onExit, onNextSong, onPr
           <span>Avanço</span>
           <span className="button-value">{controls.mode === 'manual' ? 'Manual' : controls.awaitingManualAdvance ? 'Automático · esperando você' : 'Automático'}</span>
         </Action>
-        <Action className="button" testId="menu-rotate" onSelect={() => dispatch({ type: 'rotate' })}>
-          <span>Girar a letra</span>
-          <span className="button-value">{controls.rotation}°</span>
+        <Action className="button" testId="menu-rotate" onSelect={() => dispatch({ type: 'setRotation', rotation: controls.rotation === 0 ? 90 : 0 })}>
+          <span>{controls.rotation === 0 ? 'Vertical' : 'Horizontal'}</span>
+          <span className="button-value">{controls.rotation === 0 ? <PortraitIcon /> : <LandscapeIcon />}</span>
         </Action>
         {item('alinhamento', 'Alinhamento', ALIGN_LABEL[appearance.textAlign])}
         {audio && item('audio', 'Áudio', (linked ? controls.status === 'running' : audio.playing) ? 'Tocando' : 'Parado')}

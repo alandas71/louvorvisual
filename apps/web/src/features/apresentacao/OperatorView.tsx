@@ -9,10 +9,12 @@ import { Loading, noticeClass, pillClass } from '@/components/ui/PageHeader';
 import { Textarea } from '@/components/ui/Textarea';
 import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
-import { saveDocuments, useLocalSession, type LocalSession, type PresentationSessionRow } from '@/local';
+import { readAssetBlob, saveDocuments, useLocalSession, type LocalSession, type PresentationSessionRow } from '@/local';
 import { useFontFace, useSlideFit } from '@/presentation/measure';
+import { firstVoiceMs } from '../audio/firstVoice';
 import { AudioPanel, LinkedTiming } from './AudioPanel';
 import type { SessionController } from './controller';
+import { ExpandIcon, MenuIcon, PreviousIcon } from './icons';
 import { InteractiveStage } from './InteractiveStage';
 import { COMMAND_FAILURE_TEXT, formatSeconds, SAVE_FIELD_TEXT, SNAPSHOT_ISSUE_TEXT, SNAPSHOT_WARNING_TEXT } from './labels';
 import { LiveMenu, MenuSection } from './LiveMenu';
@@ -201,6 +203,67 @@ function isEditable(target: EventTarget | null): boolean {
   return Boolean(element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT' || element.isContentEditable));
 }
 
+const COMPACT_QUERY = '(max-width: 1023px)';
+
+function subscribeCompact(onChange: () => void) {
+  const media = window.matchMedia(COMPACT_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+/** Celular e tablet em pé: painel enxuto, com o slide no centro e os ajustes atrás do menu. */
+function useCompactLayout(): boolean {
+  return useSyncExternalStore(subscribeCompact, () => window.matchMedia(COMPACT_QUERY).matches, () => false);
+}
+
+/** Quanto antes da primeira voz da faixa o botão "Letra →" começa a chamar o operador. */
+const VOICE_CUE_LEAD_MS = 1000;
+
+/**
+ * Na abertura, com a faixa tocando: `true` a partir de 1 s antes de a voz
+ * entrar. A faixa é analisada uma vez, em segundo plano; sem faixa, sem voz
+ * encontrada ou sem conseguir analisar, o aviso simplesmente não aparece.
+ */
+function useVoiceCue(local: LocalSession, controller: SessionController, row: PresentationSessionRow, enabled: boolean, armed: boolean): boolean {
+  const audio = row.snapshot.audio;
+  const workspaceId = row.snapshot.workspaceId;
+  const sha256 = audio?.sha256 ?? null;
+  const [voice, setVoice] = useState<{ sha256: string; startMs: number } | null>(null);
+  const [due, setDue] = useState(false);
+
+  // A análise começa assim que o painel abre, para estar pronta quando a faixa tocar.
+  useEffect(() => {
+    if (!enabled || sha256 === null) return;
+    let current = true;
+    void (async () => {
+      const blob = await readAssetBlob(local.db, workspaceId, sha256);
+      if (!blob) return;
+      const startMs = await firstVoiceMs(blob, sha256);
+      if (current && startMs !== null) setVoice({ sha256, startMs });
+    })().catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [enabled, local, workspaceId, sha256]);
+
+  const startMs = voice && voice.sha256 === sha256 ? voice.startMs : null;
+  useEffect(() => {
+    if (!armed || startMs === null) return;
+    const check = () => {
+      const position = controller.engine.audioPositionMs();
+      setDue(position !== null && position >= startMs - VOICE_CUE_LEAD_MS);
+    };
+    check();
+    const timer = window.setInterval(check, 100);
+    return () => {
+      window.clearInterval(timer);
+      setDue(false);
+    };
+  }, [armed, controller, startMs]);
+
+  return armed && due;
+}
+
 type PanelProps = {
   local: LocalSession;
   controller: SessionController;
@@ -217,7 +280,12 @@ type PanelProps = {
 function OperatorPanel({ local, controller, row, warnings, recovered, audioChoices, onChooseAudio, setlist, onEnd, onNextSong }: PanelProps) {
   const { view, link, checkpoint, wakeLock, lastConfirmMs } = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const { state, controls, current, next, slides, output } = view;
+  const compact = useCompactLayout();
   const [interactive, setInteractive] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // No celular, na abertura, o botão de avançar é "Letra →" e chama o operador quando a voz da faixa vai entrar.
+  const lyricsCue = compact && state.cover;
+  const voiceCue = useVoiceCue(local, controller, row, compact, lyricsCue && Boolean(controls.audio?.playing));
   const [message, setMessage] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [draft, setDraft] = useState<{ occurrenceId: Uuid; text: string } | null>(null);
@@ -250,6 +318,17 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [dispatch]);
+
+  // O menu de ajustes do celular fecha com Esc e some ao voltar para a tela larga.
+  const settingsOpen = compact && menuOpen;
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [settingsOpen]);
 
   function openProjection() {
     // Aberta por clique direto; a janela pública nunca é criada sozinha.
@@ -391,51 +470,70 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
 
   return (
     <main id="main-content" className="flex min-h-dvh flex-col gap-3 p-3 sm:p-4 lg:h-dvh lg:overflow-hidden" data-view="apresentar" {...rootAttributes}>
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border bg-surface-raised px-4 py-3 shadow-card">
-        <div className="min-w-0 flex-1 basis-56">
-          <h1 className="truncate text-xl font-bold">{row.snapshot.song.title}</h1>
-          <p className="text-sm text-muted">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border bg-surface-raised px-4 py-3 shadow-card max-lg:px-2 max-lg:py-2">
+        {compact && (
+          // No celular não há botão "Encerrar": voltar fecha a sessão e devolve ao repertório ou ao editor.
+          <button type="button" className={buttonClass('ghost', 'sm', 'min-h-11 min-w-11 px-2')} aria-label="Encerrar e voltar" title="Encerrar e voltar" onClick={onEnd}>
+            <PreviousIcon />
+          </button>
+        )}
+        <div className="min-w-0 flex-1 basis-56 max-lg:basis-0">
+          <h1 className="truncate text-xl font-bold max-lg:text-base">{row.snapshot.song.title}</h1>
+          <p className="truncate text-sm text-muted max-lg:text-xs">
             {row.snapshot.arrangement.name} · {state.cover ? 'abertura' : `slide ${state.currentIndex + 1} de ${slides.length}`}
             {recovered && ' · sessão recuperada'}
             {setlist && ` · ${setlist.title}: louvor ${setlist.index + 1} de ${setlist.total}`}
           </p>
         </div>
+        {compact && (
+          <button type="button" className={buttonClass('ghost', 'sm', 'min-h-11 min-w-11 px-2')} aria-label="Abrir ajustes" title="Abrir ajustes" aria-haspopup="dialog" aria-expanded={settingsOpen} data-testid="operator-menu" onClick={() => setMenuOpen(true)}>
+            <MenuIcon />
+          </button>
+        )}
         {setlist?.next && (
           // Trocar de louvor é sempre uma ação do operador; o próximo abre preparado, sem tocar.
-          <button type="button" className={buttonClass('secondary', 'sm')} data-testid="next-song" onClick={() => onNextSong(setlist.next as NonNullable<SetlistPosition['next']>)}>
+          <button type="button" className={buttonClass('secondary', 'sm', 'max-lg:w-full')} data-testid="next-song" onClick={() => onNextSong(setlist.next as NonNullable<SetlistPosition['next']>)}>
             Próximo louvor: {setlist.next.title} →
           </button>
         )}
-        <div className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1" role="group" aria-label="Modo de avanço">
-          <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'manual' && pressedClass)} aria-pressed={state.mode === 'manual'} onClick={() => dispatch({ type: 'setMode', mode: 'manual' })}>
-            Manual
-          </button>
-          <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'automatic' && pressedClass)} aria-pressed={state.mode === 'automatic'} onClick={() => dispatch({ type: 'setMode', mode: 'automatic' })}>
-            Automático
-          </button>
-        </div>
-        <button type="button" className={buttonClass('secondary', 'sm')} onClick={openProjection}>
-          {link.connection === 'connected' ? 'Reabrir janela de projeção' : 'Abrir janela de projeção'}
-        </button>
-        <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setInteractive(true)}>
-          Modo interativo
-        </button>
-        <button type="button" className={buttonClass('danger', 'sm')} onClick={onEnd}>
-          Encerrar
-        </button>
+        {!compact && (
+          <>
+            <div className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1" role="group" aria-label="Modo de avanço">
+              <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'manual' && pressedClass)} aria-pressed={state.mode === 'manual'} onClick={() => dispatch({ type: 'setMode', mode: 'manual' })}>
+                Manual
+              </button>
+              <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'automatic' && pressedClass)} aria-pressed={state.mode === 'automatic'} onClick={() => dispatch({ type: 'setMode', mode: 'automatic' })}>
+                Automático
+              </button>
+            </div>
+            <button type="button" className={buttonClass('secondary', 'sm')} onClick={openProjection}>
+              {link.connection === 'connected' ? 'Reabrir janela de projeção' : 'Abrir janela de projeção'}
+            </button>
+            <button type="button" className={buttonClass('danger', 'sm')} onClick={onEnd}>
+              Encerrar
+            </button>
+          </>
+        )}
       </header>
 
-      <div className="flex flex-wrap gap-2">
-        <p role="status" data-testid="projection-status" data-connection={link.connection} className={pillClass(link.connection === 'lost' ? 'danger' : link.connection === 'connected' && link.armed ? 'success' : link.connection === 'connected' ? 'accent' : 'neutral')}>
-          {link.connection === 'lost' ? '⚠ ' : link.connection === 'connected' ? '● ' : '○ '}
-          {projectionText}
-        </p>
-        <p role="status" data-testid="checkpoint-status" data-state={checkpoint} className={pillClass(checkpoint === 'memory-only' ? 'danger' : 'neutral')}>
-          {checkpoint === 'saved' && '✓ Guardado nesta sessão'}
-          {checkpoint === 'saving' && 'Guardando…'}
-          {checkpoint === 'memory-only' && '⚠ Não foi possível gravar: o ajuste está apenas em memória.'}
-        </p>
-      </div>
+      {/* No celular os avisos de rotina somem; só aparece o que pede atenção. */}
+      {(!compact || link.connection !== 'none' || checkpoint === 'memory-only') && (
+        <div className="flex flex-wrap gap-2">
+          {(!compact || link.connection !== 'none') && (
+            <p role="status" data-testid="projection-status" data-connection={link.connection} className={pillClass(link.connection === 'lost' ? 'danger' : link.connection === 'connected' && link.armed ? 'success' : link.connection === 'connected' ? 'accent' : 'neutral')}>
+              {link.connection === 'lost' ? '⚠ ' : link.connection === 'connected' ? '● ' : '○ '}
+              {projectionText}
+            </p>
+          )}
+          {(!compact || checkpoint === 'memory-only') && (
+            <p role="status" data-testid="checkpoint-status" data-state={checkpoint} className={pillClass(checkpoint === 'memory-only' ? 'danger' : 'neutral')}>
+              {checkpoint === 'saved' && '✓ Guardado nesta sessão'}
+              {checkpoint === 'saving' && 'Guardando…'}
+              {checkpoint === 'memory-only' && '⚠ Não foi possível gravar: o ajuste está apenas em memória.'}
+            </p>
+          )}
+        </div>
+      )}
 
       {link.fontMissing && (
         <p role="alert" data-testid="projection-font-missing" className={noticeClass('danger')}>
@@ -471,13 +569,26 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
       )}
 
       {/* Em telas largas só esta área rola: cabeçalho, miniaturas e comandos ficam sempre à vista. */}
-      <div className="grid gap-4 scrollbar-thin lg:-m-1 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(16rem,22rem)] lg:items-start lg:overflow-y-auto lg:p-1">
+      <div className="grid gap-4 scrollbar-thin max-lg:my-auto lg:-m-1 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(16rem,22rem)] lg:items-start lg:overflow-y-auto lg:p-1">
         <section aria-labelledby="atual" className="flex flex-col gap-2">
           <h2 id="atual" className="text-xs font-bold uppercase tracking-wider text-muted">
             {state.cover ? 'Abertura' : `Slide atual · ${current.label || 'Sem rótulo'}`}
           </h2>
-          <div data-testid="current-slide">
-            <SlideView text={current.text} style={current.style} fontId={current.fontId} cover={view.live.cover} transitionKey={`${current.occurrenceId}:${view.live.cover ? 'abertura' : 'letra'}`} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
+          <div className="relative">
+            <div data-testid="current-slide">
+              <SlideView text={current.text} style={current.style} fontId={current.fontId} cover={view.live.cover} transitionKey={`${current.occurrenceId}:${view.live.cover ? 'abertura' : 'letra'}`} className="w-full overflow-hidden rounded-2xl border-2 border-accent/70 shadow-pop" />
+            </div>
+            {/* Sobre o slide, como os controles do modo interativo: cinza claro em fundo escuro, legível em qualquer tema. */}
+            <button
+              type="button"
+              className="absolute right-2 top-2 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg border border-[rgba(209,213,219,0.35)] bg-[rgba(0,0,0,0.45)] text-[rgba(209,213,219,0.9)] transition-colors duration-150 hover:border-[rgba(209,213,219,0.9)] hover:text-[#D1D5DB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D1D5DB]"
+              aria-label="Modo interativo"
+              title="Modo interativo"
+              data-testid="enter-interactive"
+              onClick={() => setInteractive(true)}
+            >
+              <ExpandIcon />
+            </button>
           </div>
           {!state.cover && <SlideChecks slide={current} />}
           <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="timing">
@@ -519,43 +630,66 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
           <AudioPanel controller={controller} view={view} dispatch={dispatch} choices={audioChoices} selectedBindingId={row.snapshot.audio?.bindingId ?? null} onChoose={onChooseAudio} />
         </section>
 
-        <section aria-labelledby="lado" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h2 id="lado" className="text-xs font-bold uppercase tracking-wider text-muted">
-              O público vê agora
-            </h2>
-            <PublicPreview frame={output} rotation={view.rotation} />
-            <p className="text-xs font-semibold text-muted" data-testid="public-summary">
-              {state.status === 'ready' ? 'Preto (aguardando iniciar)' : output.cover && output.visualMode === 'normal' ? 'Abertura' : OUTPUT_LABEL[output.visualMode]}
-              {state.frozenOutput && ' · congelada'}
-              {frozenDiffers && ' · diferente do slide atual'}
-            </p>
-          </div>
-          {row.snapshot.song.notes.trim() !== '' && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Notas privadas</h2>
-              <p className="whitespace-pre-line rounded-xl border border-accent/30 bg-accent/5 px-3 py-2 text-sm" data-testid="private-notes">
-                {row.snapshot.song.notes}
-              </p>
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Próximo slide{upcoming ? ` · ${upcoming.label || 'Sem rótulo'}` : ''}</h2>
-            {upcoming ? (
-              <div data-testid="next-slide">
-                <SlideView text={upcoming.text} style={upcoming.style} fontId={upcoming.fontId} className="w-full overflow-hidden rounded-xl border border-border" />
+        {/* No celular o slide do centro já é o que o público vê; sobram só as notas privadas. */}
+        {(!compact || row.snapshot.song.notes.trim() !== '') && (
+          <section aria-label="Saída pública e notas" className="flex flex-col gap-3">
+            {!compact && (
+              <div className="flex flex-col gap-2">
+                <h2 id="lado" className="text-xs font-bold uppercase tracking-wider text-muted">
+                  O público vê agora
+                </h2>
+                <PublicPreview frame={output} rotation={view.rotation} />
+                <p className="text-xs font-semibold text-muted" data-testid="public-summary">
+                  {state.status === 'ready' ? 'Preto (aguardando iniciar)' : output.cover && output.visualMode === 'normal' ? 'Abertura' : OUTPUT_LABEL[output.visualMode]}
+                  {state.frozenOutput && ' · congelada'}
+                  {frozenDiffers && ' · diferente do slide atual'}
+                </p>
               </div>
-            ) : (
-              <p className="text-sm text-muted">Este é o último slide.</p>
             )}
-          </div>
-        </section>
+            {row.snapshot.song.notes.trim() !== '' && (
+              <div className="flex flex-col gap-1">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Notas privadas</h2>
+                <p className="whitespace-pre-line rounded-xl border border-accent/30 bg-accent/5 px-3 py-2 text-sm" data-testid="private-notes">
+                  {row.snapshot.song.notes}
+                </p>
+              </div>
+            )}
+            {!compact && (
+              <div className="flex flex-col gap-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Próximo slide{upcoming ? ` · ${upcoming.label || 'Sem rótulo'}` : ''}</h2>
+                {upcoming ? (
+                  <div data-testid="next-slide">
+                    <SlideView text={upcoming.text} style={upcoming.style} fontId={upcoming.fontId} className="w-full overflow-hidden rounded-xl border border-border" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted">Este é o último slide.</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Coluna privada: nada daqui é enviado à janela de projeção. */}
-        <aside aria-label="Ajustes ao vivo" className="max-h-[70dvh] overflow-y-auto rounded-2xl border border-border bg-surface-raised p-3 shadow-card scrollbar-thin lg:sticky lg:top-0 lg:max-h-[calc(100dvh-21rem)]">
-          <LiveMenu controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} />
-        </aside>
+        {!compact && (
+          <aside aria-label="Ajustes ao vivo" className="max-h-[70dvh] overflow-y-auto rounded-2xl border border-border bg-surface-raised p-3 shadow-card scrollbar-thin lg:sticky lg:top-0 lg:max-h-[calc(100dvh-21rem)]">
+            <LiveMenu controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} />
+          </aside>
+        )}
       </div>
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-30 flex justify-end bg-black/60" data-testid="operator-menu-backdrop" onClick={() => setMenuOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Ajustes ao vivo" className="flex h-full w-[min(24rem,100%)] flex-col gap-3 overflow-y-auto border-l border-border bg-surface-raised p-4 pb-safe shadow-pop scrollbar-thin" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-bold">Ajustes</h2>
+              <button type="button" autoFocus className={buttonClass('secondary', 'sm')} onClick={() => setMenuOpen(false)}>
+                Fechar
+              </button>
+            </div>
+            <LiveMenu controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} />
+          </div>
+        </div>
+      )}
 
       <ol className="flex shrink-0 gap-2 overflow-x-auto p-1 pb-2 scrollbar-thin" aria-label="Slides da apresentação">
         {slides.map((slide, index) => (
@@ -603,8 +737,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
               {transportLabel}
             </button>
           )}
-          <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} data-testid="advance" data-auto={controls.capabilities.countdown} onClick={() => dispatch({ type: 'next' })}>
-            Avançar {controls.capabilities.countdown ? <span className="lv-auto-spinner" data-testid="auto-spinner" aria-hidden="true" /> : '→'}
+          <button type="button" className={cn(buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3'), voiceCue && 'lv-cue-blink')} data-testid="advance" data-auto={controls.capabilities.countdown} data-voice-cue={voiceCue} onClick={() => dispatch({ type: 'next' })}>
+            {lyricsCue ? 'Letra' : 'Avançar'} {controls.capabilities.countdown ? <span className="lv-auto-spinner" data-testid="auto-spinner" aria-hidden="true" /> : '→'}
           </button>
           <span className="mx-2 h-8 w-px bg-border max-sm:hidden" aria-hidden="true" />
           <button type="button" className={cn(buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3'), state.visualMode === 'black' && pressedClass)} aria-pressed={state.visualMode === 'black'} onClick={() => dispatch({ type: 'setVisualMode', visualMode: state.visualMode === 'black' ? 'normal' : 'black' })}>
@@ -632,7 +766,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
 }
 
 /** O que a janela pública está mostrando, com a rotação da saída. */
-function PublicPreview({ frame, rotation }: { frame: OutputFrame; rotation: 0 | 90 | 180 | 270 }) {
+function PublicPreview({ frame, rotation }: { frame: OutputFrame; rotation: 0 | 90 }) {
   return (
     <div className="aspect-video w-full overflow-hidden rounded-lg border border-border" data-testid="public-preview" data-occurrence-id={frame.occurrenceId}>
       <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} cover={frame.cover} transitionKey={`${frame.occurrenceId}:${frame.cover ? 'abertura' : 'letra'}`} />

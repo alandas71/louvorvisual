@@ -89,8 +89,8 @@ describe('sessões de apresentação no banco local', () => {
   it('rotação da saída fica nas preferências do dispositivo', async () => {
     const db = testDatabase();
     expect(await readOutputRotation(db)).toBe(0);
-    await saveOutputRotation(db, 270);
-    expect(await readOutputRotation(db)).toBe(270);
+    await saveOutputRotation(db, 90);
+    expect(await readOutputRotation(db)).toBe(90);
     db.close();
   });
 
@@ -102,8 +102,8 @@ describe('sessões de apresentação no banco local', () => {
     await saveOperatorPreferences(db, { appearance: { themePresetId: 'violeta', fontSizePx: 80 } });
     expect(await readOperatorPreferences(db)).toEqual({ mode: 'manual', appearance: { themePresetId: 'violeta', fontSizePx: 80 } });
     // Rotação e preferências dividem o mesmo registro sem se apagar.
-    await saveOutputRotation(db, 180);
-    expect(await readOutputRotation(db)).toBe(180);
+    await saveOutputRotation(db, 0);
+    expect(await readOutputRotation(db)).toBe(0);
     expect((await readOperatorPreferences(db)).mode).toBe('manual');
     // Um ajuste que deixou de ser válido é descartado, não aplicado pela metade.
     await db.outputPreferences.put({ outputId: 'public', rotation: 0, appearance: { fontSizePx: 99999 } });
