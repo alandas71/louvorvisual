@@ -245,7 +245,7 @@ test('AT-05: automático com 8, 12 e 10 segundos em relógio real, com pausa e r
   await createSong(page, { durations: ['8', '12', '10'] });
   await openOperator(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático' }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático' }).first().click();
   await expect(operator(page)).toHaveAttribute('data-mode', 'automatic');
   await recordTransitions(projection);
   const ids = await page.getByTestId('thumbnail').evaluateAll((items) => items.map((item) => item.getAttribute('data-occurrence-id')!));
@@ -315,7 +315,7 @@ test('AT-06 e AT-27: saltos no automático, slide sem tempo espera comando e aju
   await createSong(page, { durations: ['4', null, '6', '3'] });
   await openOperator(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático' }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático' }).first().click();
   await recordTransitions(projection);
   const ids = await page.getByTestId('thumbnail').evaluateAll((items) => items.map((item) => item.getAttribute('data-occurrence-id')!));
   const [a, b, c, d] = ids as [string, string, string, string];
@@ -525,7 +525,7 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
   await expect(page.getByTestId('corner-timer')).toBeVisible();
   await expect(page.getByTestId('corner-timer').getByTestId('timer-static')).toHaveText('8 s');
   await expect(page.getByTestId('corner-transport')).toHaveCount(0);
-  await menu.getByRole('button', { name: 'Automático' }).click();
+  await menu.getByRole('button', { name: 'Semi-automático' }).click();
   await expect(page.getByTestId('corner-transport')).toHaveAccessibleName('Pausar');
   await expect(page.getByTestId('corner-timer').getByTestId('countdown')).toBeVisible();
   await page.getByTestId('corner-transport').click();
@@ -625,7 +625,7 @@ test('AT-28, AT-29, AT-32: cantos, ajustes ao vivo, giro, controles na projeçã
   await expect(projection.getByTestId('corner-timer').getByTestId('timer-static')).toHaveText('8 s');
   await projection.getByTestId('corner-menu').click();
   const publicMenu = projection.getByTestId('live-menu');
-  await publicMenu.getByRole('button', { name: 'Automático' }).click();
+  await publicMenu.getByRole('button', { name: 'Semi-automático' }).click();
   await expect(operator(page)).toHaveAttribute('data-mode', 'automatic');
   await expect(projection.getByTestId('corner-transport')).toHaveAccessibleName('Pausar');
   await expect(page.getByTestId('corner-timer').getByTestId('countdown')).toBeVisible();
@@ -697,7 +697,7 @@ test('AT-17, AT-25, AT-26, AT-30: ajusta, fecha tudo, desliga a rede, recupera e
   await openOperator(page);
   const operatorUrl = page.url();
   let projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático' }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático' }).first().click();
   await startShow(page);
 
   // Ajustes da sessão: tema (louvor), A+ (este slide), fonte (louvor) e giro da saída.
@@ -766,7 +766,7 @@ test('AT-17, AT-25, AT-26, AT-30: ajusta, fecha tudo, desliga a rede, recupera e
   await page.getByRole('button', { name: '↶ Desfazer último ajuste' }).click();
   await expectConfirmed(page, projection);
   expect((await drawn(projection))!.family).toBe('Montserrat');
-  await page.getByRole('button', { name: '0°', exact: true }).click();
+  await page.getByRole('button', { name: 'Horizontal (0°)', exact: true }).click();
 
   // ── AT-26: oito temas; fundo e letra juntos; sem fonte manual, a inicial do tema ──
   for (const [presetId, background, color, family] of THEMES) {

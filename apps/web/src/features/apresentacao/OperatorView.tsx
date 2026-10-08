@@ -2,7 +2,7 @@
 
 import { touch, type Uuid } from '@louvorvisual/domain';
 import { mergeOverridesIntoArrangement, shortcutCommand, type OperatorCommand, type OutputFrame, type ResolvedSlide, type SaveToArrangementResult } from '@louvorvisual/presentation';
-import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { SlideView } from '@/components/SlideView';
 import { buttonClass, pressedClass } from '@/components/ui/buttonStyles';
 import { Loading, noticeClass, pillClass } from '@/components/ui/PageHeader';
@@ -14,10 +14,10 @@ import { useFontFace, useSlideFit } from '@/presentation/measure';
 import { firstVoiceMs } from '../audio/firstVoice';
 import { AudioPanel, LinkedTiming } from './AudioPanel';
 import type { SessionController } from './controller';
-import { ExpandIcon, MenuIcon, PreviousIcon } from './icons';
+import { CloseIcon, ExpandIcon, MenuIcon, PreviousIcon } from './icons';
 import { InteractiveStage } from './InteractiveStage';
 import { COMMAND_FAILURE_TEXT, formatSeconds, SAVE_FIELD_TEXT, SNAPSHOT_ISSUE_TEXT, SNAPSHOT_WARNING_TEXT } from './labels';
-import { LiveMenu, MenuSection } from './LiveMenu';
+import { LiveMenu, MenuSection, ModeButtons } from './LiveMenu';
 import { useOperatorSession, type AudioChoice, type AudioProblem, type SessionWarning, type SetlistPosition } from './useOperatorSession';
 
 /** Volta para de onde a apresentação foi aberta: o repertório ou o editor do louvor. */
@@ -220,15 +220,16 @@ function useCompactLayout(): boolean {
 const VOICE_CUE_LEAD_MS = 1000;
 
 /**
- * Na abertura, com a faixa tocando: `true` a partir de 1 s antes de a voz
- * entrar. A faixa é analisada uma vez, em segundo plano; sem faixa, sem voz
- * encontrada ou sem conseguir analisar, o aviso simplesmente não aparece.
+ * Na abertura, com a faixa tocando: `true` a partir de 1 s antes de a letra
+ * começar a ser cantada. A faixa é analisada uma vez, em segundo plano; sem
+ * faixa, sem a letra reconhecida ou sem conseguir analisar, o aviso
+ * simplesmente não aparece.
  */
-function useVoiceCue(local: LocalSession, controller: SessionController, row: PresentationSessionRow, enabled: boolean, armed: boolean): boolean {
+function useVoiceCue(local: LocalSession, controller: SessionController, row: PresentationSessionRow, lyrics: string, enabled: boolean, armed: boolean): boolean {
   const audio = row.snapshot.audio;
   const workspaceId = row.snapshot.workspaceId;
   const sha256 = audio?.sha256 ?? null;
-  const [voice, setVoice] = useState<{ sha256: string; startMs: number } | null>(null);
+  const [voice, setVoice] = useState<{ sha256: string; lyrics: string; startMs: number } | null>(null);
   const [due, setDue] = useState(false);
 
   // A análise começa assim que o painel abre, para estar pronta quando a faixa tocar.
@@ -238,15 +239,15 @@ function useVoiceCue(local: LocalSession, controller: SessionController, row: Pr
     void (async () => {
       const blob = await readAssetBlob(local.db, workspaceId, sha256);
       if (!blob) return;
-      const startMs = await firstVoiceMs(blob, sha256);
-      if (current && startMs !== null) setVoice({ sha256, startMs });
+      const startMs = await firstVoiceMs(blob, sha256, lyrics);
+      if (current && startMs !== null) setVoice({ sha256, lyrics, startMs });
     })().catch(() => undefined);
     return () => {
       current = false;
     };
-  }, [enabled, local, workspaceId, sha256]);
+  }, [enabled, local, workspaceId, sha256, lyrics]);
 
-  const startMs = voice && voice.sha256 === sha256 ? voice.startMs : null;
+  const startMs = voice && voice.sha256 === sha256 && voice.lyrics === lyrics ? voice.startMs : null;
   useEffect(() => {
     if (!armed || startMs === null) return;
     const check = () => {
@@ -285,7 +286,11 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
   const [menuOpen, setMenuOpen] = useState(false);
   // No celular, na abertura, o botão de avançar é "Letra →" e chama o operador quando a voz da faixa vai entrar.
   const lyricsCue = compact && state.cover;
-  const voiceCue = useVoiceCue(local, controller, row, compact, lyricsCue && Boolean(controls.audio?.playing));
+  // A letra preparada da sessão, sem os ajustes de texto ao vivo: é com ela que a faixa é comparada.
+  const lyrics = useMemo(() => row.snapshot.occurrences.map((occurrence) => occurrence.text).join('\n'), [row.snapshot]);
+  // No automático a letra entra pelo temporizador da introdução: não há o que detectar nem para quem avisar.
+  const introTimed = state.mode === 'automatic' && controls.intro?.auto === true;
+  const voiceCue = useVoiceCue(local, controller, row, lyrics, compact && !introTimed, lyricsCue && !introTimed && Boolean(controls.audio?.playing));
   const [message, setMessage] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [draft, setDraft] = useState<{ occurrenceId: Uuid; text: string } | null>(null);
@@ -424,6 +429,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
     'data-sequence': state.sequenceNumber,
     'data-awaiting': state.awaitingManualAdvance,
     'data-cover': state.cover,
+    'data-intro-ms': controls.intro?.durationMs ?? '',
+    'data-intro-auto': controls.intro?.auto ?? false,
     'data-visual-mode': state.visualMode,
     'data-frozen': state.frozenOutput,
     'data-rotation': view.rotation,
@@ -499,12 +506,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
         {!compact && (
           <>
             <div className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1" role="group" aria-label="Modo de avanço">
-              <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'manual' && pressedClass)} aria-pressed={state.mode === 'manual'} onClick={() => dispatch({ type: 'setMode', mode: 'manual' })}>
-                Manual
-              </button>
-              <button type="button" className={cn(buttonClass('ghost', 'sm'), state.mode === 'automatic' && pressedClass)} aria-pressed={state.mode === 'automatic'} onClick={() => dispatch({ type: 'setMode', mode: 'automatic' })}>
-                Automático
-              </button>
+              <ModeButtons controls={controls} dispatch={dispatch} variant="ghost" />
             </div>
             <button type="button" className={buttonClass('secondary', 'sm')} onClick={openProjection}>
               {link.connection === 'connected' ? 'Reabrir janela de projeção' : 'Abrir janela de projeção'}
@@ -602,7 +604,7 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
                 faltam <Countdown controller={controller} className="font-semibold" />
               </span>
             )}
-            {state.cover && <span data-testid="cover-status">Abertura na tela: avance para mostrar a letra.</span>}
+            {state.cover && <span data-testid="cover-status">{introTimed ? 'Abertura na tela: a letra entra sozinha no fim da introdução.' : 'Abertura na tela: avance para mostrar a letra.'}</span>}
             {state.awaitingManualAdvance && !state.cover && <span data-testid="awaiting-advance">Sem tempo neste slide: aguardando você avançar.</span>}
             {state.mode === 'manual' && state.status !== 'ready' && <span className="text-muted">Avanço manual.</span>}
             {state.status === 'ready' && <span className="text-muted">Pronta. O público vê preto até você iniciar.</span>}
@@ -682,8 +684,8 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
           <div role="dialog" aria-modal="true" aria-label="Ajustes ao vivo" className="flex h-full w-[min(24rem,100%)] flex-col gap-3 overflow-y-auto border-l border-border bg-surface-raised p-4 pb-safe shadow-pop scrollbar-thin" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-bold">Ajustes</h2>
-              <button type="button" autoFocus className={buttonClass('secondary', 'sm')} onClick={() => setMenuOpen(false)}>
-                Fechar
+              <button type="button" autoFocus className={buttonClass('secondary', 'sm', 'min-h-11 min-w-11 border-danger px-2 text-danger hover:border-danger hover:text-danger')} aria-label="Fechar" title="Fechar" onClick={() => setMenuOpen(false)}>
+                <CloseIcon />
               </button>
             </div>
             <LiveMenu controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} />

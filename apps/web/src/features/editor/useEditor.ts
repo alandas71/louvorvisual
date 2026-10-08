@@ -212,7 +212,7 @@ export function useEditor(session: LocalSession, songId: Uuid, arrangementId: Uu
       if (fields.title !== undefined && fields.title.trim() === '') return;
       commit({ ...previous, song: touch({ ...previous.song, ...fields }, session.context()) });
     },
-    updateArrangement(fields: Partial<Pick<Arrangement, 'name' | 'themeRef' | 'fontId' | 'themeOverrides'>>, immediate = true) {
+    updateArrangement(fields: Partial<Pick<Arrangement, 'name' | 'themeRef' | 'fontId' | 'themeOverrides' | 'introDurationMs'>>, immediate = true) {
       const previous = current.current;
       if (!previous) return;
       if (fields.name !== undefined && fields.name.trim() === '') return;

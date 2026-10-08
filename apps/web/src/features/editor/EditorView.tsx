@@ -32,6 +32,7 @@ import { EditorSyncNotice } from './EditorSyncNotice';
 import { EDIT_ERROR_TEXT, EDIT_REVIEW_TEXT, SECTION_KIND_LABEL } from './messages';
 import { OccurrenceCard } from './OccurrenceCard';
 import { parseSyncedLyrics, searchLrclib, type LrclibTrack } from './lrclib';
+import { TimerField } from './TimerField';
 import type { SaveStatus } from './saver';
 import { useEditor, type EditorActions } from './useEditor';
 import { resolveArrangementVisual } from './visual';
@@ -160,6 +161,15 @@ function Editor({ session, songId, arrangementId, onReload }: { session: LocalSe
           Arranjo e slides
         </h2>
         <ArrangementFields state={state} actions={actions} session={session} />
+
+        <div className="flex flex-col gap-2 border-t border-border pt-4" data-testid="intro-timer">
+          <h3 className="text-sm font-bold">Temporizador da introdução</h3>
+          <p className="text-xs text-muted">
+            Tempo da abertura até a letra entrar sozinha. Com ele definido, a apresentação pode rodar no modo Automático, sem o primeiro avanço manual; sem ele, o
+            Semi-automático espera você avançar na abertura.
+          </p>
+          <TimerField target="início (introdução)" durationMs={arrangement.introDurationMs ?? null} onChange={(introDurationMs) => actions.updateArrangement({ introDurationMs })} />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4" role="toolbar" aria-label="Edição dos slides">
           <button type="button" className={buttonClass('secondary', 'sm')} disabled={!state.canUndo} onClick={actions.undo}>

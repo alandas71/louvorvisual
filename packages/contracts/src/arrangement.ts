@@ -69,6 +69,8 @@ export const arrangementSchema = z
     audioBindings: z.array(audioBindingSchema),
     selectedAudioBindingId: uuidSchema.nullable(),
     defaultMode: z.enum(PRESENTATION_MODES),
+    // Opcional: documentos anteriores ao temporizador da introdução continuam válidos como estão.
+    introDurationMs: occurrenceDurationSchema.optional(),
   })
   .check((ctx) => {
     for (const issue of arrangementIssues(ctx.value)) {

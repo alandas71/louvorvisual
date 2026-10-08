@@ -9,6 +9,7 @@ function Icon({ children }: { children: ReactNode }) {
 }
 
 export const MenuIcon = () => <Icon><path d="M4 6h16M4 12h16M4 18h16" /></Icon>;
+export const CloseIcon = () => <Icon><path d="M6 6l12 12M18 6L6 18" /></Icon>;
 export const LandscapeIcon = () => <Icon><rect x="3" y="6" width="18" height="12" rx="1.5" /></Icon>;
 export const PortraitIcon = () => <Icon><rect x="6" y="3" width="12" height="18" rx="1.5" /></Icon>;
 export const FullscreenIcon = () => <Icon><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Icon>;

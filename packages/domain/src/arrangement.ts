@@ -64,6 +64,11 @@ export type Arrangement = AggregateMeta & {
   audioBindings: AudioBinding[];
   selectedAudioBindingId: Uuid | null;
   defaultMode: PresentationMode;
+  /**
+   * Temporizador da introdução: quanto a abertura fica na tela antes de a letra
+   * entrar sozinha (modo automático). Ausente ou `null`: a abertura espera o operador.
+   */
+  introDurationMs?: number | null;
 };
 
 export function isValidOccurrenceDuration(durationMs: number | null): boolean {

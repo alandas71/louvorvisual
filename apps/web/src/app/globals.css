@@ -1,10 +1,5 @@
 @import "tailwindcss";
 
-/* Os comandos do palco acompanham a orientação da saída. */
-[data-ui-rotation="90"] [data-corner-button] {
-  transform: rotate(90deg);
-}
-
 /* Interface do aplicativo. As cores dos slides vêm dos temas, não daqui. */
 @theme {
   --color-surface: #0a0c11;

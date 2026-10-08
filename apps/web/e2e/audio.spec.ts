@@ -135,7 +135,7 @@ test('AT-07 (independente), AT-08 e AT-28: player único, sem seek ao trocar de 
   await liveMenu.getByRole('button', { name: 'Adicionar tempo ao slide atual' }).click();
   await liveMenu.getByLabel('Tempo do slide atual, em segundos').fill('60');
   await liveMenu.getByLabel('Tempo do slide atual, em segundos').press('Enter');
-  await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
   await expect(page.getByTestId('countdown').first()).toBeVisible();
   await expect(page.getByTestId('transport')).toHaveText('❚❚ Pausar');
   await page.getByTestId('transport').click();
@@ -247,7 +247,7 @@ test('AT-07 (vinculada): os slides acompanham a posição da faixa e os saltos r
   await expect(operator(page)).toHaveAttribute('data-audio-policy', 'linked');
   await watchAudio(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
   await expect(operator(page)).toHaveAttribute('data-clock-source', 'audio');
 
   // ── automático vinculado: a faixa é o relógio ───────────────────────────
@@ -340,7 +340,7 @@ test('AT-07 (vinculada): os slides acompanham a posição da faixa e os saltos r
   expect(state.positionMs).toBeLessThan(9700);
   // De volta ao automático: os slides seguem a posição em que a faixa está, sem novo seek.
   const seeksManual = state.seeking;
-  await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
   await expect(operator(page)).toHaveAttribute('data-status', 'finished', { timeout: 10_000 });
   expect((await audioState(page)).seeking).toBe(seeksManual);
   await page.screenshot({ path: join(EVIDENCE, 'operador-faixa-vinculada.png') });
@@ -361,7 +361,7 @@ test('AT-31: rascunho de tempo com faixa vinculada não faz seek; aplicar pede p
   await openOperator(page);
   await watchAudio(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
   await startShow(page);
   await expectAudioPlaying(page, true);
   await waitAudioAt(page, 1500);
@@ -583,7 +583,7 @@ test('AT-09 e AT-15: repertório ordenado, faixa faltante não marca pronto, pro
   await expect(page.getByTestId('session-warning')).toHaveCount(0);
   await watchAudio(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
   await startShow(page);
   await expectAudioPlaying(page, true);
   await expectConfirmed(page, projection);
@@ -760,7 +760,7 @@ test('MP3, autoplay bloqueado e suspensão: a sessão não finge que toca e volt
 
   await openOperator(page);
   await watchAudio(page);
-  await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
 
   // ── autoplay bloqueado: a promessa de play() é recusada como o navegador faria ──
   await page.evaluate(() => {
@@ -888,7 +888,7 @@ test('ensaio offline prolongado com áudio vinculado e projeção', async () => 
     }
     projection ??= await openProjection(context, page);
     await expect(operator(page)).toHaveAttribute('data-projection-armed', 'true');
-    if ((await operator(page).getAttribute('data-mode')) !== 'automatic') await page.getByRole('button', { name: 'Automático', exact: true }).first().click();
+    if ((await operator(page).getAttribute('data-mode')) !== 'automatic') await page.getByRole('button', { name: 'Semi-automático', exact: true }).first().click();
     await startShow(page);
     await expect(operator(page)).toHaveAttribute('data-status', 'finished', { timeout: 90_000 });
     const run = await audioState(page);

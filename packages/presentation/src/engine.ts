@@ -112,6 +112,12 @@ export type ControlsState = {
   awaitingManualAdvance: boolean;
   /** A sessão está na abertura, antes do primeiro slide da letra. */
   cover?: boolean;
+  /**
+   * Temporizador da introdução, quando o arranjo tem um. `auto`: no automático a
+   * abertura dá lugar à letra sozinha (modo "Automático"); desligado, espera o
+   * operador como no "Semi-automático".
+   */
+  intro?: { durationMs: number; auto: boolean };
   capabilities: Capabilities;
   visualMode: VisualMode;
   frozen: boolean;
@@ -173,6 +179,8 @@ export type OperatorCommand =
   | { type: 'first' }
   | { type: 'goTo'; occurrenceId: Uuid }
   | { type: 'setMode'; mode: PresentationMode }
+  /** Liga ou desliga a saída automática da abertura; só existe com temporizador da introdução no arranjo. */
+  | { type: 'setAutoIntro'; enabled: boolean }
   /** Fecha o ensaio manual no último slide e prepara seus tempos para salvar. */
   | { type: 'completeManualTiming' }
   | { type: 'restartOccurrence' }
@@ -296,6 +304,10 @@ export class PresentationEngine {
   private readonly withCover: boolean;
   /** Abertura em exibição: nenhum relógio de slide corre até o operador avançar. */
   private cover = false;
+  /** Temporizador da introdução preparado no arranjo; nunca muda durante a sessão. */
+  private readonly introDurationMs: number | null;
+  /** Com temporizador da introdução, o automático sai da abertura sozinho. */
+  private autoIntro = true;
 
   private readonly transport: AudioTransport | null;
   private audioPolicy: SessionAudioPolicy = 'none';
@@ -321,6 +333,7 @@ export class PresentationEngine {
     this.mode = options.mode ?? options.snapshot.arrangement.defaultMode;
     this.rotation = options.rotation ?? 0;
     this.withCover = options.cover ?? false;
+    this.introDurationMs = options.snapshot.arrangement.introDurationMs ?? null;
     if (options.appearance && Object.keys(options.appearance).length > 0 && visualPatchIssues(options.appearance).length === 0) {
       this.overrides = { current: { revision: 0, song: { ...options.appearance }, occurrences: {} }, undo: [] };
     }
@@ -548,13 +561,19 @@ export class PresentationEngine {
     return resolveSlide(this.snapshot, this.overrides.current, occurrence);
   }
 
+  /** A abertura está contando o temporizador da introdução: conta como um slide com tempo, pelo relógio da sessão. */
+  private get introTimed(): boolean {
+    return this.cover && this.autoIntro && this.introDurationMs !== null && this.mode === 'automatic';
+  }
+
   private currentDuration(): number | null {
+    if (this.introTimed) return this.introDurationMs;
     return this.slideAt(this.index).durationMs;
   }
 
   private elapsed(): number {
-    if (this.cover) return 0;
-    if (this.audioClock) {
+    if (this.cover && !this.introTimed) return 0;
+    if (this.audioClock && !this.cover) {
       const cue = this.cueAt(this.index);
       return Math.min(cue.endMs - cue.startMs, Math.max(0, (this.transport as AudioTransport).positionMs() - cue.startMs));
     }
@@ -604,7 +623,7 @@ export class PresentationEngine {
       currentOccurrenceId: current.occurrenceId,
       currentIndex: this.index,
       elapsedInSlideMs: timed ? Math.min(this.elapsed(), current.durationMs ?? 0) : 0,
-      awaitingManualAdvance: this.cover || (this.mode === 'automatic' && current.durationMs === null && this.status !== 'finished'),
+      awaitingManualAdvance: (this.cover && !this.introTimed) || (this.mode === 'automatic' && current.durationMs === null && this.status !== 'finished'),
       cover: this.cover,
       overridesRevision: this.overrides.current.revision,
       clockSource: this.audioClock ? 'audio' : 'monotonic',
@@ -619,8 +638,8 @@ export class PresentationEngine {
   /** Tempo que falta no slide atual; `null` sem duração ou fora do automático. */
   remainingMs(): number | null {
     const duration = this.currentDuration();
-    if (duration === null || this.mode !== 'automatic' || this.cover) return null;
-    if (this.audioClock) return Math.max(0, this.cueAt(this.index).endMs - (this.transport as AudioTransport).positionMs());
+    if (duration === null || this.mode !== 'automatic' || (this.cover && !this.introTimed)) return null;
+    if (this.audioClock && !this.cover) return Math.max(0, this.cueAt(this.index).endMs - (this.transport as AudioTransport).positionMs());
     return Math.max(0, duration - this.elapsed());
   }
 
@@ -670,11 +689,12 @@ export class PresentationEngine {
       durationMs: current.durationMs,
       awaitingManualAdvance: state.awaitingManualAdvance,
       ...(this.withCover ? { cover: this.cover } : {}),
+      ...(this.introDurationMs !== null ? { intro: { durationMs: this.introDurationMs, auto: this.autoIntro } } : {}),
       capabilities: {
         timerIndicator: hasDuration,
-        countdown: hasDuration && this.mode === 'automatic' && this.status === 'running' && !this.cover,
+        countdown: this.status === 'running' && (this.cover ? this.introTimed : hasDuration && this.mode === 'automatic'),
         // Faixa pronta mantém o play/pause mesmo em slide sem temporizador.
-        transport: (timed || audio !== null) && this.status !== 'ready',
+        transport: (timed || this.introTimed || audio !== null) && this.status !== 'ready',
       },
       visualMode: this.visualMode,
       frozen: this.frozenFrame !== null,
@@ -764,8 +784,8 @@ export class PresentationEngine {
   /** Arma o despertador do slide atual, se há o que esperar. Sem duração, só aguarda. */
   private arm(): void {
     this.disarm();
-    if (this.cover) return;
-    if (this.audioClock) {
+    if (this.cover && !this.introTimed) return;
+    if (this.audioClock && !this.cover) {
       // O despertador só acorda o motor perto do fim do intervalo; quem decide é a posição da faixa.
       if (this.status !== 'running' || this.pendingSeek !== null) return;
       const remaining = this.cueAt(this.index).endMs - (this.transport as AudioTransport).positionMs();
@@ -800,6 +820,10 @@ export class PresentationEngine {
    * despertador e por quem hospeda o motor (visibilidade, verificação periódica).
    */
   reconcile(): void {
+    if (this.cover) {
+      this.reconcileIntro();
+      return;
+    }
     if (this.audioClock) {
       this.followAudio();
       return;
@@ -851,6 +875,23 @@ export class PresentationEngine {
     this.changed();
   }
 
+  /** Temporizador da introdução vencido: a letra entra sozinha, como se o operador tivesse avançado. */
+  private reconcileIntro(): void {
+    if (this.disposed || this.status !== 'running' || !this.introTimed || this.anchor === null) return;
+    const overshoot = this.elapsed() - (this.introDurationMs as number);
+    if (overshoot < 0) {
+      this.arm();
+      return;
+    }
+    if (overshoot > SUSPENSION_THRESHOLD_MS) {
+      // Suspensão: fica na abertura, em pausa, com a introdução inteira pela frente.
+      this.notifySuspension();
+      return;
+    }
+    this.leaveCover();
+    this.changed();
+  }
+
   private changed(): void {
     this.sequenceNumber += 1;
     this.view = null;
@@ -862,6 +903,9 @@ export class PresentationEngine {
   /** Sai da abertura para o slide escolhido; é aqui que o tempo do slide começa a contar. */
   private leaveCover(): CommandResult {
     this.cover = false;
+    // O que a introdução já contou não entra no tempo do primeiro slide.
+    this.accumulatedMs = 0;
+    this.anchor = null;
     if (this.linked) {
       // A faixa não é reposicionada: no automático a letra entra onde a música está.
       this.followAudio();
@@ -1035,6 +1079,11 @@ export class PresentationEngine {
         if (command.mode === this.mode) return OK;
         this.mode = command.mode;
         this.pauseManualTiming();
+        if (this.cover) {
+          // Na abertura só o temporizador da introdução pode estar contando.
+          this.restartInterval();
+          return OK;
+        }
         if (this.linked) {
           // A faixa não é reposicionada: no automático os slides passam a seguir a
           // posição em que ela está; no manual, deixam de segui-la.
@@ -1047,6 +1096,12 @@ export class PresentationEngine {
         // Para o automático: intervalo completo. Para o manual: nenhum avanço armado.
         this.restartInterval();
         this.beginManualTiming();
+        return OK;
+      case 'setAutoIntro':
+        if (this.introDurationMs === null || typeof command.enabled !== 'boolean') return fail('invalid-value');
+        if (command.enabled === this.autoIntro) return OK;
+        this.autoIntro = command.enabled;
+        if (this.cover) this.restartInterval();
         return OK;
       case 'completeManualTiming':
         return this.completeManualTiming();

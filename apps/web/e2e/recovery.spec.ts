@@ -376,7 +376,7 @@ test('AT-21: atualização chega durante a apresentação — nenhuma recarga, n
   await createSong(page, { durations: ['30', '30', null], install: true });
   await openOperator(page);
   const projection = await openProjection(context, page);
-  await page.getByRole('button', { name: 'Automático' }).first().click();
+  await page.getByRole('button', { name: 'Semi-automático' }).first().click();
   await startShow(page);
   await expect(operator(page)).toHaveAttribute('data-status', 'running');
   const sessionId = await operator(page).getAttribute('data-session-id');

@@ -43,6 +43,9 @@ export function buildServiceWorker(options = {}) {
     entries.push({ url, sha256: sha256(readFileSync(join(appDir, file))) });
   }
   for (const file of walk(staticDir)) {
+    // O runtime do reconhecimento de fala (~27 MB) não entra no aplicativo offline:
+    // é servido de public/asr/ e baixado só quando uma faixa é analisada.
+    if (file.endsWith('.wasm')) continue;
     entries.push({ url: toUrl('/_next/static', staticDir, file), sha256: sha256(readFileSync(file)) });
   }
   for (const dir of PUBLIC_DIRS) {

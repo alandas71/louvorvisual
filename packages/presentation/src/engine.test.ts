@@ -593,3 +593,81 @@ describe('aparência inicial (preferências do operador)', () => {
     expect(engine.getView().current.style).toEqual(plain.getView().current.style);
   });
 });
+
+describe('temporizador da introdução (modo automático)', () => {
+  function intro(durations: readonly (number | null)[], introDurationMs: number | null, mode: 'manual' | 'automatic' = 'automatic') {
+    const { snapshot } = timedSong(durations, (arrangement) => ({ ...arrangement, introDurationMs }));
+    const clock = new ManualClock();
+    const engine = new PresentationEngine({ snapshot, clock, sessionId: 'session-1', mode, cover: true });
+    const run = (command: OperatorCommand) => engine.execute(command);
+    return { clock, engine, run, at: () => engine.getState() };
+  }
+
+  it('a letra entra sozinha quando a introdução termina e o primeiro slide conta do zero', () => {
+    const { clock, engine, run, at } = intro([8 * S, 12 * S], 5 * S);
+    run({ type: 'start' });
+    expect(at()).toMatchObject({ cover: true, awaitingManualAdvance: false });
+    expect(engine.getView().controls).toMatchObject({ intro: { durationMs: 5 * S, auto: true }, capabilities: { countdown: true, transport: true } });
+    clock.advance(4 * S);
+    expect(at().cover).toBe(true);
+    expect(engine.remainingMs()).toBe(1 * S);
+    clock.advance(1 * S);
+    expect(at()).toMatchObject({ cover: false, currentIndex: 0, elapsedInSlideMs: 0 });
+    clock.advance(8 * S);
+    expect(at()).toMatchObject({ cover: false, currentIndex: 1 });
+  });
+
+  it('pausar segura a introdução e retomar continua de onde parou', () => {
+    const { clock, run, at } = intro([8 * S], 5 * S);
+    run({ type: 'start' });
+    clock.advance(3 * S);
+    run({ type: 'pause' });
+    clock.advance(60 * S);
+    expect(at()).toMatchObject({ cover: true, status: 'paused' });
+    run({ type: 'resume' });
+    clock.advance(2 * S - 1);
+    expect(at().cover).toBe(true);
+    clock.advance(1);
+    expect(at().cover).toBe(false);
+  });
+
+  it('avançar antes do fim da introdução mostra a letra na hora', () => {
+    const { clock, run, at } = intro([8 * S, 8 * S], 5 * S);
+    run({ type: 'start' });
+    clock.advance(2 * S);
+    run({ type: 'next' });
+    expect(at()).toMatchObject({ cover: false, currentIndex: 0, elapsedInSlideMs: 0 });
+    clock.advance(5 * S);
+    expect(at().currentIndex).toBe(0);
+  });
+
+  it('no semi-automático e no manual a abertura espera o operador', () => {
+    const semi = intro([8 * S], 5 * S);
+    expect(semi.run({ type: 'setAutoIntro', enabled: false })).toEqual({ ok: true });
+    semi.run({ type: 'start' });
+    semi.clock.advance(60 * S);
+    expect(semi.at()).toMatchObject({ cover: true, awaitingManualAdvance: true });
+    expect(semi.engine.getView().controls.capabilities.countdown).toBe(false);
+    // Voltar ao automático na abertura conta a introdução inteira.
+    semi.run({ type: 'setAutoIntro', enabled: true });
+    semi.clock.advance(5 * S);
+    expect(semi.at().cover).toBe(false);
+
+    const manual = intro([8 * S], 5 * S, 'manual');
+    manual.run({ type: 'start' });
+    manual.clock.advance(60 * S);
+    expect(manual.at().cover).toBe(true);
+    manual.run({ type: 'setMode', mode: 'automatic' });
+    manual.clock.advance(5 * S);
+    expect(manual.at().cover).toBe(false);
+  });
+
+  it('sem temporizador da introdução não existe o modo automático completo', () => {
+    const { clock, engine, run, at } = intro([8 * S], null);
+    expect(engine.getView().controls.intro).toBeUndefined();
+    expect(run({ type: 'setAutoIntro', enabled: true })).toEqual({ ok: false, reason: 'invalid-value' });
+    run({ type: 'start' });
+    clock.advance(60 * S);
+    expect(at().cover).toBe(true);
+  });
+});

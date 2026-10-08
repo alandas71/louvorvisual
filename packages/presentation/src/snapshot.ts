@@ -115,7 +115,7 @@ export type SessionSnapshot = {
   createdAt: IsoInstant;
   /** `notes` são privadas do operador: ficam no snapshot e nunca entram no estado visual enviado à saída. */
   song: SnapshotSource & { title: string; artist: string | null; notes: string };
-  arrangement: SnapshotSource & { name: string; defaultMode: PresentationMode };
+  arrangement: SnapshotSource & { name: string; defaultMode: PresentationMode; introDurationMs?: number };
   themePresetId: ThemePresetId;
   fontId: BundledFontId;
   fontChosen: boolean;
@@ -218,6 +218,7 @@ export function prepareSnapshot(input: PrepareInput): PrepareResult {
       localGeneration: input.arrangementGeneration,
       name: arrangement.name,
       defaultMode: arrangement.defaultMode,
+      ...(typeof arrangement.introDurationMs === 'number' ? { introDurationMs: arrangement.introDurationMs } : {}),
     },
     themePresetId: visual.preset.presetId,
     fontId: visual.fontId,

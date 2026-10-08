@@ -1,15 +1,15 @@
-/** Mesma versão de scripts/copy-vad-assets.mjs. */
-const VAD_ASSETS = '/vad/v1/';
+import type { FirstVoiceRequest, FirstVoiceResponse } from './firstVoice.worker';
+import { firstVoiceStorageKey } from './lyricsStart';
+
 const SAMPLE_RATE = 16_000;
-/** A primeira voz está no começo da música: não vale analisar a faixa inteira. */
+/** A letra entra no começo da música: não vale analisar a faixa inteira. */
 const ANALYSIS_LIMIT_S = 240;
-const STORAGE_PREFIX = 'lv:first-voice:v1:';
 
 const pending = new Map<string, Promise<number | null>>();
 
-function remembered(sha256: string): number | null | undefined {
+function remembered(key: string): number | null | undefined {
   try {
-    const stored = window.localStorage.getItem(STORAGE_PREFIX + sha256);
+    const stored = window.localStorage.getItem(key);
     if (stored === null) return undefined;
     return stored === 'none' ? null : Number(stored);
   } catch {
@@ -17,60 +17,63 @@ function remembered(sha256: string): number | null | undefined {
   }
 }
 
-function remember(sha256: string, value: number | null): void {
+function remember(key: string, value: number | null): void {
   try {
-    window.localStorage.setItem(STORAGE_PREFIX + sha256, value === null ? 'none' : String(value));
+    window.localStorage.setItem(key, value === null ? 'none' : String(value));
   } catch {
     // Sem armazenamento, a próxima sessão analisa de novo.
   }
 }
 
-async function analyze(blob: Blob): Promise<number | null> {
+async function analyze(blob: Blob, lyrics: string): Promise<number | null> {
   // Decodificar em um contexto de 16 kHz já entrega o áudio na taxa que o modelo usa.
   const decoded = await new OfflineAudioContext(1, 1, SAMPLE_RATE).decodeAudioData(await blob.arrayBuffer());
   const length = Math.min(decoded.length, ANALYSIS_LIMIT_S * SAMPLE_RATE);
-  const mono = new Float32Array(length);
+  const samples = new Float32Array(length);
   for (let channel = 0; channel < decoded.numberOfChannels; channel++) {
     const data = decoded.getChannelData(channel);
-    for (let i = 0; i < length; i++) mono[i] = (mono[i] as number) + (data[i] as number) / decoded.numberOfChannels;
+    for (let i = 0; i < length; i++) samples[i] = (samples[i] as number) + (data[i] as number) / decoded.numberOfChannels;
   }
 
-  const { NonRealTimeVAD } = await import('@ricky0123/vad-web');
-  const vad = await NonRealTimeVAD.new({
-    modelURL: `${VAD_ASSETS}silero_vad_legacy.onnx`,
-    // Um trecho curto de instrumento parecido com voz não conta como a entrada do canto.
-    minSpeechMs: 500,
-    ortConfig: (ort) => {
-      ort.env.wasm.wasmPaths = VAD_ASSETS;
-      ort.env.wasm.numThreads = 1;
-    },
-  });
-  for await (const speech of vad.run(mono, SAMPLE_RATE)) return Math.round(speech.start);
-  return null;
+  // O reconhecimento leva de segundos a minutos: roda fora da janela, para o painel não travar.
+  const worker = new Worker(new URL('./firstVoice.worker.ts', import.meta.url), { type: 'module' });
+  try {
+    return await new Promise<number | null>((resolve, reject) => {
+      worker.addEventListener('message', (event: MessageEvent<FirstVoiceResponse>) => (event.data.ok ? resolve(event.data.startMs) : reject(new Error(event.data.message))));
+      worker.addEventListener('error', (event) => reject(new Error(event.message)));
+      const request: FirstVoiceRequest = { samples, lyrics };
+      worker.postMessage(request, [samples.buffer]);
+    });
+  } finally {
+    worker.terminate();
+  }
 }
 
 /**
- * Posição (ms, no arquivo) em que a voz entra pela primeira vez na faixa, ou
- * `null` se nenhuma voz foi encontrada. O resultado fica guardado por arquivo;
- * o modelo e o runtime só são baixados quando há uma faixa nova para analisar.
- * Rejeita se a análise não puder rodar (sem rede para baixar o modelo, por exemplo).
+ * Posição (ms, no arquivo) em que a letra do louvor começa a ser cantada na
+ * faixa, ou `null` se ela não foi reconhecida. A faixa é transcrita por
+ * reconhecimento de fala e comparada com a letra, então a introdução
+ * instrumental não conta. O resultado fica guardado por arquivo e letra; o
+ * modelo só é baixado quando há uma faixa nova para analisar. Rejeita se a
+ * análise não puder rodar (sem rede para baixar o modelo, por exemplo).
  */
-export function firstVoiceMs(blob: Blob, sha256: string): Promise<number | null> {
-  const known = remembered(sha256);
+export function firstVoiceMs(blob: Blob, sha256: string, lyrics: string): Promise<number | null> {
+  const key = firstVoiceStorageKey(sha256, lyrics);
+  const known = remembered(key);
   if (known !== undefined) return Promise.resolve(known);
-  let running = pending.get(sha256);
+  let running = pending.get(key);
   if (!running) {
-    running = analyze(blob).then(
+    running = analyze(blob, lyrics).then(
       (value) => {
-        remember(sha256, value);
+        remember(key, value);
         return value;
       },
       (error: unknown) => {
-        pending.delete(sha256);
+        pending.delete(key);
         throw error;
       },
     );
-    pending.set(sha256, running);
+    pending.set(key, running);
   }
   return running;
 }

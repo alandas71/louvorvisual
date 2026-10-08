@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/copy-vad-assets.mjs && next dev",
-    "build": "node scripts/copy-vad-assets.mjs && next build && node scripts/generate-sw.mjs",
+    "dev": "node scripts/copy-asr-assets.mjs && next dev",
+    "build": "node scripts/copy-asr-assets.mjs && next build && node scripts/generate-sw.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
@@ -14,12 +14,12 @@
     "icons:build": "node scripts/build-icons.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.1",
     "@louvorvisual/contracts": "*",
     "@louvorvisual/domain": "*",
     "@louvorvisual/pack": "*",
     "@louvorvisual/presentation": "*",
     "@louvorvisual/sync": "*",
-    "@ricky0123/vad-web": "0.0.31",
     "clsx": "2.1.1",
     "dexie": "4.4.6",
     "next": "16.3.8",

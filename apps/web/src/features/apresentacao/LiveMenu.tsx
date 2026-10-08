@@ -55,6 +55,43 @@ function ScopePicker({ name, value, onChange }: { name: string; value: AdjustSco
 const pill = (active: boolean) => cn(buttonClass('secondary', 'sm'), active && pressedClass);
 
 /**
+ * Modo de avanço. Semi-automático: a abertura espera o operador e depois os
+ * tempos dos slides correm. Automático: a abertura também tem tempo, o
+ * temporizador da introdução, que só se define no editor; sem ele, o botão
+ * fica desligado.
+ */
+export function ModeButtons({ controls, dispatch, variant = 'pill' }: { controls: ControlsState; dispatch: Dispatch; variant?: 'pill' | 'ghost' }) {
+  const style = (active: boolean) => (variant === 'pill' ? pill(active) : cn(buttonClass('ghost', 'sm'), active && pressedClass));
+  const timed = controls.mode === 'automatic';
+  const full = timed && controls.intro?.auto === true;
+  function choose(mode: 'manual' | 'automatic', autoIntro?: boolean) {
+    if (autoIntro !== undefined && controls.intro && controls.intro.auto !== autoIntro) dispatch({ type: 'setAutoIntro', enabled: autoIntro });
+    if (controls.mode !== mode) dispatch({ type: 'setMode', mode });
+  }
+  return (
+    <>
+      <button type="button" className={style(controls.mode === 'manual')} aria-pressed={controls.mode === 'manual'} onClick={() => choose('manual')}>
+        Manual
+      </button>
+      <button type="button" className={style(timed && !full)} aria-pressed={timed && !full} data-testid="mode-semi" onClick={() => choose('automatic', false)}>
+        Semi-automático
+      </button>
+      <button
+        type="button"
+        className={style(full)}
+        aria-pressed={full}
+        data-testid="mode-automatic"
+        disabled={!controls.intro}
+        title={controls.intro ? undefined : 'Defina o temporizador da introdução no editor do louvor para usar o automático.'}
+        onClick={() => choose('automatic', true)}
+      >
+        Automático
+      </button>
+    </>
+  );
+}
+
+/**
  * Ajustes ao vivo (planejamento/20). Só envia comandos: quem executa é o motor
  * único, esteja este menu no painel do operador ou numa saída com controles.
  */
@@ -158,16 +195,16 @@ export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHi
 
       <Section title="Avanço">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Modo de avanço">
-          <button type="button" className={pill(controls.mode === 'manual')} aria-pressed={controls.mode === 'manual'} onClick={() => dispatch({ type: 'setMode', mode: 'manual' })}>
-            Manual
-          </button>
-          <button type="button" className={pill(controls.mode === 'automatic')} aria-pressed={controls.mode === 'automatic'} onClick={() => dispatch({ type: 'setMode', mode: 'automatic' })}>
-            Automático
-          </button>
+          <ModeButtons controls={controls} dispatch={dispatch} />
         </div>
+        <p className="text-xs text-muted" data-testid="intro-timer-info">
+          {controls.intro
+            ? `Automático: a letra entra sozinha ${(controls.intro.durationMs / 1000).toLocaleString('pt-BR')} s depois de iniciar. O tempo da introdução é definido no editor.`
+            : 'O automático precisa do temporizador da introdução, definido no editor do louvor.'}
+        </p>
         {controls.awaitingManualAdvance && (
           <p className="text-xs text-muted" data-testid="awaiting-advance">
-            Este slide não tem tempo: o automático espera você avançar.
+            {controls.cover ? 'Abertura na tela: avance para mostrar a letra.' : 'Este slide não tem tempo: o avanço espera você.'}
           </p>
         )}
       </Section>

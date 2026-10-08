@@ -39,6 +39,7 @@ const PROJECTION_COMMANDS: ReadonlySet<OperatorCommand['type']> = new Set([
   'first',
   'goTo',
   'setMode',
+  'setAutoIntro',
   'setVisualMode',
   'setFrozen',
   'adjust',
