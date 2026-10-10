@@ -16,3 +16,4 @@ export * from './editing';
 export * from './history';
 export * from './search';
 export * from './authoring';
+export * from './youtube';

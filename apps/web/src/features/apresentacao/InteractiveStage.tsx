@@ -4,6 +4,7 @@ import type { ControlsState, OutputFrame, Rotation } from '@louvorvisual/present
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { SlideView } from '@/components/SlideView';
 import { cn } from '@/lib/utils';
+import { enterPresentationFullscreen, exitPresentationFullscreen } from '@/presentation/fullscreen';
 import { CloseIcon, FullscreenIcon, LandscapeIcon, LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PortraitIcon, PreviousIcon, SmallerIcon, TimerIcon } from './icons';
 import { formatSeconds } from './labels';
 import { LiveMenu, type Dispatch } from './LiveMenu';
@@ -100,7 +101,7 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
   function toggleFullscreen() {
     setFullscreenError(false);
-    const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    const request = document.fullscreenElement ? exitPresentationFullscreen() : enterPresentationFullscreen();
     // O navegador pode recusar (sem gesto, política da janela): avisar e deixar tentar de novo.
     request.catch(() => setFullscreenError(true));
   }

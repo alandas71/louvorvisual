@@ -36,3 +36,4 @@ contexto_base.md
 **/*.md
 **/.env.example
 !apps/api/.env.example
+louvores

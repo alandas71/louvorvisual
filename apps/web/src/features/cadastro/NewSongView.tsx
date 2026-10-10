@@ -27,6 +27,8 @@ import { importAudioFile, listSongIndex, saveDocuments, useLocalSession, type Lo
 import { estimateFreeSpace, probeAudio } from '../audio/htmlTransport';
 import { lyricsFromLrclib, searchLrclib, type LrclibTrack } from '../editor/lrclib';
 
+import { YoutubeImport } from './YoutubeImport';
+
 const SPLIT = { maxLines: maxLinesForStyle(themePreset(DEFAULT_THEME_PRESET_ID).style) };
 
 /** Prévia determinística: os IDs daqui são descartados; os definitivos nascem ao salvar. */
@@ -156,9 +158,15 @@ function NewSongForm({ session }: { session: LocalSession }) {
   const sections = suggestion.parsed.sections.length;
 
   return (
-    <form onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-6" noValidate>
-      <PageHeader title="Novo louvor" />
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Novo louvor"
+        description="Importe pela URL do YouTube ou preencha o título e a letra manualmente."
+      />
 
+      <YoutubeImport session={session} />
+
+      <form onSubmit={(event) => void onSubmit(event)} noValidate>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className={cn(cardClass, 'flex flex-col gap-5 p-4 sm:p-6')}>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -303,7 +311,8 @@ function NewSongForm({ session }: { session: LocalSession }) {
           </div>
         </div>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }
 

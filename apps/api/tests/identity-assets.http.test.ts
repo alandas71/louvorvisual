@@ -13,6 +13,31 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 const wav = Buffer.from('RIFF\x24\x00\x00\x00WAVEfmt ', 'binary');
 
 describe('identidade, isolamento e arquivos privados', () => {
+  it.each([
+    ['m4a', 'audio/mp4', [0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32]],
+    ['aac', 'audio/aac', [0xff, 0xf1, 0x50, 0x80, 0, 0x1f, 0xfc]],
+    ['opus', 'audio/ogg', [79, 103, 103, 83, 0, 2]],
+    ['flac', 'audio/flac', [102, 76, 97, 67]],
+    ['webm', 'audio/webm', [0x1a, 0x45, 0xdf, 0xa3]],
+  ])('recebe %s e recusa conteúdo de outro formato', async (extension, mimeType, bytes) => {
+    const app = createApp();
+    const admin = await signup(app, 'Admin', `format-${extension}@example.test`);
+    const ws = await request(app).post('/api/v1/workspaces').set(auth(admin.token)).send({ name: 'Louvor', timezone: 'UTC' }).expect(201);
+    const workspaceId = ws.body.data.id as string;
+    for (const [content, status] of [[Buffer.from(bytes), 200], [wav, 415]] as const) {
+      const id = randomUUID();
+      const created = await request(app).post(`/api/v1/workspaces/${workspaceId}/assets`).set(auth(admin.token)).send({
+        id, sha256: createHash('sha256').update(content).digest('hex'), filename: `faixa.${extension}`,
+        mimeType, byteSize: content.length, audioKind: 'playback', durationMs: null,
+      }).expect(201);
+      await request(app).put(`/api/v1/workspaces/${workspaceId}/assets/${id}/content`).set(auth(admin.token))
+        .set('Content-Type', mimeType).set('Upload-Attempt-Id', created.body.data.uploadId).send(content).expect(status);
+      if (status === 200) {
+        await request(app).get(`/api/v1/workspaces/${workspaceId}/assets/${id}/content`).set(auth(admin.token)).expect(200).expect('Content-Type', mimeType);
+      }
+    }
+  });
+
   it('isola espaços, aplica papéis, protege o último admin e publica áudio somente após checksum', async () => {
     const app = createApp();
     const admin = await signup(app, 'Admin', 'admin@example.test');

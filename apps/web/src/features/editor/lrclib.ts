@@ -1,4 +1,4 @@
-import { normalizeForComparison } from '@louvorvisual/domain';
+import { normalizeForComparison, parseSyncedLyrics } from '@louvorvisual/domain';
 
 /** Cliente mínimo da API pública LRCLIB e leitor de timestamps LRC por linha. */
 export type LrclibTrack = {
@@ -12,27 +12,7 @@ export type LrclibTrack = {
   syncedLyrics: string | null;
 };
 
-export type TimedLyricLine = { startMs: number; text: string };
-
-const LRC_TIME = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
-
-/** Ignora tags de metadados e expande linhas que tenham mais de uma marcação. */
-export function parseSyncedLyrics(source: string): TimedLyricLine[] {
-  const lines: TimedLyricLine[] = [];
-  for (const sourceLine of source.replace(/^\uFEFF/, '').split(/\r?\n/)) {
-    const times: number[] = [];
-    for (const match of sourceLine.matchAll(LRC_TIME)) {
-      const minutes = Number(match[1]);
-      const seconds = Number(match[2]);
-      const fraction = match[3] ? Number(`0.${match[3]}`) * 1000 : 0;
-      if (Number.isFinite(minutes) && Number.isFinite(seconds) && seconds < 60) times.push(Math.round((minutes * 60 + seconds) * 1000 + fraction));
-    }
-    const text = sourceLine.replace(LRC_TIME, '').trim();
-    if (times.length === 0 || text === '') continue;
-    for (const startMs of times) lines.push({ startMs, text });
-  }
-  return lines.sort((a, b) => a.startMs - b.startMs);
-}
+export { parseSyncedLyrics, type TimedLyricLine } from '@louvorvisual/domain';
 
 function words(value: string) {
   return normalizeForComparison(value).split(' ').filter(Boolean);

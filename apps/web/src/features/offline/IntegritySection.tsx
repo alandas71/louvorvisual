@@ -66,8 +66,8 @@ export function IntegritySection({ buttonClassName }: { buttonClassName: string 
     if (!session) return;
     try {
       await discardMediaForDownload(session.db, problem.assetId);
-      syncEngine(session).syncNow();
-      setMessage(`"${problem.filename}" será baixado de novo e conferido na sincronização. Acompanhe em "Sincronização" e confira outra vez depois.`);
+      await syncEngine(session).downloadAssets([problem.assetId]);
+      setMessage(`"${problem.filename}" foi baixado de novo e conferido.`);
       await scan(false);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : 'Não foi possível descartar o arquivo.');

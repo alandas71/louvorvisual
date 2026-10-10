@@ -10,12 +10,15 @@ import {
   type AudioKind,
   type Uuid,
 } from '@louvorvisual/domain';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AudioImport, type ImportStatus } from '@/components/ui/AudioImport';
 import { buttonClass } from '@/components/ui/buttonStyles';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
-import { assetPresent, getAsset, importAudioFile, readAssetBlob, type ImportProgress, type LocalSession } from '@/local';
+import { assetPresent, getAsset, importAudioFile, type ImportProgress, type LocalSession } from '@/local';
+import { useLibraryVersion } from '@/sync/hooks';
+import { ListenAudio } from '../audio/ListenAudio';
+import { DownloadAudioButton } from '../audio/DownloadAudioButton';
 import { estimateFreeSpace, formatBytes, formatClock, probeAudio } from '../audio/htmlTransport';
 
 const KIND_TEXT: Record<AudioKind, { title: string; importLabel: string }> = {
@@ -46,6 +49,7 @@ type AudioSectionProps = {
  */
 export function AudioSection({ session, arrangement, onChange }: AudioSectionProps) {
   const [info, setInfo] = useState<Record<Uuid, AssetInfo>>({});
+  const version = useLibraryVersion();
   const assetIds = arrangement.audioBindings.map((binding) => binding.assetId).join(',');
 
   // Arranjos antigos podiam guardar uma faixa vinculada. Ao abri-los no editor,
@@ -75,7 +79,7 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
     return () => {
       current = false;
     };
-  }, [session, assetIds]);
+  }, [session, assetIds, version]);
 
   async function importFile(kind: AudioKind, file: File, onProgress: (status: ImportStatus) => void) {
     const context = session.context();
@@ -165,7 +169,7 @@ type TrackProps = {
   onRemove: () => void;
 };
 
-function Track({ session, arrangement, binding, info, onUpdate, onRemove }: TrackProps) {
+function Track({ session, binding, info, onUpdate, onRemove }: TrackProps) {
   const [offset, setOffset] = useState(formatTimerSeconds(binding.offsetMs));
   const asset = info?.asset ?? null;
   const duration = asset?.durationMs ?? null;
@@ -195,10 +199,12 @@ function Track({ session, arrangement, binding, info, onUpdate, onRemove }: Trac
         </p>
       )}
       <p data-testid="audio-availability" className={info.present ? 'text-muted' : 'text-danger'} role={info.present ? undefined : 'alert'}>
-        {info.present ? '✓ Disponível neste dispositivo' : '⚠ O arquivo não está neste dispositivo. Importe-o de novo para usar a faixa.'}
+        {info.present ? '✓ Disponível neste dispositivo' : session.team && asset?.remoteState === 'ready' ? 'O áudio está na equipe. Você pode ouvir online ou baixar para ouvir offline.' : '⚠ O arquivo não está neste dispositivo. Importe-o de novo para usar a faixa.'}
       </p>
 
-      {info.present && asset && <Listen session={session} asset={asset} />}
+      {!info.present && asset && <DownloadAudioButton session={session} assetId={asset.id} title={asset.filename} />}
+
+      {asset && (info.present || (session.team && asset.remoteState === 'ready')) && <ListenAudio session={session} asset={asset} />}
 
       <div>
         <Label htmlFor={`volume-${binding.id}`}>Volume inicial · {Math.round(binding.volume * 100)}%</Label>
@@ -215,38 +221,4 @@ function Track({ session, arrangement, binding, info, onUpdate, onRemove }: Trac
       </button>
     </div>
   );
-}
-
-/** Teste audível no editor: toca os bytes guardados, por uma URL criada só enquanto o player está aberto. */
-function Listen({ session, asset }: { session: LocalSession; asset: Asset }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const created = useRef<string | null>(null);
-
-  useEffect(
-    () => () => {
-      if (created.current) URL.revokeObjectURL(created.current);
-    },
-    [],
-  );
-
-  async function open() {
-    const blob = await readAssetBlob(session.db, asset.workspaceId, asset.sha256);
-    if (!blob) {
-      setFailed(true);
-      return;
-    }
-    created.current = URL.createObjectURL(blob);
-    setUrl(created.current);
-  }
-
-  if (failed) return <p role="alert" className="text-xs text-danger">Não foi possível abrir o arquivo guardado.</p>;
-  if (!url) {
-    return (
-      <button type="button" className={buttonClass('secondary', 'sm', 'self-start')} onClick={() => void open()}>
-        ▶ Ouvir
-      </button>
-    );
-  }
-  return <audio controls src={url} className="w-full" data-testid="audio-listen" onError={() => setFailed(true)} />;
 }

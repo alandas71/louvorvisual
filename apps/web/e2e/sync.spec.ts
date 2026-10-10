@@ -182,18 +182,29 @@ test('AT-10: criar e importar áudio offline, reconectar e convergir no segundo 
     expect(onB[table]!.map((row) => row.id).sort(), table).toEqual(onA[table]!.map((row) => row.id).sort());
     expect(onB[table]).toHaveLength(1);
   }
-  // Bytes presentes e conferidos: mesmo hash e tamanho do arquivo importado em A.
-  expect(onB.assetBlobs).toHaveLength(1);
-  expect(onB.assetBlobs![0]).toMatchObject({ state: 'ready', sha256: onA.assetBlobs![0]!.sha256, byteSize: audio.buffer.length, blobSize: audio.buffer.length });
+  // A sincronização traz os registros, sem baixar o áudio.
+  expect(onB.assetBlobs).toHaveLength(0);
   expect(onB.assets![0]).toMatchObject({ remoteState: 'ready', sha256: onA.assetBlobs![0]!.sha256 });
   expect((onB.entityStates as unknown as LocalState[]).every((state) => state.dirty === 0 && state.serverRevision === '1')).toBe(true);
   expect(logB.pushes).toHaveLength(0);
 
-  // O louvor aparece na biblioteca de B e a faixa está disponível no editor.
+  // Ouvir online não grava bytes; o download é uma escolha para uso offline.
   await gotoView(b, 'biblioteca');
   await expect(b.getByTestId('library-item')).toHaveCount(1);
   await openEditor(b, song.id);
-  await expect(b.getByTestId('audio-playback').getByTestId('audio-track')).toHaveAttribute('data-present', 'true');
+  const track = b.getByTestId('audio-playback').getByTestId('audio-track');
+  await expect(track).toHaveAttribute('data-present', 'false');
+  await track.getByRole('button', { name: 'Ouvir playback-manha.wav', exact: true }).click();
+  const player = track.getByTestId('audio-listen');
+  await expect(player).toHaveAttribute('src', new RegExp('/api/v1/workspaces/.*/assets/.*/content'));
+  await player.evaluate(async (element: HTMLAudioElement) => { await element.play(); });
+  await expect.poll(() => player.evaluate((element: HTMLAudioElement) => element.currentTime)).toBeGreaterThan(0);
+  await player.evaluate((element: HTMLAudioElement) => element.pause());
+  expect((await readDb(b, teamB.dbName, ['assetBlobs'])).assetBlobs).toHaveLength(0);
+  await track.getByRole('button', { name: 'Baixar playback-manha.wav', exact: true }).click();
+  await expect(track).toHaveAttribute('data-present', 'true');
+  const downloaded = await readDb(b, teamB.dbName, ['assetBlobs']);
+  expect(downloaded.assetBlobs![0]).toMatchObject({ state: 'ready', sha256: onA.assetBlobs![0]!.sha256, byteSize: audio.buffer.length, blobSize: audio.buffer.length });
 });
 
 test('AT-11: duas pessoas editam a mesma revisão offline; conflito explícito; resolução produz nova revisão', async () => {

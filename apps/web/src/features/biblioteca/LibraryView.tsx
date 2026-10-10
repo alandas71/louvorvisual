@@ -17,6 +17,7 @@ import {
   type SongIndexRow,
 } from '@/local';
 import { useLibraryVersion } from '@/sync/hooks';
+import { DownloadAudioButton } from '../audio/DownloadAudioButton';
 
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const PAGE_SIZE = 30;
@@ -157,6 +158,7 @@ function Library({ session }: { session: LocalSession }) {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 max-sm:w-full">
+                    <DownloadAudioButton session={session} songId={row.id} title={row.title} />
                     <button type="button" className={buttonClass('secondary', 'sm', 'border-accent/50 text-accent hover:border-accent max-sm:flex-1')} onClick={() => setLocalQuery({ view: 'apresentar', song: row.id, arranjo: null })} aria-label={`Apresentar ${row.title}`}>
                       ▶ Apresentar
                     </button>

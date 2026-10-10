@@ -234,6 +234,24 @@ export class SyncEngine {
     if (!this.stopped) this.setStatus({ summary });
   }
 
+  /** Download manual disponível também nas janelas que não são líderes. */
+  async downloadAssets(assetIds: readonly string[]): Promise<void> {
+    const { db, profile, team } = this.session;
+    if (!team) throw new Error('Este perfil não está conectado a uma equipe.');
+    const coordinator = new SyncCoordinator({
+      storage: this.storage,
+      transport: new HttpSyncTransport({ workspaceId: team.workspaceId, userId: team.userId }),
+      assets: new LocalAssetBytes(db, profile.profileId),
+      workspaceId: team.workspaceId,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      isPresenting,
+    });
+    const report = await coordinator.requestDownloads(assetIds);
+    if (report.downloaded > 0) this.announceLibraryChange();
+    if (report.downloadsDeferred > 0) throw new Error('Encerre a apresentação e clique em baixar novamente.');
+  }
+
   /** Ação manual "Sincronizar agora". */
   syncNow(): void {
     if (this.scheduler) this.scheduler.request(0);

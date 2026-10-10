@@ -1,4 +1,5 @@
-import { MAX_ASSET_BYTES, Sha256, type Asset, type AudioKind, type AudioMimeType, type IsoInstant, type Uuid } from '@louvorvisual/domain';
+import { AUDIO_FORMAT_LABEL, AUDIO_MIME_BY_EXTENSION, MAX_ASSET_BYTES, Sha256, sniffAudioType, type Asset, type AudioKind, type AudioMimeType, type IsoInstant, type Uuid } from '@louvorvisual/domain';
+export { sniffAudioType } from '@louvorvisual/domain';
 import type { LocalDatabase } from './db';
 import { isQuotaError, validateDocument, writeDocument } from './repository';
 import { assetBlobKey, type AssetBlobRow } from './schema';
@@ -6,7 +7,7 @@ import { assetBlobKey, type AssetBlobRow } from './schema';
 export type AudioImportErrorCode = 'unsupported-type' | 'empty' | 'too-large' | 'unplayable' | 'quota' | 'storage' | 'read';
 
 const IMPORT_ERROR_TEXT: Record<AudioImportErrorCode, string> = {
-  'unsupported-type': 'Formato não aceito. Use um arquivo MP3 ou WAV.',
+  'unsupported-type': `Formato não aceito. Use um arquivo ${AUDIO_FORMAT_LABEL}.`,
   empty: 'O arquivo está vazio.',
   'too-large': 'O arquivo passa do limite de 100 MiB por faixa.',
   unplayable: 'Este navegador não conseguiu ler o áudio: o arquivo pode estar corrompido ou em um formato que ele não reproduz.',
@@ -38,7 +39,6 @@ export type FreeSpaceEstimate = () => Promise<number | null>;
 /** Folga exigida além do tamanho do arquivo antes de aceitar a escrita. */
 export const QUOTA_MARGIN_BYTES = 8 * 1024 * 1024;
 
-const MIME_BY_EXTENSION: Record<string, AudioMimeType> = { mp3: 'audio/mpeg', wav: 'audio/wav' };
 const MIME_ALIASES: Record<string, AudioMimeType> = {
   'audio/mpeg': 'audio/mpeg',
   'audio/mp3': 'audio/mpeg',
@@ -46,24 +46,32 @@ const MIME_ALIASES: Record<string, AudioMimeType> = {
   'audio/x-wav': 'audio/wav',
   'audio/wave': 'audio/wav',
   'audio/vnd.wave': 'audio/wav',
+  'audio/mp4': 'audio/mp4',
+  'audio/m4a': 'audio/mp4',
+  'audio/x-m4a': 'audio/mp4',
+  'video/mp4': 'audio/mp4',
+  'audio/aac': 'audio/aac',
+  'audio/x-aac': 'audio/aac',
+  'audio/aacp': 'audio/aac',
+  'audio/ogg': 'audio/ogg',
+  'application/ogg': 'audio/ogg',
+  'audio/opus': 'audio/ogg',
+  'audio/flac': 'audio/flac',
+  'audio/x-flac': 'audio/flac',
+  'audio/webm': 'audio/webm',
+  'video/webm': 'audio/webm',
 };
 
 /** Tipo aceito a partir da extensão e do tipo informado; os dois precisam concordar quando existem. */
 export function declaredAudioType(filename: string, type: string): AudioMimeType | null {
-  const byExtension = MIME_BY_EXTENSION[filename.split('.').pop()?.toLowerCase() ?? ''] ?? null;
-  const byType = type === '' ? null : (MIME_ALIASES[type.toLowerCase().split(';')[0]?.trim() ?? ''] ?? null);
+  const extension = filename.includes('.') ? filename.split('.').pop()?.toLowerCase() ?? '' : '';
+  const byExtension = Object.hasOwn(AUDIO_MIME_BY_EXTENSION, extension) ? AUDIO_MIME_BY_EXTENSION[extension] : null;
+  const normalized = type.toLowerCase().split(';')[0]?.trim() ?? '';
+  const unspecified = normalized === '' || normalized === 'application/octet-stream';
+  const byType = MIME_ALIASES[normalized] ?? null;
   if (!byExtension) return null;
-  if (type !== '' && byType !== byExtension) return null;
+  if (!unspecified && byType !== byExtension) return null;
   return byExtension;
-}
-
-/** Confere o começo do arquivo: RIFF/WAVE para WAV; ID3 ou sincronismo de quadro para MP3. */
-export function sniffAudioType(head: Uint8Array): AudioMimeType | null {
-  const text = (start: number, length: number) => String.fromCharCode(...head.subarray(start, start + length));
-  if (head.length >= 12 && text(0, 4) === 'RIFF' && text(8, 4) === 'WAVE') return 'audio/wav';
-  if (head.length >= 3 && text(0, 3) === 'ID3') return 'audio/mpeg';
-  if (head.length >= 2 && head[0] === 0xff && ((head[1] as number) & 0xe0) === 0xe0) return 'audio/mpeg';
-  return null;
 }
 
 /**
@@ -126,7 +134,8 @@ export async function importAudioFile(db: LocalDatabase, input: ImportAudioInput
   }
 
   report('checking', totalBytes);
-  const durationMs = await input.probe(file).catch(() => null);
+  const audioFile = file.type === declared ? file : file.slice(0, file.size, declared);
+  const durationMs = await input.probe(audioFile).catch(() => null);
   if (durationMs === null || !(durationMs > 0)) throw new AudioImportError('unplayable');
 
   const key = assetBlobKey(workspaceId, sha256);
@@ -143,7 +152,7 @@ export async function importAudioFile(db: LocalDatabase, input: ImportAudioInput
     const free = (await input.freeSpace?.().catch(() => null)) ?? null;
     if (free !== null && free < totalBytes + QUOTA_MARGIN_BYTES) throw new AudioImportError('quota');
     report('storing', 0);
-    const staged: AssetBlobRow = { key, profileId: input.profileId, workspaceId, sha256, byteSize: totalBytes, mimeType: declared, blob: file, state: 'staged', storedAt: input.now(), verifiedAt: null };
+    const staged: AssetBlobRow = { key, profileId: input.profileId, workspaceId, sha256, byteSize: totalBytes, mimeType: declared, blob: audioFile, state: 'staged', storedAt: input.now(), verifiedAt: null };
     try {
       await db.assetBlobs.put(staged);
       // Confere o que ficou gravado, não o que foi entregue para gravar.

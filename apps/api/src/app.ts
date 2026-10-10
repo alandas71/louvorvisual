@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response } from 'express';
 import { syncBootstrapPageQuerySchema, syncBootstrapRequestSchema, syncPullQuerySchema, syncPushRequestSchema, uuidSchema, type SyncResult } from '@louvorvisual/contracts';
 import { z } from 'zod';
+import { AUDIO_MIME_TYPES, normalizeYoutubeUrl } from '@louvorvisual/domain';
 import { errorHandler, notFound } from './middlewares/errors';
 import { requestId, type RequestWithId } from './middlewares/requestId';
 import { validate } from './middlewares/validate';
@@ -11,7 +12,9 @@ import type { SyncStore } from './modules/sync/sync-store';
 import { AppError, type ErrorCode } from './utils/AppError';
 import { clientVersionAccepted, readApiConfig } from './config';
 
-type Options = { syncStore?: SyncStore; actorId?: (request: Request) => string | null; identityStore?: IdentityStore };
+import { importYoutube, type YoutubeImporter } from './modules/import/youtube-import';
+
+type Options = { youtubeImporter?: YoutubeImporter; syncStore?: SyncStore; actorId?: (request: Request) => string | null; identityStore?: IdentityStore };
 const workspaceParams = z.strictObject({ workspaceId: uuidSchema });
 const assetParams = z.strictObject({ workspaceId: uuidSchema, assetId: uuidSchema });
 const memberParams = z.strictObject({ workspaceId: uuidSchema, userId: uuidSchema });
@@ -23,7 +26,7 @@ const registerSchema = credentialsSchema.extend({ name: z.string().trim().min(1)
 const workspaceSchema = z.strictObject({ name: z.string().trim().min(1).max(200), timezone: z.string().min(1).max(64).default('UTC') });
 const inviteSchema = z.strictObject({ email: z.email(), role: roleSchema });
 const memberPatchSchema = z.strictObject({ role: roleSchema.optional(), status: z.enum(['active', 'revoked']).optional() }).refine((value) => value.role || value.status, 'empty patch');
-const assetSchema = (maxAssetBytes: number) => z.strictObject({ id: uuidSchema, sha256: z.string().regex(/^[0-9a-f]{64}$/), filename: z.string().trim().min(1).max(255), mimeType: z.enum(['audio/mpeg', 'audio/wav']), byteSize: z.int().min(1).max(maxAssetBytes), audioKind: z.enum(['original', 'playback']), durationMs: z.int().min(0).nullable() });
+const assetSchema = (maxAssetBytes: number) => z.strictObject({ id: uuidSchema, sha256: z.string().regex(/^[0-9a-f]{64}$/), filename: z.string().trim().min(1).max(255), mimeType: z.enum(AUDIO_MIME_TYPES), byteSize: z.int().min(1).max(maxAssetBytes), audioKind: z.enum(['original', 'playback']), durationMs: z.int().min(0).nullable() });
 const parseCookies = (req: Request) => Object.fromEntries((req.headers.cookie ?? '').split(';').map((x) => x.trim().split(/=(.*)/s, 2)).filter(([key]) => key).map(([key, value]) => [key, decodeURIComponent(value ?? '')]));
 const bearer = (req: Request) => req.header('authorization')?.startsWith('Bearer ') ? req.header('authorization')!.slice(7) : undefined;
 const param = (req: Request, key: string) => { const value = req.params[key]; return Array.isArray(value) ? value[0] ?? '' : value ?? ''; };
@@ -39,6 +42,32 @@ export function createApp(options: Options = {}): Express {
   const requireUser = async (req: Request) => { const current = await user(req); if (!current) throw new AppError(401, 'UNAUTHORIZED', 'Não autenticado.'); return current; };
   const csrf = (req: Request) => { const cookies = parseCookies(req); if (!bearer(req) && cookies.lv_access) { const origin = req.header('origin'); if (!origin || (config.publicOrigin && origin !== config.publicOrigin)) throw new AppError(403, 'CSRF_ORIGIN_INVALID', 'Origem não autorizada.'); } };
   const access = async (req: Request, workspaceId: string, roles: Role[]) => { if (actorOverride) { const id = actorOverride(req); if (!id) throw new AppError(401, 'UNAUTHORIZED', 'Não autenticado.'); return id; } try { const current = await requireUser(req); await identity.requireRole(workspaceId, current.id, roles); return current.id; } catch (error) { return mapIdentity(error); } };
+
+
+  const activeYoutubeImports = new Set<string>();
+  app.post('/api/v1/workspaces/:workspaceId/imports/youtube', validate({ params: workspaceParams, body: z.strictObject({ url: z.string().trim().min(1).max(2048).refine(value => normalizeYoutubeUrl(value) !== null, 'Informe a URL de um vídeo do YouTube.') }) }), async (req, res, next) => {
+    let actor: string | undefined;
+    try {
+      csrf(req);
+      actor = await access(req, param(req, 'workspaceId'), ['editor', 'admin']);
+      if (activeYoutubeImports.has(actor) || activeYoutubeImports.size >= 2) throw new AppError(429, 'DEPENDENCY_NOT_READY', 'Já há uma importação em andamento. Aguarde e tente novamente.');
+      activeYoutubeImports.add(actor);
+      const controller = new AbortController();
+      const disconnected = () => { if (!res.writableEnded) controller.abort(); };
+      res.on('close', disconnected);
+      try {
+        const { audio, ...metadata } = await (options.youtubeImporter ?? importYoutube)(req.body.url, controller.signal);
+        await access(req, param(req, 'workspaceId'), ['editor', 'admin']);
+        const form = new FormData();
+        form.set('metadata', JSON.stringify(metadata));
+        form.set('audio', new Blob([new Uint8Array(audio)], { type: 'audio/mpeg' }), 'youtube.mp3');
+        const response = new globalThis.Response(form);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('Content-Type', response.headers.get('content-type')!);
+        res.send(Buffer.from(await response.arrayBuffer()));
+      } finally { res.off('close', disconnected); activeYoutubeImports.delete(actor); }
+    } catch (error) { next(error); }
+  });
 
   app.post('/api/v1/auth/register', validate({ body: registerSchema }), async (req, res, next) => { try { csrf(req); const u = await identity.register(req.body.name, req.body.email, req.body.password); const t = await identity.issue(u.id); setCookies(res, t.accessToken, t.refreshToken); reply(res, req, { user: safeUser(u), accessToken: t.accessToken }, 201); } catch (e) { next(e); } });
   app.post('/api/v1/auth/login', validate({ body: credentialsSchema }), async (req, res, next) => { try { csrf(req); const u = await identity.login(req.body.email, req.body.password); const t = await identity.issue(u.id); setCookies(res, t.accessToken, t.refreshToken); reply(res, req, { user: safeUser(u), accessToken: t.accessToken }); } catch (e) { next(e); } });
