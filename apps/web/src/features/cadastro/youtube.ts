@@ -13,13 +13,22 @@ export async function createYoutubeSong(session: LocalSession, value: string, on
   if (!url) throw new Error('Informe a URL de um vídeo do YouTube.');
   if (!session.team || !['editor', 'admin'].includes(session.team.role)) throw new Error('Entre em uma equipe com permissão de edição para importar e publicar.');
   onStatus('Identificando o vídeo, escolhendo a letra pelo tempo e convertendo para MP3…');
-  const response = await fetch('/api/v1/workspaces/' + session.team.workspaceId + '/imports/youtube', {
-    method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }), signal: AbortSignal.timeout(11 * 60_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch('/api/v1/workspaces/' + session.team.workspaceId + '/imports/youtube', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }), signal: AbortSignal.timeout(11 * 60_000),
+    });
+  } catch {
+    throw new Error('Não foi possível alcançar o servidor de importação. Verifique a conexão e tente novamente.');
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error?.message ?? 'O servidor de importação não respondeu. Tente novamente.');
+    if (body?.error?.message) throw new Error(body.error.message);
+    if (response.status === 404 || response.status === 502 || response.status === 503) {
+      throw new Error('O servidor de importação não está conectado ao aplicativo. Configure BACKEND_URL no serviço web e reinicie os serviços.');
+    }
+    throw new Error(`O servidor de importação respondeu com erro ${response.status}. Tente novamente.`);
   }
   const form = await response.formData();
   const metadata = JSON.parse(String(form.get('metadata'))) as Metadata;

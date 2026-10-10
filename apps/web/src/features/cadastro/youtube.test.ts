@@ -64,4 +64,10 @@ describe('criar e publicar louvor do YouTube', () => {
     await expect(createYoutubeSong(session, 'https://youtu.be/abcdefghijk', () => undefined)).rejects.toThrow('equipe');
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it('mostra uma orientação de configuração quando o proxy da API não existe', async () => {
+    await open();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>not found</html>', { status: 404, headers: { 'content-type': 'text/html' } })));
+    await expect(createYoutubeSong(session, 'https://youtu.be/abcdefghijk', () => undefined)).rejects.toThrow('Configure BACKEND_URL');
+    expect(await session.db.songs.count()).toBe(0);
+  });
 });

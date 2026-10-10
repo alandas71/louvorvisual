@@ -4,7 +4,7 @@ import type { ControlsState, OutputFrame, Rotation } from '@louvorvisual/present
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { SlideView } from '@/components/SlideView';
 import { cn } from '@/lib/utils';
-import { enterPresentationFullscreen, exitPresentationFullscreen } from '@/presentation/fullscreen';
+import { enterPresentationFullscreen, unlockPresentationOrientation } from '@/presentation/fullscreen';
 import { CloseIcon, FullscreenIcon, LandscapeIcon, LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PortraitIcon, PreviousIcon, SmallerIcon, TimerIcon } from './icons';
 import { formatSeconds } from './labels';
 import { LiveMenu, type Dispatch } from './LiveMenu';
@@ -59,6 +59,10 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState(false);
   const timer = useRef<number | null>(null);
+  const [needsRotation, setNeedsRotation] = useState(false);
+  const orientationLocked = useRef(false);
+  const displayRequested = useRef(false);
+  const fullscreenBusy = useRef(false);
 
   const hasFocusedControl = useCallback(() => {
     const focused = document.activeElement;
@@ -97,13 +101,60 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
 
-  const visible = active || menuOpen || pinned;
+  useEffect(() => {
+    const release = () => {
+      if (orientationLocked.current) unlockPresentationOrientation();
+      orientationLocked.current = false;
+      displayRequested.current = false;
+    };
+    const onResize = () => {
+      if (displayRequested.current) setNeedsRotation(window.innerHeight > window.innerWidth);
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        release();
+        setNeedsRotation(false);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      release();
+    };
+  }, []);
 
-  function toggleFullscreen() {
+  const visible = active || menuOpen || pinned || needsRotation;
+
+  async function toggleFullscreen() {
+    if (fullscreenBusy.current) return;
+    fullscreenBusy.current = true;
     setFullscreenError(false);
-    const request = document.fullscreenElement ? exitPresentationFullscreen() : enterPresentationFullscreen();
-    // O navegador pode recusar (sem gesto, política da janela): avisar e deixar tentar de novo.
-    request.catch(() => setFullscreenError(true));
+    setNeedsRotation(false);
+    try {
+      if (document.fullscreenElement || displayRequested.current) {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        if (orientationLocked.current) unlockPresentationOrientation();
+        orientationLocked.current = false;
+        displayRequested.current = false;
+      } else {
+        const result = await enterPresentationFullscreen();
+        // Se a apresentação foi fechada durante o pedido, não manter a trava.
+        if (!result.active || !root.current) {
+          if (result.orientationLocked) unlockPresentationOrientation();
+          return;
+        }
+        orientationLocked.current = result.orientationLocked;
+        displayRequested.current = true;
+        // Conferir o viewport real: aceitar o pedido não garante que já girou.
+        setNeedsRotation(window.innerHeight > window.innerWidth);
+      }
+    } catch {
+      setFullscreenError(true);
+    } finally {
+      fullscreenBusy.current = false;
+    }
   }
 
   const { capabilities } = controls;
@@ -167,6 +218,13 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
             {autoAdvancing ? <span className="lv-auto-spinner" data-testid="auto-spinner" aria-hidden="true" /> : <NextIcon />}
           </CornerButton>
         </div>
+
+        {needsRotation && (
+          <div role="status" data-stage-ui data-testid="rotation-help" className="pointer-events-auto absolute bottom-20 left-4 right-4 mx-auto max-w-md rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm">
+            <p>A tela continua na vertical. Ative a rotação automática e deite o celular para o projetor acompanhar.</p>
+            <button type="button" className="mt-2 underline" onClick={() => setNeedsRotation(false)}>Fechar aviso</button>
+          </div>
+        )}
 
         {fullscreenError && (
           <p role="alert" data-stage-ui className="pointer-events-auto absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm">
