@@ -14,6 +14,32 @@ export type YoutubeImport = {
 export type YoutubeImporter = (url: string, signal: AbortSignal) => Promise<YoutubeImport>;
 type Metadata = { title?: string; track?: string; artist?: string; creator?: string; uploader?: string; duration?: number; is_live?: boolean };
 
+/** Erros conhecidos do yt-dlp/FFmpeg são convertidos em orientação útil, sem expor argumentos, caminhos ou URL. */
+function importFailure(error: unknown, signal: AbortSignal): AppError {
+  if (signal.aborted) return new AppError(504, 'DEPENDENCY_NOT_READY', 'A importação foi interrompida ou excedeu o tempo limite. Tente novamente.');
+  if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    return new AppError(503, 'DEPENDENCY_NOT_READY', 'O servidor precisa de yt-dlp, FFmpeg e ffprobe para importar do YouTube.');
+  }
+  const detail = [
+    (error as { stderr?: unknown }).stderr,
+    (error as { stdout?: unknown }).stdout,
+    error instanceof Error ? error.message : '',
+  ].filter((value): value is string => typeof value === 'string').join('\n').toLowerCase();
+  if (/private video|video is unavailable|not available|has been removed|does not exist/.test(detail)) {
+    return new AppError(422, 'DEPENDENCY_NOT_READY', 'Este vídeo não está disponível publicamente no YouTube. Escolha outra URL.');
+  }
+  if (/sign in to confirm|not a bot|verify you are human|http error 403|forbidden/.test(detail)) {
+    return new AppError(502, 'DEPENDENCY_NOT_READY', 'O YouTube bloqueou temporariamente o download deste servidor. Atualize o yt-dlp e tente novamente mais tarde.');
+  }
+  if (/ffmpeg|ffprobe/.test(detail)) {
+    return new AppError(503, 'DEPENDENCY_NOT_READY', 'O servidor não encontrou FFmpeg ou ffprobe para converter o áudio.');
+  }
+  if (/unable to extract|extractor|unsupported url/.test(detail)) {
+    return new AppError(502, 'DEPENDENCY_NOT_READY', 'O yt-dlp não conseguiu processar este vídeo. Atualize o yt-dlp no servidor e tente novamente.');
+  }
+  return new AppError(502, 'DEPENDENCY_NOT_READY', 'Não foi possível baixar este vídeo. Confirme que ele está público e atualize o yt-dlp no servidor.');
+}
+
 export function youtubeSongMetadata(info: Metadata): { title: string; artist: string } {
   const clean = (s: string) => s.replace(/\s*[([](?:official[^)\]]*|vídeo[^)\]]*|video[^)\]]*|lyric[^)\]]*|clipe[^)\]]*)[)\]]/gi, '').trim();
   const parts = clean(info.title ?? '').split(/\s+[-–—|]\s+/);
@@ -70,9 +96,7 @@ export const importYoutube: YoutubeImporter = async (value, callerSignal) => {
       rawLyrics: parseSyncedLyrics(chosen.syncedLyrics).map(line => line.text).join('\n'), syncedLyrics: chosen.syncedLyrics, lyricsId: chosen.id, audio: await readFile(audioPath) };
   } catch (error) {
     if (error instanceof AppError) throw error;
-    if (signal.aborted) throw new AppError(504, 'DEPENDENCY_NOT_READY', 'A importação foi interrompida ou excedeu o tempo limite. Tente novamente.');
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new AppError(503, 'DEPENDENCY_NOT_READY', 'O servidor precisa de yt-dlp, FFmpeg e ffprobe para importar do YouTube.');
-    throw new AppError(502, 'DEPENDENCY_NOT_READY', 'Não foi possível baixar e converter este vídeo. Verifique se ele está disponível e tente novamente.');
+    throw importFailure(error, signal);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

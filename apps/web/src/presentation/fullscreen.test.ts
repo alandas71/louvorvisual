@@ -1,79 +1,98 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { enterPresentationFullscreen, unlockPresentationOrientation } from './fullscreen';
+import { deviceOrientation, enterPresentationFullscreen, exitPresentationFullscreen } from './fullscreen';
 
-describe('rotação real na apresentação do PWA', () => {
+describe('giro físico antes da tela cheia', () => {
   const element = {};
-  const lock = vi.fn<(orientation: string) => Promise<void>>(async () => {});
-  const unlock = vi.fn();
   const requestFullscreen = vi.fn(async () => { doc.fullscreenElement = element; });
-  const doc = { fullscreenElement: null as object | null, documentElement: { requestFullscreen } };
-  const matchMedia = vi.fn<(query: string) => { matches: boolean }>(() => ({ matches: false }));
-
+  const exitFullscreen = vi.fn(async () => { doc.fullscreenElement = null; });
+  const doc = { exitFullscreen, fullscreenElement: null as object | null, documentElement: { requestFullscreen } };
+  const matchMedia = vi.fn((query: string) => ({ matches: query === '(pointer: coarse)' }));
+  const lock = vi.fn();
+  const win = { matchMedia, innerWidth: 360, innerHeight: 800, orientation: undefined as number | undefined };
   beforeEach(() => {
     vi.clearAllMocks();
     doc.fullscreenElement = null;
     doc.documentElement.requestFullscreen = requestFullscreen;
+    win.orientation = undefined;
+    win.innerWidth = 360;
+    win.innerHeight = 800;
     vi.stubGlobal('document', doc);
-    vi.stubGlobal('screen', { orientation: { lock, unlock } });
-    vi.stubGlobal('window', { matchMedia });
+    vi.stubGlobal('window', win);
     vi.stubGlobal('navigator', {});
+    vi.stubGlobal('screen', { orientation: { type: 'portrait-primary', lock } });
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('pede orientação do sistema depois de entrar em tela cheia', async () => {
-    lock.mockImplementationOnce(async () => { expect(doc.fullscreenElement).toBe(element); });
-    expect(await enterPresentationFullscreen()).toEqual({ orientationLocked: true, active: true });
-    expect(lock).toHaveBeenCalledWith('landscape');
-    expect(requestFullscreen).toHaveBeenCalledOnce();
-  });
-
-  it('pede paisagem no PWA standalone mesmo sem API de tela cheia', async () => {
-    matchMedia.mockImplementationOnce((query) => ({ matches: query === '(display-mode: standalone)' }));
-    doc.documentElement.requestFullscreen = undefined!;
-    expect(await enterPresentationFullscreen()).toEqual({ orientationLocked: true, active: true });
-    expect(lock).toHaveBeenCalledWith('landscape');
-  });
-
-  it('tenta orientação quando o PWA instalado recusa a tela cheia adicional', async () => {
-    vi.stubGlobal('navigator', { standalone: true });
-    requestFullscreen.mockRejectedValueOnce(new Error('Not allowed'));
-    expect(await enterPresentationFullscreen()).toEqual({ orientationLocked: true, active: true });
-    expect(lock).toHaveBeenCalledWith('landscape');
-  });
-
-  it('informa recusa de tela cheia em aba comum', async () => {
-    requestFullscreen.mockRejectedValueOnce(new Error('Denied'));
-    await expect(enterPresentationFullscreen()).rejects.toThrow('Denied');
+  it('pede giro físico sem abrir tela cheia nem travar orientação', async () => {
+    expect(await enterPresentationFullscreen()).toBe('rotate-device');
+    expect(requestFullscreen).not.toHaveBeenCalled();
     expect(lock).not.toHaveBeenCalled();
   });
-
-  it('não quebra quando o celular não oferece orientação programática', async () => {
-    vi.stubGlobal('screen', {});
-    expect(await enterPresentationFullscreen()).toEqual({ orientationLocked: false, active: true });
-    expect(doc.fullscreenElement).toBe(element);
-  });
-
-  it('preserva tela cheia quando a orientação é recusada', async () => {
-    lock.mockRejectedValueOnce(new Error('NotSupportedError'));
-    expect(await enterPresentationFullscreen()).toEqual({ orientationLocked: false, active: true });
-    expect(doc.fullscreenElement).toBe(element);
-  });
-
-  it('libera a orientação se o usuário sair durante a rotação', async () => {
-    lock.mockImplementationOnce(async () => { doc.fullscreenElement = null; });
-    expect(await enterPresentationFullscreen()).toEqual({ orientationLocked: false, active: false });
-    expect(unlock).toHaveBeenCalledOnce();
-  });
-
-  it('não pede novamente tela cheia quando ela já está ativa', async () => {
-    doc.fullscreenElement = element;
-    await enterPresentationFullscreen();
+  it('não aceita layout horizontal como rotação do sistema', async () => {
+    win.innerWidth = 800;
+    win.innerHeight = 360;
+    expect(deviceOrientation()).toBe('portrait');
+    expect(await enterPresentationFullscreen()).toBe('rotate-device');
     expect(requestFullscreen).not.toHaveBeenCalled();
-    expect(lock).toHaveBeenCalledWith('landscape');
   });
-
-  it('permite liberar orientação sem API disponível', () => {
+  it('libera tela cheia após a orientação real mudar', async () => {
+    expect(await enterPresentationFullscreen()).toBe('rotate-device');
+    vi.stubGlobal('screen', { orientation: { type: 'landscape-primary', lock } });
+    expect(await enterPresentationFullscreen()).toBe('entered');
+    expect(doc.fullscreenElement).toBe(element);
+    expect(lock).not.toHaveBeenCalled();
+  });
+  it('aceita os dois sentidos horizontais do sistema', () => {
+    vi.stubGlobal('screen', { orientation: { type: 'landscape-secondary' } });
+    expect(deviceOrientation()).toBe('landscape');
+  });
+  it('lê a orientação legada quando ScreenOrientation não existe', () => {
     vi.stubGlobal('screen', {});
-    expect(() => unlockPresentationOrientation()).not.toThrow();
+    win.orientation = -90;
+    expect(deviceOrientation()).toBe('landscape');
+    win.orientation = 0;
+    expect(deviceOrientation()).toBe('portrait');
+  });
+  it('exige confirmação manual se o sistema não informa orientação', () => {
+    vi.stubGlobal('screen', {});
+    expect(deviceOrientation()).toBe('unknown');
+  });
+  it('permite PWA instalado sem API adicional de tela cheia', async () => {
+    vi.stubGlobal('screen', { orientation: { type: 'landscape-primary' } });
+    vi.stubGlobal('navigator', { standalone: true });
+    doc.documentElement.requestFullscreen = undefined!;
+    expect(await enterPresentationFullscreen()).toBe('entered');
+  });
+  it('informa recusa de tela cheia em uma aba comum', async () => {
+    vi.stubGlobal('screen', { orientation: { type: 'landscape-primary' } });
+    requestFullscreen.mockRejectedValueOnce(new Error('Denied'));
+    await expect(enterPresentationFullscreen()).rejects.toThrow('Denied');
+  });
+  it('preserva comportamento de tela cheia no computador', async () => {
+    matchMedia.mockReturnValueOnce({ matches: false });
+    expect(await enterPresentationFullscreen()).toBe('entered');
+    expect(requestFullscreen).toHaveBeenCalledOnce();
+  });
+  it('sai da tela cheia sem alterar a orientação do sistema', async () => {
+    vi.stubGlobal('screen', { orientation: { type: 'landscape-secondary', lock } });
+    doc.fullscreenElement = element;
+    await exitPresentationFullscreen();
+    expect(doc.fullscreenElement).toBeNull();
+    expect(exitFullscreen).toHaveBeenCalledOnce();
+    expect(deviceOrientation()).toBe('landscape');
+    expect(lock).not.toHaveBeenCalled();
+    expect(requestFullscreen).not.toHaveBeenCalled();
+  });
+  it('sai do modo PWA sem chamar uma API de tela cheia inativa', async () => {
+    await exitPresentationFullscreen();
+    expect(exitFullscreen).not.toHaveBeenCalled();
+    expect(lock).not.toHaveBeenCalled();
+  });
+  it('propaga falha de saída para a interface permitir nova tentativa', async () => {
+    doc.fullscreenElement = element;
+    exitFullscreen.mockRejectedValueOnce(new Error('Denied'));
+    await expect(exitPresentationFullscreen()).rejects.toThrow('Denied');
+    expect(doc.fullscreenElement).toBe(element);
+    expect(lock).not.toHaveBeenCalled();
   });
 });

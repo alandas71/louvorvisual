@@ -370,13 +370,11 @@ function OperatorPanel({ local, controller, row, warnings, recovered, audioChoic
           controls={controls}
           dispatch={dispatch}
           countdown={controls.capabilities.countdown ? <Countdown controller={controller} /> : undefined}
+          onExit={() => setInteractive(false)}
           pinned={draft !== null}
           badge={
             <span className="flex items-center gap-2 text-xs text-[rgba(209,213,219,0.9)]">
               {state.frozenOutput && <span data-testid="stage-frozen">Saída congelada</span>}
-              <button type="button" className="rounded-lg border border-[rgba(209,213,219,0.35)] px-2 py-2 hover:border-[rgba(209,213,219,0.9)] focus-visible:outline-2 focus-visible:outline-[#D1D5DB]" onClick={() => setInteractive(false)}>
-                Painel completo
-              </button>
             </span>
           }
           operatorItems={operatorItems}

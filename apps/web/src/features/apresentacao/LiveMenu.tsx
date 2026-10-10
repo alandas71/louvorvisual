@@ -19,6 +19,8 @@ type LiveMenuProps = {
   /** Só na janela pública: voltar à saída limpa. */
   onHideOutputControls?: () => void;
   className?: string;
+  /** Espelhamento móvel usa a orientação do sistema, sem girar o slide. */
+  allowOutputRotation?: boolean;
 };
 
 const ALIGN_LABEL: Record<TextAlign, string> = { left: 'Esquerda', center: 'Centro', right: 'Direita' };
@@ -57,7 +59,7 @@ const pill = (active: boolean) => cn(buttonClass('secondary', 'sm'), active && p
  * Ajustes ao vivo (planejamento/20). Só envia comandos: quem executa é o motor
  * único, esteja este menu no painel do operador ou numa saída com controles.
  */
-export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHideOutputControls, className }: LiveMenuProps) {
+export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHideOutputControls, className, allowOutputRotation = true }: LiveMenuProps) {
   // Fonte e tamanho valem, por padrão, para o slide atual; tema, para o louvor.
   const [styleScope, setStyleScope] = useState<AdjustScope>('occurrence');
   const [themeScope, setThemeScope] = useState<AdjustScope>('song');
@@ -171,7 +173,7 @@ export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHi
         )}
       </Section>
 
-      <Section title="Rotação desta saída">
+      {allowOutputRotation && <Section title="Rotação desta saída">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Rotação da saída pública">
           {ROTATIONS.map((rotation) => (
             <button key={rotation} type="button" className={pill(controls.rotation === rotation)} aria-pressed={controls.rotation === rotation} onClick={() => dispatch({ type: 'setRotation', rotation })}>
@@ -180,7 +182,7 @@ export function LiveMenu({ controls, dispatch, operatorItems, linkedTiming, onHi
           ))}
         </div>
         <p className="text-xs text-muted">Gira só a composição do slide; fica guardada neste dispositivo, não no arranjo.</p>
-      </Section>
+      </Section>}
 
       <Section title="Alinhamento e entrelinha" scope={<span className="text-xs text-muted">{SCOPE_LABEL[styleScope]}</span>}>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Alinhamento">

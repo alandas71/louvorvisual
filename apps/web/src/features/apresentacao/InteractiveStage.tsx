@@ -1,10 +1,11 @@
 'use client';
 
 import type { ControlsState, OutputFrame, Rotation } from '@louvorvisual/presentation';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { SlideView } from '@/components/SlideView';
 import { cn } from '@/lib/utils';
-import { enterPresentationFullscreen, unlockPresentationOrientation } from '@/presentation/fullscreen';
+import { buttonClass } from '@/components/ui/buttonStyles';
+import { deviceOrientation, enterPresentationFullscreen, exitPresentationFullscreen, subscribeDeviceOrientation } from '@/presentation/fullscreen';
 import { FullscreenIcon, LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, RotateIcon, SmallerIcon, TimerIcon } from './icons';
 import { formatSeconds } from './labels';
 import { LiveMenu, type Dispatch } from './LiveMenu';
@@ -38,6 +39,8 @@ type InteractiveStageProps = {
   operatorItems?: ReactNode;
   linkedTiming?: ReactNode;
   onHideOutputControls?: () => void;
+  /** Voltar ao painel do operador após sair da tela cheia. */
+  onExit?: () => void;
   /** Aviso discreto sobre o que o público vê (congelada, preta…). */
   badge?: ReactNode;
   /** Mantém os controles à vista por outro motivo (ex.: rascunho de texto aberto). */
@@ -49,16 +52,17 @@ type InteractiveStageProps = {
  * cantos, na orientação normal mesmo com a composição girada. Usada no monitor
  * do operador e, quando habilitada, na própria janela pública.
  */
-export function InteractiveStage({ frame, rotation, controls, dispatch, countdown, operatorItems, linkedTiming, onHideOutputControls, badge, pinned = false }: InteractiveStageProps) {
+export function InteractiveStage({ frame, rotation, controls, dispatch, countdown, operatorItems, linkedTiming, onHideOutputControls, onExit, badge, pinned = false }: InteractiveStageProps) {
   const root = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState(false);
   const timer = useRef<number | null>(null);
   const [needsRotation, setNeedsRotation] = useState(false);
-  const orientationLocked = useRef(false);
+  const physicalOrientation = useSyncExternalStore(subscribeDeviceOrientation, deviceOrientation, () => 'desktop' as const);
   const displayRequested = useRef(false);
   const fullscreenBusy = useRef(false);
+  const rotationDialog = useRef<HTMLDivElement>(null);
 
   const hasFocusedControl = useCallback(() => {
     const focused = document.activeElement;
@@ -98,54 +102,74 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
   }, [menuOpen]);
 
   useEffect(() => {
-    const release = () => {
-      if (orientationLocked.current) unlockPresentationOrientation();
-      orientationLocked.current = false;
-      displayRequested.current = false;
-    };
-    const onResize = () => {
-      if (displayRequested.current) setNeedsRotation(window.innerHeight > window.innerWidth);
-    };
     const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        release();
-        setNeedsRotation(false);
+      if (!document.fullscreenElement) displayRequested.current = false;
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!needsRotation) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const dialog = rotationDialog.current;
+    dialog?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNeedsRotation(false);
+      if (event.key !== 'Tab' || !dialog) return;
+      const buttons = [...dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
       }
     };
-    window.addEventListener('resize', onResize);
-    document.addEventListener('fullscreenchange', onFullscreenChange);
+    window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('resize', onResize);
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
-      release();
+      window.removeEventListener('keydown', onKey);
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, []);
+  }, [needsRotation]);
 
   const visible = active || menuOpen || pinned || needsRotation;
 
-  async function toggleFullscreen() {
+  async function exitPresentation() {
     if (fullscreenBusy.current) return;
     fullscreenBusy.current = true;
     setFullscreenError(false);
-    setNeedsRotation(false);
     try {
-      if (document.fullscreenElement || displayRequested.current) {
-        if (document.fullscreenElement) await document.exitFullscreen();
-        if (orientationLocked.current) unlockPresentationOrientation();
-        orientationLocked.current = false;
-        displayRequested.current = false;
-      } else {
-        const result = await enterPresentationFullscreen();
-        // Se a apresentação foi fechada durante o pedido, não manter a trava.
-        if (!result.active || !root.current) {
-          if (result.orientationLocked) unlockPresentationOrientation();
-          return;
-        }
-        orientationLocked.current = result.orientationLocked;
-        displayRequested.current = true;
-        // Conferir o viewport real: aceitar o pedido não garante que já girou.
-        setNeedsRotation(window.innerHeight > window.innerWidth);
+      await exitPresentationFullscreen();
+      displayRequested.current = false;
+      setNeedsRotation(false);
+      onExit?.();
+    } catch {
+      setFullscreenError(true);
+    } finally {
+      fullscreenBusy.current = false;
+    }
+  }
+
+  async function toggleFullscreen() {
+    if (document.fullscreenElement || displayRequested.current) {
+      await exitPresentation();
+      return;
+    }
+    if (fullscreenBusy.current) return;
+    fullscreenBusy.current = true;
+    setFullscreenError(false);
+    try {
+      const result = await enterPresentationFullscreen();
+      if (!root.current) return;
+      if (result === 'rotate-device') {
+        setNeedsRotation(true);
+        return;
       }
+      displayRequested.current = true;
+      setNeedsRotation(false);
     } catch {
       setFullscreenError(true);
     } finally {
@@ -160,7 +184,7 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
   return (
     <div ref={root} className={cn('relative h-full w-full overflow-hidden', !visible && 'cursor-none')} data-testid="interactive-stage" data-controls-visible={visible}>
-      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={rotation} />
+      <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={physicalOrientation === 'desktop' ? rotation : 0} />
 
       <div data-stage-ui className={cn(corner, 'left-4 top-4')} data-corner="top-left">
         <CornerButton label={menuOpen ? 'Fechar ajustes' : 'Abrir ajustes'} testId="corner-menu" pressed={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
@@ -170,7 +194,15 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
       <div data-stage-ui className={cn(corner, 'right-4 top-4')} data-corner="top-right">
         {badge}
-        <CornerButton label={`Girar a saída 90° (agora ${rotation}°)`} testId="corner-rotate" onClick={() => dispatch({ type: 'rotate' })}>
+        {onExit && (
+          <button type="button" className="rounded-lg border border-[rgba(209,213,219,0.35)] px-2 py-2 text-xs hover:border-[rgba(209,213,219,0.9)] focus-visible:outline-2 focus-visible:outline-[#D1D5DB]" onClick={() => void exitPresentation()}>
+            Painel completo
+          </button>
+        )}
+        <CornerButton label={physicalOrientation === 'desktop' ? `Girar a saída 90° (agora ${rotation}°)` : 'Girar o celular para a horizontal'} testId="corner-rotate" onClick={() => {
+          if (physicalOrientation === 'desktop') dispatch({ type: 'rotate' });
+          else setNeedsRotation(true);
+        }}>
           <RotateIcon />
         </CornerButton>
         <CornerButton label="Entrar ou sair da tela cheia" testId="corner-fullscreen" onClick={toggleFullscreen}>
@@ -209,21 +241,35 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
       </div>
 
       {needsRotation && (
-        <div role="status" data-stage-ui data-testid="rotation-help" className="absolute bottom-20 left-4 right-4 mx-auto max-w-md rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm">
-          <p>A tela continua na vertical. Ative a rotação automática e deite o celular para o projetor acompanhar.</p>
-          <button type="button" className="mt-2 underline" onClick={() => setNeedsRotation(false)}>Fechar aviso</button>
+        <div ref={rotationDialog} data-stage-ui role="dialog" aria-modal="true" aria-labelledby="rotate-device-title" data-testid="rotation-help" className="absolute inset-0 z-20 flex items-center justify-center bg-black/90 p-4">
+          <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border-strong bg-surface-raised p-6 text-center">
+            <h2 id="rotate-device-title" className="text-xl font-bold">Gire o celular para a horizontal</h2>
+            <p>Ative a rotação automática do celular e deite o aparelho. Espere a tela do sistema girar para o projetor acompanhar.</p>
+            <p role="status" data-testid="device-orientation-status" className="text-sm text-muted">
+              {physicalOrientation === 'landscape' ? 'Celular na horizontal. Agora você pode entrar em tela cheia.' : physicalOrientation === 'unknown' ? 'Não foi possível detectar a orientação. Confirme que a tela do celular já está na horizontal.' : 'Aguardando a rotação real do celular…'}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button type="button" className={buttonClass('primary')} disabled={physicalOrientation === 'portrait'} onClick={() => {
+                if (displayRequested.current || document.fullscreenElement) setNeedsRotation(false);
+                else void toggleFullscreen();
+              }}>
+                {physicalOrientation === 'unknown' ? 'Já girei o celular — entrar' : 'Entrar em tela cheia'}
+              </button>
+              <button type="button" className={buttonClass('secondary')} onClick={() => setNeedsRotation(false)}>Cancelar</button>
+            </div>
+          </div>
         </div>
       )}
 
       {fullscreenError && (
         <p role="alert" data-stage-ui className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm">
-          O navegador recusou a tela cheia. Clique no botão de novo.
+          Não foi possível entrar ou sair da tela cheia. Tente novamente.
         </p>
       )}
 
       {menuOpen && (
         <div data-stage-ui role="dialog" aria-label="Ajustes da apresentação" className="absolute bottom-20 left-4 top-20 w-[min(24rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-border-strong bg-surface-raised p-4 shadow-xl">
-          <LiveMenu controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} onHideOutputControls={onHideOutputControls} />
+          <LiveMenu allowOutputRotation={physicalOrientation === 'desktop'} controls={controls} dispatch={dispatch} operatorItems={operatorItems} linkedTiming={linkedTiming} onHideOutputControls={onHideOutputControls} />
         </div>
       )}
     </div>
