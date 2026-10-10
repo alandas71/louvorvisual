@@ -112,7 +112,11 @@ describe('setlistSchema', () => {
 });
 
 describe('assetSchema', () => {
-  it('recusa formato fora de MP3/WAV e arquivo acima de 100 MiB', () => {
+  it.each(['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/flac', 'audio/webm'])('aceita %s', (mimeType) => {
+    expect(assetSchema.safeParse({ ...asset, mimeType }).success).toBe(true);
+  });
+
+  it('recusa formato não suportado e arquivo acima de 100 MiB', () => {
     expect(assetSchema.safeParse({ ...asset, mimeType: 'application/pdf' }).success).toBe(false);
     expect(assetSchema.safeParse({ ...asset, byteSize: 100 * 1024 * 1024 + 1 }).success).toBe(false);
   });

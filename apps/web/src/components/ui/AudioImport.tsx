@@ -1,6 +1,6 @@
 'use client';
 
-import { MAX_ASSET_BYTES } from '@louvorvisual/domain';
+import { AUDIO_FILE_ACCEPT, AUDIO_FORMAT_LABEL, MAX_ASSET_BYTES } from '@louvorvisual/domain';
 import { useId, useRef, useState, type DragEvent } from 'react';
 import { cn } from '@/lib/utils';
 import { buttonClass } from './buttonStyles';
@@ -86,8 +86,8 @@ export function AudioImport({ label, onImport, testId }: AudioImportProps) {
         )}
       >
         <span className="font-semibold">{label}</span>
-        <span className="text-xs text-muted">Arraste o arquivo ou clique para escolher · MP3 ou WAV, até {megabytes(MAX_ASSET_BYTES)}</span>
-        <input ref={input} id={inputId} type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" className="sr-only" disabled={busy} onChange={(event) => choose(event.target.files?.[0])} />
+        <span className="text-xs text-muted">Arraste o arquivo ou clique para escolher · {AUDIO_FORMAT_LABEL}, até {megabytes(MAX_ASSET_BYTES)}</span>
+        <input ref={input} id={inputId} type="file" accept={AUDIO_FILE_ACCEPT} className="sr-only" disabled={busy} onChange={(event) => choose(event.target.files?.[0])} />
       </label>
 
       {chosen && !busy && (

@@ -72,11 +72,25 @@ describe('hash em fluxo', () => {
 });
 
 describe('tipo do arquivo', () => {
+  it.each([
+    ['faixa.M4A', 'audio/x-m4a', 'audio/mp4'],
+    ['faixa.m4a', 'video/mp4', 'audio/mp4'],
+    ['faixa.m4a', 'application/octet-stream', 'audio/mp4'],
+    ['faixa.aac', 'audio/aac', 'audio/aac'],
+    ['faixa.opus', 'audio/ogg; codecs=opus', 'audio/ogg'],
+    ['faixa.oga', 'application/ogg', 'audio/ogg'],
+    ['faixa.flac', 'audio/x-flac', 'audio/flac'],
+    ['faixa.webm', 'video/webm', 'audio/webm'],
+  ])('normaliza o tipo de %s', (filename, type, canonical) => {
+    expect(declaredAudioType(filename, type)).toBe(canonical);
+    expect(declaredAudioType(filename, '')).toBe(canonical);
+  });
+
   it('aceita MP3 e WAV quando extensão e tipo concordam', () => {
     expect(declaredAudioType('a.MP3', 'audio/mpeg')).toBe('audio/mpeg');
     expect(declaredAudioType('a.wav', 'audio/x-wav')).toBe('audio/wav');
     expect(declaredAudioType('a.wav', '')).toBe('audio/wav');
-    expect(declaredAudioType('a.ogg', 'audio/ogg')).toBeNull();
+    expect(declaredAudioType('a.ogg', 'audio/ogg')).toBe('audio/ogg');
     expect(declaredAudioType('a.mp3', 'audio/wav')).toBeNull();
     expect(declaredAudioType('sem-extensao', 'audio/mpeg')).toBeNull();
   });
@@ -90,6 +104,34 @@ describe('tipo do arquivo', () => {
 });
 
 describe('importação de áudio', () => {
+  it.each([
+    ['m4a', 'audio/mp4', [0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32]],
+    ['aac', 'audio/aac', [0xff, 0xf1, 0x50, 0x80, 0, 0x1f, 0xfc]],
+    ['opus', 'audio/ogg', [79, 103, 103, 83, 0, 2]],
+    ['flac', 'audio/flac', [102, 76, 97, 67]],
+    ['webm', 'audio/webm', [0x1a, 0x45, 0xdf, 0xa3]],
+  ])('importa %s com MIME genérico após verificar a reprodução', async (extension, mimeType, bytes) => {
+    db = testDatabase();
+    const probe = vi.fn(async (blob: Blob) => {
+      expect(blob.type).toBe(mimeType);
+      return 2000;
+    });
+    const file = new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' });
+    const { asset } = await importAudioFile(db, input(file, { filename: `faixa.${extension}`, probe }));
+    expect(asset.mimeType).toBe(mimeType);
+    expect(probe.mock.calls[0]?.[0].type).toBe(mimeType);
+    const stored = await db.assetBlobs.get(assetBlobKey(asset.workspaceId, asset.sha256));
+    expect(stored?.blob.type).toBe(mimeType);
+  });
+
+  it('recusa M4A disfarçado ou que o navegador não reproduz sem guardar dados', async () => {
+    db = testDatabase();
+    await expectCode(importAudioFile(db, input(wav(), { filename: 'faixa.m4a' })), 'unsupported-type');
+    const head = new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32]);
+    await expectCode(importAudioFile(db, input(new Blob([head]), { filename: 'faixa.m4a', probe: async () => null })), 'unplayable');
+    await nothingStored();
+  });
+
   it('grava bytes e metadados, com identidade pelo hash, progresso real e pendência de sincronização', async () => {
     db = testDatabase();
     const bytes = wavBytes(2);

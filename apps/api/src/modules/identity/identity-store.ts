@@ -1,9 +1,11 @@
+import type { AudioMimeType } from '@louvorvisual/domain';
+
 export const ROLES = ['operator', 'editor', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
 export type User = { id: string; name: string; email: string; passwordHash: string; status: 'active' | 'blocked'; createdAt: string };
 export type Membership = { workspaceId: string; userId: string; role: Role; status: 'active' | 'revoked'; createdAt: string; updatedAt: string };
 export type Workspace = { id: string; name: string; timezone: string; createdAt: string };
-export type Asset = { id: string; workspaceId: string; sha256: string; filename: string; mimeType: 'audio/mpeg' | 'audio/wav'; byteSize: number; audioKind: 'original' | 'playback'; durationMs: number | null; state: 'pending' | 'ready' | 'failed'; uploadId: string; createdAt: string; updatedAt: string };
+export type Asset = { id: string; workspaceId: string; sha256: string; filename: string; mimeType: AudioMimeType; byteSize: number; audioKind: 'original' | 'playback'; durationMs: number | null; state: 'pending' | 'ready' | 'failed'; uploadId: string; createdAt: string; updatedAt: string };
 export type Invitation = { id: string; workspaceId: string; email: string; role: Role; expiresAt: number; acceptedAt: number | null; createdBy: string };
 
 export class IdentityError extends Error { constructor(readonly code: string, readonly status: number, message: string) { super(message); } }

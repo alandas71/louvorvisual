@@ -30,7 +30,7 @@ function device(server: FakeServer) {
   const db = database();
   const storage = new DexieSyncStorage(db, { workspaceId: context.workspaceId, deviceId: crypto.randomUUID() });
   const coordinator = new SyncCoordinator({ storage, transport: new FakeTransport(server, context.userId), assets: new LocalAssetBytes(db, 'perfil'), workspaceId: context.workspaceId, now: () => new Date(Date.parse(NOW) + (tick += 1) * 1000).toISOString(), newId: () => crypto.randomUUID() });
-  return { db, sync: () => coordinator.syncOnce() };
+  return { db, sync: () => coordinator.syncOnce(), download: (assetIds: string[]) => coordinator.requestDownloads(assetIds) };
 }
 
 /** Grava direto na tabela um registro que não passa no esquema, como um dado danificado. */
@@ -149,14 +149,16 @@ describe('conferência e reparo dos dados locais', () => {
       { entityType: 'arrangement', document: bound },
     ]);
     await a.sync();
-    expect(await b.sync()).toMatchObject({ downloaded: 1 });
+    expect(await b.sync()).toMatchObject({ downloaded: 0 });
+    expect(await b.download([asset.id])).toMatchObject({ downloaded: 1 });
 
     const bytes = wavBytes(2);
     bytes[300] = (bytes[300] as number) ^ 0xff;
     await b.db.assetBlobs.update(assetBlobKey(context.workspaceId, asset.sha256), { blob: new Blob([bytes]) });
     expect((await scanIntegrity(b.db, { verifyMedia: true, now: NOW })).problems).toMatchObject([{ kind: 'media', issue: 'corrupted', repair: 'download' }]);
     await discardMediaForDownload(b.db, asset.id);
-    expect(await b.sync()).toMatchObject({ downloaded: 1 });
+    expect(await b.sync()).toMatchObject({ downloaded: 0 });
+    expect(await b.download([asset.id])).toMatchObject({ downloaded: 1 });
     expect(await verifyAsset(b.db, asset, NOW)).toBe('ok');
     expect((await scanIntegrity(b.db, { verifyMedia: true, now: NOW })).problems).toEqual([]);
   });

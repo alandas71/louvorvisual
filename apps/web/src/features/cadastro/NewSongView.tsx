@@ -23,6 +23,8 @@ import { setLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
 import { listSongIndex, saveDocuments, useLocalSession, type LocalSession, type SongIndexRow } from '@/local';
 
+import { YoutubeImport } from './YoutubeImport';
+
 const SPLIT = { maxLines: maxLinesForStyle(themePreset(DEFAULT_THEME_PRESET_ID).style) };
 
 /** Prévia determinística: os IDs daqui são descartados; os definitivos nascem ao salvar. */
@@ -85,12 +87,15 @@ function NewSongForm({ session }: { session: LocalSession }) {
   const sections = suggestion.parsed.sections.length;
 
   return (
-    <form onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-6" noValidate>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Novo louvor"
-        description="Cole a letra como ela é. O aplicativo guarda o texto original e sugere seções e slides, que você revisa em seguida."
+        description="Importe pela URL do YouTube ou preencha o título e a letra manualmente."
       />
 
+      <YoutubeImport session={session} />
+
+      <form onSubmit={(event) => void onSubmit(event)} noValidate>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className={cn(cardClass, 'flex flex-col gap-5 p-4 sm:p-6')}>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -197,6 +202,7 @@ function NewSongForm({ session }: { session: LocalSession }) {
           </div>
         </div>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }

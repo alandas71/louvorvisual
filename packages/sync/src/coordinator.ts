@@ -128,6 +128,16 @@ export class SyncCoordinator {
     return this.running;
   }
 
+  /** Baixa somente as faixas escolhidas explicitamente pelo usuário. */
+  async requestDownloads(assetIds: readonly string[]): Promise<CycleReport> {
+    const report = emptyReport();
+    let identity = await this.deps.transport.checkIdentity();
+    if (identity === 'unauthenticated' && await this.deps.transport.refreshSession()) identity = await this.deps.transport.checkIdentity();
+    if (identity !== 'ok') throw new Error(identity === 'unreachable' ? 'Sem conexão para baixar. Tente de novo quando estiver online.' : 'Entre na conta desta equipe para baixar.');
+    await this.downloadAssets(report, new Set(assetIds));
+    return report;
+  }
+
   private async run(): Promise<CycleOutcome> {
     const report = emptyReport();
     const done = (connection: ConnectionState, extra: Partial<CycleOutcome> = {}): CycleOutcome => ({ ...report, connection, retry: false, retryAfterMs: null, error: null, ...extra });
@@ -148,7 +158,6 @@ export class SyncCoordinator {
           await this.clearSuspension('revoked');
           readOnly = await this.pushPhase(report);
           await this.pullAll(report);
-          await this.downloadAssets(report);
           break;
         } catch (error) {
           if (!(error instanceof NeedBootstrap) || round >= 2) throw error;
@@ -687,14 +696,14 @@ export class SyncCoordinator {
   }
 
   /** Baixa os bytes das faixas usadas por arranjos e ainda ausentes neste dispositivo. */
-  private async downloadAssets(report: CycleReport): Promise<void> {
+  private async downloadAssets(report: CycleReport, requested: ReadonlySet<string>): Promise<void> {
     const missing = await this.deps.storage.transaction(async (tx) => {
       const used = new Set<string>();
       for (const arrangement of await tx.listDocuments('arrangement')) {
         if (arrangement.deletedAt !== null) continue;
         for (const binding of ((arrangement as Record<string, unknown>).audioBindings as { assetId: string }[] | undefined) ?? []) used.add(binding.assetId);
       }
-      return ((await tx.listDocuments('asset')) as AssetDoc[]).filter((asset) => used.has(asset.id) && asset.deletedAt === null && asset.remoteState === 'ready' && asset.workspaceId === this.deps.workspaceId);
+      return ((await tx.listDocuments('asset')) as AssetDoc[]).filter((asset) => requested.has(asset.id) && used.has(asset.id) && asset.deletedAt === null && asset.remoteState === 'ready' && asset.workspaceId === this.deps.workspaceId);
     });
     for (const asset of missing) {
       if (await this.deps.assets.has(asset)) continue;
@@ -702,14 +711,10 @@ export class SyncCoordinator {
         report.downloadsDeferred += 1;
         continue;
       }
-      try {
-        const bytes = await this.call(() => this.deps.transport.downloadAsset(asset));
-        // Bytes incompletos ou diferentes do hash nunca ficam referenciados como disponíveis.
-        if ((await this.deps.assets.write(asset, bytes)) === 'stored') report.downloaded += 1;
-      } catch (error) {
-        if (error instanceof TransportError && error.kind === 'http' && (error.status === 404 || error.status === 422)) continue;
-        throw error;
-      }
+      const bytes = await this.call(() => this.deps.transport.downloadAsset(asset));
+      // Bytes incompletos ou diferentes do hash nunca ficam referenciados como disponíveis.
+      if ((await this.deps.assets.write(asset, bytes)) !== 'stored') throw new Error('O arquivo baixado não confere com o original. Tente baixar de novo.');
+      report.downloaded += 1;
     }
   }
 }

@@ -4,6 +4,7 @@ import type { ControlsState, OutputFrame, Rotation } from '@louvorvisual/present
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { SlideView } from '@/components/SlideView';
 import { cn } from '@/lib/utils';
+import { enterPresentationFullscreen, exitPresentationFullscreen } from '@/presentation/fullscreen';
 import { FullscreenIcon, LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, RotateIcon, SmallerIcon, TimerIcon } from './icons';
 import { formatSeconds } from './labels';
 import { LiveMenu, type Dispatch } from './LiveMenu';
@@ -96,7 +97,7 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
   function toggleFullscreen() {
     setFullscreenError(false);
-    const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    const request = document.fullscreenElement ? exitPresentationFullscreen() : enterPresentationFullscreen();
     // O navegador pode recusar (sem gesto, política da janela): avisar e deixar tentar de novo.
     request.catch(() => setFullscreenError(true));
   }
@@ -158,7 +159,7 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
       {fullscreenError && (
         <p role="alert" data-stage-ui className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm">
-          O navegador recusou a tela cheia. Clique no botão de novo.
+          Não foi possível entrar ou sair da tela cheia neste navegador.
         </p>
       )}
 

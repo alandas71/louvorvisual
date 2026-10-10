@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { sniffAudioType } from '@louvorvisual/domain';
 import { type Asset, type IdentityStore, IdentityError, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
 
 export { IdentityError, ROLES, safeUser, type Asset, type Membership, type Role, type User, type Workspace } from './identity-store';
@@ -117,4 +118,4 @@ const hashPassword = (password: string) => { const salt = randomBytes(16); retur
 const verifyPassword = (password: string, encoded: string) => { const [salt, digest] = encoded.split(':'); if (!salt || !digest) return false; return safeEquals(scryptSync(password, Buffer.from(salt, 'base64url'), 64).toString('base64url'), digest); };
 const safeEquals = (left: string, right: string) => { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); };
 const sha = (data: Buffer) => createHash('sha256').update(data).digest('hex');
-const hasAudioMagic = (data: Buffer, type: string) => type === 'audio/wav' ? data.subarray(0, 4).toString() === 'RIFF' && data.subarray(8, 12).toString() === 'WAVE' : data.subarray(0, 3).toString() === 'ID3' || (data[0] === 0xff && (data[1] ?? 0) >= 0xe0);
+const hasAudioMagic = (data: Buffer, type: string) => sniffAudioType(data.subarray(0, 12)) === type;

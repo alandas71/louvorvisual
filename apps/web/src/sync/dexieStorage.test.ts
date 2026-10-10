@@ -14,6 +14,7 @@ import { acquireEditLease, editLockName } from './leases';
 
 const databases: LocalDatabase[] = [];
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await Promise.all(databases.splice(0).map((db) => db.delete()));
 });
 
@@ -124,6 +125,7 @@ describe('coordenador sobre o banco local (Dexie)', () => {
 
   it('AT-24: com o editor aberto (marcação válida), o pull não troca o documento; marcação vencida não segura', async () => {
     const { a, b, song } = await pair();
+    vi.stubGlobal('navigator', {});
     const key = entityKey('song', song.id);
     await b.db.editLeases.put({ id: `${key}|editor`, key, holder: 'editor', expiresAt: Date.now() + 60_000 });
     await saveDocuments(a.db, [{ entityType: 'song', document: retitle(song, 'Remoto') }]);
@@ -182,6 +184,7 @@ describe('coordenador sobre o banco local (Dexie)', () => {
 
   it('carregar a versão remota adiada troca documento e índice numa única transação', async () => {
     const { a, b, song } = await pair();
+    vi.stubGlobal('navigator', {});
     const key = entityKey('song', song.id);
     await b.db.editLeases.put({ id: `${key}|editor`, key, holder: 'editor', expiresAt: Date.now() + 60_000 });
     await saveDocuments(a.db, [{ entityType: 'song', document: retitle(song, 'Remoto') }]);

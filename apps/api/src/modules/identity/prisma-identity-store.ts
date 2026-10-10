@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafe
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
+import { sniffAudioType } from '@louvorvisual/domain';
 import { type Asset, type IdentityStore, IdentityError, type Invitation, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
 
 const DAY = 86_400_000;
@@ -11,7 +12,7 @@ const equal = (left: string, right: string) => { const a = Buffer.from(left); co
 const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const hashPassword = (password: string) => { const salt = randomBytes(16); return `${salt.toString('base64url')}:${scryptSync(password, salt, 64).toString('base64url')}`; };
 const verifyPassword = (password: string, encoded: string) => { const [salt, hash] = encoded.split(':'); return !!salt && !!hash && equal(scryptSync(password, Buffer.from(salt, 'base64url'), 64).toString('base64url'), hash); };
-const audioMagic = (data: Buffer, type: string) => type === 'audio/wav' ? data.subarray(0, 4).toString() === 'RIFF' && data.subarray(8, 12).toString() === 'WAVE' : data.subarray(0, 3).toString() === 'ID3' || (data[0] === 0xff && (data[1] ?? 0) >= 0xe0);
+const audioMagic = (data: Buffer, type: string) => sniffAudioType(data.subarray(0, 12)) === type;
 const role = (value: string): Role => value as Role;
 const mapUser = (value: { id: string; name: string; email: string; passwordHash: string; status: string; createdAt: Date }): User => ({ ...value, status: value.status as User['status'], createdAt: asIso(value.createdAt) });
 const mapWorkspace = (value: { id: string; name: string; timezone: string; createdAt: Date }): Workspace => ({ ...value, createdAt: asIso(value.createdAt) });

@@ -184,7 +184,15 @@ describe('fila local e captura imutável', () => {
     expect(await summarize(a.storage)).toMatchObject({ pending: 0, conflicts: 0 });
 
     // AT-10: conteúdo e bytes acessíveis no segundo dispositivo.
-    expect(await b.sync()).toMatchObject({ downloaded: 1 });
+    expect(await b.sync()).toMatchObject({ downloaded: 0 });
+    expect(b.transport.calls).not.toContain('downloadAsset');
+    expect(await b.coordinator.requestDownloads([])).toMatchObject({ downloaded: 0 });
+    expect(b.transport.calls).not.toContain('downloadAsset');
+    b.transport.faults.identity = 'mismatch';
+    await expect(b.coordinator.requestDownloads([asset.id])).rejects.toThrow('Entre na conta');
+    expect(b.transport.calls).not.toContain('downloadAsset');
+    b.transport.faults.identity = 'ok';
+    expect(await b.coordinator.requestDownloads([asset.id])).toMatchObject({ downloaded: 1 });
     expect((await b.doc('asset', asset.id)) as AssetDoc).toMatchObject({ remoteState: 'ready', sha256: asset.sha256 });
     expect(b.bytes.blobs.get(asset.sha256)?.size).toBe(asset.byteSize);
     expect(await b.doc('setlist', setlist.id)).toBeDefined();
@@ -755,11 +763,13 @@ describe('mídia', () => {
     await a.save('arrangement', arrangement);
     await a.sync();
     b.state.presenting = true;
-    expect(await b.sync()).toMatchObject({ downloaded: 0, downloadsDeferred: 1 });
+    expect(await b.sync()).toMatchObject({ downloaded: 0, downloadsDeferred: 0 });
+    expect(await b.coordinator.requestDownloads([asset.id])).toMatchObject({ downloaded: 0, downloadsDeferred: 1 });
     expect(await b.doc('arrangement', arrangement.id)).toBeDefined();
     expect(b.bytes.blobs.size).toBe(0);
     b.state.presenting = false;
-    expect(await b.sync()).toMatchObject({ downloaded: 1 });
+    expect(await b.sync()).toMatchObject({ downloaded: 0 });
+    expect(await b.coordinator.requestDownloads([asset.id])).toMatchObject({ downloaded: 1 });
   });
 
   it('bytes baixados que não conferem não ficam disponíveis', async () => {
@@ -773,6 +783,7 @@ describe('mídia', () => {
     await a.sync();
     server.assets.get(asset.id)!.bytes = new Blob([new Uint8Array(10)]);
     expect(await b.sync()).toMatchObject({ downloaded: 0 });
+    await expect(b.coordinator.requestDownloads([asset.id])).rejects.toThrow('não confere');
     expect(b.bytes.blobs.size).toBe(0);
   });
 });
