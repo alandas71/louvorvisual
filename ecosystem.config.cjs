@@ -14,6 +14,9 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3022',
+        // O navegador chama /api; o Next encaminha essas chamadas para a API
+        // que roda no mesmo host. Pode ser substituída por BACKEND_URL no deploy.
+        BACKEND_URL: process.env.BACKEND_URL ?? 'http://127.0.0.1:3021',
       },
     },
   ],

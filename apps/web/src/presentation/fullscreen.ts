@@ -1,38 +1,42 @@
-/** Tela cheia da apresentação: pede paisagem sem girar apenas o conteúdo do slide. */
-type LockableOrientation = ScreenOrientation & {
+/** APIs do sistema: nenhuma transformação CSS é usada para orientar a tela. */
+type MobileOrientation = ScreenOrientation & {
   lock?: (orientation: 'landscape') => Promise<void>;
 };
 
-let releaseOrientation: (() => void) | null = null;
+function installedDisplay(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
 
-export async function enterPresentationFullscreen(): Promise<void> {
-  // Deve ser chamado diretamente pelo clique para preservar o gesto do usuário.
-  if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-
-  const orientation = screen.orientation as LockableOrientation | undefined;
-  if (!orientation?.lock || !document.fullscreenElement) return;
-
-  releaseOrientation?.();
-  const release = () => {
-    document.removeEventListener('fullscreenchange', onChange);
-    try { orientation.unlock(); } catch { /* O navegador pode já ter liberado a orientação. */ }
-    if (releaseOrientation === release) releaseOrientation = null;
-  };
-  const onChange = () => {
-    if (!document.fullscreenElement) release();
-  };
-  releaseOrientation = release;
-  document.addEventListener('fullscreenchange', onChange);
+export async function enterPresentationFullscreen(): Promise<{ orientationLocked: boolean; active: boolean }> {
+  const installed = installedDisplay();
+  if (!document.fullscreenElement) {
+    try {
+      if (!document.documentElement.requestFullscreen) throw new Error('Fullscreen unavailable');
+      await document.documentElement.requestFullscreen();
+    } catch (error) {
+      // Um PWA instalado já tem uma janela própria. Ainda pode permitir a
+      // orientação mesmo quando não oferece a API adicional de tela cheia.
+      if (!installed) throw error;
+    }
+  }
+  const nativeFullscreen = Boolean(document.fullscreenElement);
+  const orientation = screen.orientation as MobileOrientation | undefined;
+  if (!orientation?.lock) return { orientationLocked: false, active: !nativeFullscreen || Boolean(document.fullscreenElement) };
   try {
     await orientation.lock('landscape');
+    // O usuário pode sair enquanto o Android ainda processa a rotação.
+    if (nativeFullscreen && !document.fullscreenElement) {
+      unlockPresentationOrientation();
+      return { orientationLocked: false, active: false };
+    }
+    return { orientationLocked: true, active: true };
   } catch {
-    // Alguns navegadores não permitem travar a orientação. A tela cheia continua
-    // funcionando e o usuário pode deitar o celular com a rotação automática ativa.
-    release();
+    return { orientationLocked: false, active: !nativeFullscreen || Boolean(document.fullscreenElement) };
   }
 }
 
-export async function exitPresentationFullscreen(): Promise<void> {
-  await document.exitFullscreen();
-  releaseOrientation?.();
+export function unlockPresentationOrientation(): void {
+  try { screen.orientation?.unlock(); } catch { /* A orientação pode já estar liberada. */ }
 }

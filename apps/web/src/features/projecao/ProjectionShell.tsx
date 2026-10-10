@@ -6,7 +6,6 @@ import { SlideView } from '@/components/SlideView';
 import { buttonClass } from '@/components/ui/buttonStyles';
 import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
 import { useFontFace } from '@/presentation/measure';
-import { enterPresentationFullscreen } from '@/presentation/fullscreen';
 import { ServiceWorkerRegistration } from '@/pwa/ServiceWorkerRegistration';
 import { openLocalChannel, type LocalChannel } from '../apresentacao/channel';
 import { InteractiveStage } from '../apresentacao/InteractiveStage';
@@ -181,7 +180,7 @@ function PublicOutput({ sessionId }: { sessionId: string }) {
 
   function requestFullscreen() {
     setFullscreenError(false);
-    enterPresentationFullscreen().catch(() => setFullscreenError(true));
+    document.documentElement.requestFullscreen().catch(() => setFullscreenError(true));
   }
 
   const attributes = {
@@ -214,13 +213,10 @@ function PublicOutput({ sessionId }: { sessionId: string }) {
               Preparar esta janela de projeção
             </h1>
             <ol className="list-decimal space-y-1 pl-5 text-sm">
-              <li>No computador, arraste esta janela para o projetor ou segundo monitor. No celular, conecte o espelhamento Wi-Fi.</li>
-              <li>Entre em tela cheia. No celular, a apresentação tenta usar a orientação horizontal.</li>
+              <li>Arraste esta janela para o projetor ou segundo monitor (área estendida, não espelhada).</li>
+              <li>Entre em tela cheia.</li>
               <li>Arme a saída: esta ajuda some e só o slide aparece.</li>
             </ol>
-            <p className="text-xs text-muted">
-              Se continuar na vertical, ative a rotação automática e deite o celular. Se só o projetor continuar na vertical, confira a proporção da tela nas opções de espelhamento do celular ou do receptor.
-            </p>
             <p role="status" className="text-sm text-muted" data-testid="setup-connection">
               {state.status === 'ended'
                 ? 'A sessão foi encerrada pelo operador.'
@@ -238,7 +234,7 @@ function PublicOutput({ sessionId }: { sessionId: string }) {
             </p>
             {fullscreenError && (
               <p role="alert" className="text-sm text-danger">
-                Não foi possível entrar em tela cheia neste navegador.
+                O navegador recusou a tela cheia. Clique em &ldquo;Tela cheia&rdquo; de novo nesta janela.
               </p>
             )}
             <div className="flex flex-wrap gap-2">
