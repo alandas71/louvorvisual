@@ -437,6 +437,7 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
           controls={controls}
           dispatch={dispatch}
           countdown={controls.capabilities.countdown ? <Countdown controller={controller} /> : undefined}
+          onExit={() => setInteractive(false)}
           pinned={draft !== null}
           badge={
             <span className="flex items-center gap-2 text-xs text-[rgba(209,213,219,0.9)]">

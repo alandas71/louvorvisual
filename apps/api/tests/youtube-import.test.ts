@@ -37,4 +37,15 @@ describe('download e conversão do YouTube', () => {
     await expect(importYoutube('https://youtu.be/abcdefghijk', new AbortController().signal)).rejects.toMatchObject({ statusCode: 503, code: 'DEPENDENCY_NOT_READY' });
     expect(mocks.rm).toHaveBeenCalled();
   });
+
+  it.each([
+    ['vídeo privado', 'ERROR: Private video', 422, 'não está disponível publicamente'],
+    ['bloqueio do YouTube', 'ERROR: Sign in to confirm you’re not a bot', 502, 'bloqueou temporariamente'],
+    ['FFmpeg ausente depois do download', 'ERROR: ffmpeg not found', 503, 'não encontrou FFmpeg'],
+    ['extrator desatualizado', 'ERROR: Unable to extract player response', 502, 'Atualize o yt-dlp'],
+  ])('explica %s sem expor detalhes do processo', async (_name, stderr, statusCode, message) => {
+    mocks.execute.mockRejectedValue(Object.assign(new Error('command failed'), { stderr }));
+    await expect(importYoutube('https://youtu.be/abcdefghijk', new AbortController().signal)).rejects.toMatchObject({ statusCode, message: expect.stringContaining(message) });
+    expect(mocks.rm).toHaveBeenCalled();
+  });
 });
