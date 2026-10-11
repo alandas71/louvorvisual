@@ -23,7 +23,7 @@ export class ReceiverRelay {
     this.sweep();
     if (this.rooms.size >= 1000) throw new RelayError(503, 'Receptor temporariamente indisponível.');
     let code: string;
-    do { code = String(randomInt(10000000, 100000000)); } while ([...this.rooms.values()].some(room => room.code === code));
+    do { code = String(randomInt(1000, 10000)); } while ([...this.rooms.values()].some(room => room.code === code));
     const room: Room = { id: secret(), code, receiver: secret(), controller: null, created: this.now(), touched: this.now(), visual: null, ack: null, visualVersion: 0, ackVersion: 0, receiverSeen: this.now(), controllerSeen: 0, generation: -1 };
     this.rooms.set(room.id, room);
     return { id: room.id, token: room.receiver, code };

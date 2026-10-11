@@ -44,6 +44,9 @@ function WorshipWaiting({ variant = 'waiting', label }: { variant?: 'waiting' | 
 }
 
 export function ReceiverView() {
+  // The native projector APK is deliberately just a remote PWA receiver. It
+  // must never show the library or ask for a second activation after launch.
+  const apkReceiver = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('receiver') === 'apk';
   const [connection, setConnection] = useState<Connection | null>(null);
   const [message, setMessage] = useState<Extract<ChannelMessage, { type: 'SESSION_SNAPSHOT' }> | null>(null);
   const [paired, setPaired] = useState(false);
@@ -58,6 +61,13 @@ export function ReceiverView() {
     setConnection(storedConnection(RECEIVER_KEY));
     setControlling(Boolean(storedConnection(CONTROLLER_KEY)));
   }, []);
+  useEffect(() => {
+    if (!apkReceiver || connection || controlling) return;
+    void activate();
+    // A fresh APK WebView receives its credential once, then sessionStorage
+    // keeps that receiver active for the duration of the app session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apkReceiver, connection, controlling]);
   useEffect(() => {
     if (!connection) return;
     let stopped = false; let timer: ReturnType<typeof setTimeout>;
@@ -160,12 +170,12 @@ export function ReceiverView() {
         {!controlling && <button disabled={busy} className={buttonClass('primary')} onClick={() => void activate()}>Ativar receptor neste dispositivo</button>}
         {controlling ? <><p role="status">Este dispositivo está conectado como controle.</p><button className={buttonClass('secondary')} onClick={() => void disconnect()}>Desconectar controle</button></> : <form className="flex flex-col gap-3" onSubmit={event => { event.preventDefault(); void connect(); }}>
           <label htmlFor="receiver-code">Código exibido no projetor</label>
-          <input id="receiver-code" inputMode="numeric" autoComplete="off" pattern="[0-9]{8}" maxLength={8} required value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} className="rounded-lg border border-border bg-surface p-3 text-white" />
+          <input id="receiver-code" inputMode="numeric" autoComplete="off" pattern="[0-9]{4}" maxLength={4} required value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} className="rounded-lg border border-border bg-surface p-3 text-white" />
           <button disabled={busy} className={buttonClass('secondary')}>Conectar como controle</button>
         </form>}
       </>}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      <button className={buttonClass('ghost')} onClick={leave}>Voltar à biblioteca</button>
+      {!apkReceiver && <button className={buttonClass('ghost')} onClick={leave}>Voltar à biblioteca</button>}
     </section>}
   </main>;
 }
