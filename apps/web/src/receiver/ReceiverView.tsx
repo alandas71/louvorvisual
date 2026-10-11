@@ -15,7 +15,10 @@ function ReceivedSlide({ connection, message, armed }: { connection: Connection;
     if (font === 'loading') return;
     void relayRequest('POST', connection, { action: 'publish', message: { type: 'STATE_ACK', sessionId: message.sessionId, generation: message.generation, windowId: connection.id, sequenceNumber: state.sequenceNumber, armed, fontMissing: font === 'missing' } }).catch(() => {});
   }, [connection, message, state.sequenceNumber, armed, font]);
-  return armed ? <SlideView fit="fill" text={state.frame.slide.text} style={state.frame.slide.style} fontId={state.frame.slide.fontId} visualMode={state.frame.visualMode} rotation={state.rotation} /> : null;
+  // The receiver is a physical landscape output. `rotation` is a preference
+  // for a local output window and is not applied to the phone preview; using
+  // it here can therefore turn an otherwise correct slide sideways.
+  return armed ? <SlideView fit="fill" text={state.frame.slide.text} style={state.frame.slide.style} fontId={state.frame.slide.fontId} visualMode={state.frame.visualMode} rotation={0} /> : null;
 }
 
 export function ReceiverView() {
@@ -41,7 +44,13 @@ export function ReceiverView() {
         const data = await relayRequest<RelayState>('GET', connection);
         if (stopped) return;
         setPaired(data.paired); setOnline(data.peerOnline); setError('');
-        if (data.message?.type === 'SESSION_SNAPSHOT') setMessage(data.message);
+        if (data.message?.type === 'SESSION_SNAPSHOT') {
+          setMessage(data.message);
+          // Sequence zero is the prepared state. Once the operator advances
+          // past it, the remote output follows the started presentation without
+          // requiring a second action on the projector.
+          if (data.message.state.sequenceNumber > 0) setArmed(true);
+        }
         else if (data.message?.type === 'SESSION_ENDED' || data.message?.type === 'SESSION_HANDOFF') setMessage(null);
       } catch (error) {
         if (stopped) return;
