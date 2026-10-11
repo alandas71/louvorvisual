@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { ChannelMessage } from '@louvorvisual/presentation';
+import { fontStack, type ChannelMessage } from '@louvorvisual/presentation';
 import { SlideView } from '@/components/SlideView';
 import { useFontFace } from '@/presentation/measure';
 import { ConnectionError, RECEIVER_KEY, SILENT_PEER_MS, relayAudioBlob, relayRequest, storedConnection, type Connection, type RelayAudio, type RelayState } from './client';
@@ -228,26 +228,30 @@ export function ReceiverScreen({ kiosk = false, onLeave }: { kiosk?: boolean; on
   const hint = !showCode && !live && paired && code !== null;
   const frame = message?.state.frame;
   const instrumental = live && frame?.visualMode === 'normal' && frame.slide.text.trim() === '';
+  // O que ocupa a tela. A luz fica sempre por baixo; só o que está sobre ela muda, esmaecendo.
+  const mode = showCode || !data ? 'code' : !live || !frame ? 'waiting' : frame.visualMode === 'black' ? 'black' : !instrumental ? 'slide' : frame.index === 0 ? 'title' : 'light';
+  const info = message?.info ?? null;
 
   useReceiverAudio(connection, data?.audio ?? null, relay?.at ?? 0, online, message?.state.controls.audio?.volume ?? null, latency);
 
   return (
-    <main data-testid="pwa-receiver" data-online={online} data-armed={!showCode} data-live={live} data-sequence={message?.state.sequenceNumber ?? ''} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', background: '#000', cursor: showCode && !kiosk ? 'auto' : 'none' }}>
+    <main className="lv-output-motion" data-testid="pwa-receiver" data-online={online} data-armed={!showCode} data-live={live} data-mode={mode} data-sequence={message?.state.sequenceNumber ?? ''} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', background: '#000', cursor: showCode && !kiosk ? 'auto' : 'none' }}>
       {connection && message && <Acknowledge connection={connection} message={message} onLatency={onLatency} />}
-      {showCode || !data ? (
-        <>
-          <WaitingLight strength={0.45} />
-          {data ? <CodeScreen code={code} paired={paired} error={error} kiosk={kiosk} onFullscreen={fullscreen} onLeave={onLeave ? leave : undefined} />
-            : <p role="status" style={{ ...fill, top: 'auto', bottom: '6vh', height: 'auto', textAlign: 'center', fontSize: '2.4vh', color: error ? '#ff9d9d' : 'rgba(255,255,255,0.5)', margin: 0 }}>{error || 'Conectando ao servidor…'}</p>}
-        </>
-      ) : live && frame && !instrumental ? (
+      {/* Atrás da letra a luz fica mais fraca e sobre a cor do tema, para o texto continuar legível. */}
+      <WaitingLight strength={mode === 'code' ? 0.45 : mode === 'slide' ? 0.55 : 1} tint={mode === 'slide' && frame ? frame.slide.style.palette.backgroundColor : null} />
+      {mode === 'code' && (data ? <CodeScreen code={code} paired={paired} error={error} kiosk={kiosk} onFullscreen={fullscreen} onLeave={onLeave ? leave : undefined} />
+        : <p role="status" style={{ ...fill, top: 'auto', bottom: '6vh', height: 'auto', textAlign: 'center', fontSize: '2.4vh', color: error ? '#ff9d9d' : 'rgba(255,255,255,0.5)', margin: 0 }}>{error || 'Conectando ao servidor…'}</p>)}
+      {/* Introdução: nome do louvor e artista sobre a luz enquanto toca o instrumental do início. */}
+      <div data-testid="receiver-title" aria-hidden={mode !== 'title'} style={{ ...fill, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '6vh 8vw', boxSizing: 'border-box', color: '#fff', fontFamily: frame ? fontStack(frame.slide.fontId) : undefined, opacity: mode === 'title' ? 1 : 0, transition: `opacity ${mode === 'title' ? 1200 : 700}ms ease-in-out`, pointerEvents: 'none' }}>
+        <p style={{ margin: 0, fontSize: '9vh', fontWeight: 700, lineHeight: 1.15, textShadow: '0 0 5vh rgba(255,215,140,0.55), 0 0.4vh 1.2vh rgba(0,0,0,0.6)' }}>{info?.title}</p>
+        {info?.artist && <p style={{ margin: '3vh 0 0', fontSize: '4.2vh', letterSpacing: '0.08em', color: 'rgba(255,236,196,0.85)', textShadow: '0 0.3vh 1vh rgba(0,0,0,0.6)' }}>{info.artist}</p>}
+      </div>
+      {mode === 'slide' && frame && (
         <div key={frame.occurrenceId} className="lv-receiver-slide-enter" style={fill}>
-          <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={0} />
+          <SlideView transparent fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={0} />
         </div>
-      ) : (
-        // Introdução e trechos instrumentais são slides sem letra: a mesma luz da espera ocupa a tela.
-        <div style={fill} data-receiver-light={instrumental ? 'instrumental' : 'waiting'}><WaitingLight /></div>
       )}
+      <div style={{ ...fill, background: '#000', opacity: mode === 'black' ? 1 : 0, transition: 'opacity 300ms ease', pointerEvents: 'none' }} />
       {hint && <p data-testid="receiver-code-hint" style={{ position: 'absolute', right: '3vw', bottom: '3vh', margin: 0, fontSize: '2.2vh', color: 'rgba(255,255,255,0.4)' }}>Reconectar o celular: {code}</p>}
     </main>
   );

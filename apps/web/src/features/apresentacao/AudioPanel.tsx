@@ -2,7 +2,8 @@
 
 import { formatTimerSeconds, OCCURRENCE_DURATION_MS, parseTimerSeconds, type Uuid } from '@louvorvisual/domain';
 import type { AudioControls, EngineNotice, EngineView, ResolvedSlide, SnapshotAudio } from '@louvorvisual/presentation';
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useState, useSyncExternalStore } from 'react';
+import { remoteAudioStatus, subscribeRemoteAudio, type RemoteAudioStatus } from '@/receiver/client';
 import { buttonClass } from '@/components/ui/buttonStyles';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,15 @@ const NOTICE_TEXT: Partial<Record<NonNullable<EngineNotice>, string>> = {
   'audio-failed': 'A faixa falhou durante a reprodução.',
 };
 
+const REMOTE_AUDIO_TEXT: Record<Exclude<RemoteAudioStatus['state'], 'none'>, string> = {
+  offline: '🔈 Projetor sem conexão: o som sai neste dispositivo.',
+  sending: '🔈 Enviando a faixa ao projetor; por enquanto o som sai neste dispositivo',
+  loading: '🔈 O projetor está carregando a faixa; por enquanto o som sai neste dispositivo.',
+  projector: '🔊 O som está saindo no projetor. Este dispositivo fica mudo.',
+  blocked: '⚠ O projetor recusou tocar a faixa sem um toque na tela dele. O som sai neste dispositivo.',
+  failed: '⚠ O projetor não conseguiu abrir a faixa. O som sai neste dispositivo.',
+};
+
 type AudioPanelProps = {
   controller: SessionController;
   view: EngineView;
@@ -84,6 +94,7 @@ export function AudioPanel({ controller, view, dispatch, choices, selectedBindin
   const audio = view.controls.audio;
   const ready = state.status === 'ready';
   const noticeText = notice ? NOTICE_TEXT[notice] : undefined;
+  const remote = useSyncExternalStore(subscribeRemoteAudio, remoteAudioStatus, remoteAudioStatus);
 
   return (
     <section aria-labelledby="faixa" className="flex flex-col gap-2 rounded-lg border border-border p-3" data-testid="audio-panel" data-policy={state.audioPolicy} data-playing={audio?.playing ?? false} data-seeking={audio?.seeking ?? false} data-notice={notice ?? ''}>
@@ -116,6 +127,12 @@ export function AudioPanel({ controller, view, dispatch, choices, selectedBindin
           <p className="text-sm">
             <span className="font-semibold">{AUDIO_KIND_TEXT[audio.kind]}</span> · {audio.filename} · {AUDIO_POLICY_TEXT[audio.policy]}
           </p>
+          {remote.state !== 'none' && (
+            <p role="status" className={cn('text-sm', remote.state === 'projector' ? 'text-success' : remote.state === 'blocked' || remote.state === 'failed' ? 'text-danger' : 'text-muted')} data-testid="audio-output" data-state={remote.state}>
+              {REMOTE_AUDIO_TEXT[remote.state]}
+              {remote.state === 'sending' && ` (${remote.progress}%)`}
+            </p>
+          )}
           <Position controller={controller} audio={audio} dispatch={dispatch} />
           <div className="flex flex-wrap items-center gap-2">
             {(ready || audio.policy === 'independent') && (

@@ -12,9 +12,12 @@ Sem o APK, um navegador ligado ao projetor serve de saída: abra **/receptor** n
 
 - Sem celular pareado: o código.
 - Pareado, antes de **Iniciar** e depois de **Encerrar**: a espera.
-- Slide com letra: o slide, com o mesmo renderizador do PWA.
-- Slide sem letra (Introdução, Instrumental): a mesma luz da espera, no lugar de uma tela vazia.
+- Slide com letra: a letra, com o mesmo renderizador do PWA, sobre a luz animada mais fraca e a cor de fundo do tema.
+- Primeiro slide sem letra (Introdução): nome do louvor e artista sobre a luz. O louvor precisa começar com um slide sem letra; sem ele, a apresentação começa direto na letra.
+- Demais slides sem letra (Instrumental): só a luz.
 - **Tela preta** no celular continua sendo preto.
+
+A luz nunca é cortada: fica sempre por baixo, e o que está sobre ela (código, nome do louvor, letra) esmaece ao entrar e sair.
 
 ## Som
 
