@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import type { ChannelMessage } from '@louvorvisual/presentation';
 import { SlideView } from '@/components/SlideView';
 import { useFontFace } from '@/presentation/measure';
-import { ConnectionError, RECEIVER_KEY, SILENT_PEER_MS, relayAudioBlob, relayRequest, storedConnection, type Connection, type RelayAudio, type RelayState } from './client';
+import { ConnectionError, RECEIVER_KEY, SILENT_PEER_MS, cachedAudio, relayAudioBlob, relayRequest, storedConnection, type Connection, type RelayAudio, type RelayState } from './client';
 import type { ReceiverAudioStatus } from './relay';
 import { WaitingLight } from './WaitingLight';
 
@@ -36,7 +36,9 @@ function Acknowledge({ connection, message, onLatency }: { connection: Connectio
 function useReceiverAudio(connection: Connection | null, audio: RelayAudio | null, receivedAt: number, online: boolean, volume: number | null, latency: { current: number }) {
   const element = useRef<HTMLAudioElement | null>(null);
   const [loaded, setLoaded] = useState<string | null>(null);
-  const sha256 = audio?.available ? audio.sha256 : null;
+  const sha256 = audio?.sha256 ?? null;
+  const available = useRef(false);
+  useEffect(() => { available.current = audio?.available ?? false; }, [audio]);
   const report = useCallback((sha: string, status: ReceiverAudioStatus) => {
     if (connection) void relayRequest('POST', connection, { action: 'audio-status', sha256: sha, status }).catch(() => {});
   }, [connection]);
@@ -47,8 +49,17 @@ function useReceiverAudio(connection: Connection | null, audio: RelayAudio | nul
     const player = new Audio();
     player.preload = 'auto';
     report(sha256, 'loading');
-    void relayAudioBlob(connection, sha256).then(blob => {
-      if (!current) return;
+    // A faixa guardada de outra vez vale na hora, antes mesmo de o celular terminar (ou começar) o envio.
+    const fetchTrack = async (): Promise<Blob | null> => {
+      while (current) {
+        const blob = (await cachedAudio(sha256)) ?? (available.current ? await relayAudioBlob(connection, sha256) : null);
+        if (blob) return blob;
+        await new Promise(resolve => window.setTimeout(resolve, 400));
+      }
+      return null;
+    };
+    void fetchTrack().then(blob => {
+      if (!current || !blob) return;
       url = URL.createObjectURL(blob);
       // Basta conhecer a faixa: no Android o player não adianta o carregamento ("canplay"
       // só viria depois do play), e esperar por ele deixaria o projetor mudo para sempre.

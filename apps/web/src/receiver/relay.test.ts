@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AUDIO_CHUNK_BYTES, ReceiverRelay } from './relay';
 import { PresentationEngine, ControllerLink } from '@louvorvisual/presentation';
 import { timedSong } from '../../../../packages/presentation/src/testing';
@@ -109,6 +112,23 @@ describe('receptor do PWA', () => {
     const other = relay.create(); const otherPhone = relay.pair(other.code);
     expect(relay.setAudio(otherPhone.id, otherPhone.token, state).file).toMatchObject({ missing: [] });
     expect(relay.read(other.id, other.token).audio).toMatchObject({ available: true });
+  });
+  it('com pasta de faixas, o que foi enviado sobrevive ao reinício do servidor', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lv-relay-'));
+    try {
+      const content = new Uint8Array(1000).map((_, index) => index % 97);
+      const sha256 = createHash('sha256').update(content).digest('hex'); const state = { sha256, playing: false, positionMs: 0, volume: 1 };
+      const first = new ReceiverRelay(undefined, dir); const screen = first.create(); const phone = first.pair(screen.code);
+      first.setAudio(phone.id, phone.token, state);
+      expect(first.putAudio(phone.id, phone.token, { sha256, mime: 'audio/mpeg', total: 1000, offset: 0 }, content).missing).toEqual([]);
+      expect(Buffer.compare(first.getAudio(screen.id, screen.token, sha256).bytes, Buffer.from(content))).toBe(0);
+      // Outro processo, mesma pasta: nada a enviar, e o projetor baixa direto.
+      const second = new ReceiverRelay(undefined, dir); const again = second.create(); const againPhone = second.pair(again.code);
+      expect(second.setAudio(againPhone.id, againPhone.token, state).file).toEqual({ received: 1000, total: 1000, missing: [] });
+      expect(second.read(again.id, again.token).audio).toMatchObject({ available: true });
+      expect(second.getAudio(again.id, again.token, sha256)).toMatchObject({ mime: 'audio/mpeg' });
+      expect(Buffer.compare(second.getAudio(again.id, again.token, sha256).bytes, Buffer.from(content))).toBe(0);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   it('recusa uma faixa cujo conteúdo não confere com o hash', () => {
     const relay = new ReceiverRelay(); const screen = relay.create(); const phone = relay.pair(screen.code);

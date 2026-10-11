@@ -1,4 +1,6 @@
 node_modules/
+# Faixas enviadas ao projetor, guardadas pelo servidor web
+.receiver-audio/
 .next/
 out/
 dist/

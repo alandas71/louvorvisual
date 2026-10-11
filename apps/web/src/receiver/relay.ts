@@ -1,4 +1,6 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ChannelMessage } from '@louvorvisual/presentation';
 
 /** Estado da faixa publicado pelo celular: a posição vale para o instante `at` do relógio do servidor. */
@@ -21,6 +23,8 @@ const CONTROLLER_GONE_MS = 20_000;
 export const AUDIO_CHUNK_BYTES = 256 * 1024;
 const AUDIO_FILE_BYTES = 64 * 1024 * 1024;
 const AUDIO_TOTAL_BYTES = 256 * 1024 * 1024;
+/** Limite das faixas guardadas em disco; passando dele, saem as usadas há mais tempo. */
+const AUDIO_DISK_BYTES = 2 * 1024 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
 
 /** Ephemeral rooms: deploy this relay in one persistent Node process, not serverless replicas. */
@@ -32,7 +36,44 @@ export class ReceiverRelay {
    * fica pronto para o projetor na hora, em qualquer pareamento seguinte.
    */
   private files = new Map<string, AudioFile>();
-  constructor(private now = () => Date.now()) {}
+  /** Faixas completas já gravadas em disco: sobrevivem ao reinício do servidor. */
+  private saved = new Map<string, { mime: string; total: number; usedAt: number }>();
+  /** `dir`: onde guardar as faixas completas. Sem ele, ficam só em memória. */
+  constructor(private now = () => Date.now(), private dir: string | null = null) {
+    if (!dir) return;
+    try {
+      mkdirSync(dir, { recursive: true });
+      for (const name of readdirSync(dir)) {
+        const sha256 = name.endsWith('.json') ? name.slice(0, -5) : '';
+        if (!SHA256.test(sha256)) continue;
+        const meta = JSON.parse(readFileSync(join(dir, name), 'utf8')) as { mime?: unknown; total?: unknown };
+        const data = join(dir, sha256 + '.bin');
+        if (typeof meta.mime === 'string' && typeof meta.total === 'number' && existsSync(data) && statSync(data).size === meta.total) this.saved.set(sha256, { mime: meta.mime, total: meta.total, usedAt: statSync(data).mtimeMs });
+      }
+    } catch { this.dir = null; }
+  }
+  /** Passa a faixa conferida da memória para o disco. Se não der, ela continua em memória. */
+  private persist(file: AudioFile) {
+    if (!this.dir) return;
+    try {
+      const data = join(this.dir, file.sha256 + '.bin');
+      writeFileSync(data + '.part', Buffer.concat(file.parts as Buffer[]));
+      renameSync(data + '.part', data);
+      writeFileSync(join(this.dir, file.sha256 + '.json'), JSON.stringify({ mime: file.mime, total: file.total }));
+      this.saved.set(file.sha256, { mime: file.mime, total: file.total, usedAt: this.now() });
+      this.files.delete(file.sha256);
+      let bytes = [...this.saved.values()].reduce((sum, item) => sum + item.total, 0);
+      for (const [sha256, item] of [...this.saved].sort((a, b) => a[1].usedAt - b[1].usedAt)) {
+        if (bytes <= AUDIO_DISK_BYTES) break;
+        if (sha256 !== file.sha256) { this.forget(sha256); bytes -= item.total; }
+      }
+    } catch { /* Disco cheio ou sem permissão: a faixa segue em memória até o próximo reinício. */ }
+  }
+  private forget(sha256: string) {
+    this.saved.delete(sha256);
+    if (!this.dir) return;
+    for (const suffix of ['.bin', '.json']) try { rmSync(join(this.dir, sha256 + suffix), { force: true }); } catch { /* Já não existe. */ }
+  }
   private sweep() {
     for (const [id, room] of this.rooms) {
       if (this.now() - room.created <= 24 * 60 * 60_000 && this.now() - room.touched <= (room.controller ? 120_000 : 600_000)) continue;
@@ -150,7 +191,8 @@ export class ReceiverRelay {
       this.changed(room);
     }
     const stored = state ? this.files.get(state.sha256) : undefined;
-    const file = stored ? { received: stored.received, total: stored.total, missing: this.missing(stored) } : null;
+    const kept = state ? this.saved.get(state.sha256) : undefined;
+    const file = kept ? { received: kept.total, total: kept.total, missing: [] } : stored ? { received: stored.received, total: stored.total, missing: this.missing(stored) } : null;
     return { peerOnline: room.waiters.size > 0 || this.now() - room.receiverSeen < ONLINE_MS, audioStatus: room.audioStatus, file };
   }
   /** Projetor: se a faixa está pronta para tocar aqui. Enquanto não estiver, o celular continua audível. */
@@ -162,7 +204,7 @@ export class ReceiverRelay {
   }
   private complete(sha256: string) {
     const file = this.files.get(sha256);
-    return file !== undefined && file.received === file.total;
+    return this.saved.has(sha256) || (file !== undefined && file.received === file.total);
   }
   private missing(file: AudioFile) {
     const offsets: number[] = [];
@@ -185,6 +227,8 @@ export class ReceiverRelay {
     if (!SHA256.test(file.sha256) || !Number.isSafeInteger(file.total) || file.total <= 0 || !Number.isSafeInteger(file.offset) || file.offset < 0 || file.offset >= file.total || file.offset % AUDIO_CHUNK_BYTES !== 0) throw new RelayError(400, 'Áudio inválido.');
     if (bytes.byteLength !== Math.min(AUDIO_CHUNK_BYTES, file.total - file.offset)) throw new RelayError(400, 'Áudio inválido.');
     if (file.total > AUDIO_FILE_BYTES) throw new RelayError(413, 'A faixa é grande demais para tocar no projetor.');
+    const kept = this.saved.get(file.sha256);
+    if (kept) return { received: kept.total, total: kept.total, missing: [] };
     let stored = this.files.get(file.sha256);
     if (!stored || stored.total !== file.total) {
       stored = { sha256: file.sha256, mime: /^audio\/[\w.+-]+$/.test(file.mime) ? file.mime : 'application/octet-stream', total: file.total, received: 0, parts: [], usedAt: this.now() };
@@ -200,6 +244,7 @@ export class ReceiverRelay {
         const hash = createHash('sha256');
         for (const part of stored.parts) hash.update(part as Buffer);
         if (hash.digest('hex') !== file.sha256) { this.files.delete(file.sha256); throw new RelayError(400, 'A faixa chegou diferente do original.'); }
+        this.persist(stored);
         for (const room of this.rooms.values()) if (room.audio?.sha256 === file.sha256) this.changed(room);
       }
     }
@@ -207,6 +252,13 @@ export class ReceiverRelay {
   }
   getAudio(id: string, token: string, sha256: string) {
     const { room } = this.authorize(id, token);
+    const kept = room.audio?.sha256 === sha256 ? this.saved.get(sha256) : undefined;
+    if (kept && this.dir) {
+      try {
+        kept.usedAt = this.now();
+        return { mime: kept.mime, bytes: readFileSync(join(this.dir, sha256 + '.bin')) };
+      } catch { this.forget(sha256); }
+    }
     const file = this.files.get(sha256);
     if (room.audio?.sha256 !== sha256 || !file || file.received !== file.total) throw new RelayError(404, 'Áudio indisponível.');
     file.usedAt = this.now();

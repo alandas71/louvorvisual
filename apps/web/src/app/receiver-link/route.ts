@@ -1,9 +1,11 @@
 import { AUDIO_CHUNK_BYTES, ReceiverRelay, RelayError, type ReceiverAudioStatus, type RelayAudioState } from '@/receiver/relay';
 import type { ChannelMessage } from '@louvorvisual/presentation';
+import { join } from 'node:path';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const shared = globalThis as typeof globalThis & { lvReceiverRelay?: ReceiverRelay };
-const relay = shared.lvReceiverRelay ??= new ReceiverRelay();
+// As faixas enviadas ao projetor ficam em disco, fora do build: um deploy não obriga a reenviá-las.
+const relay = shared.lvReceiverRelay ??= new ReceiverRelay(undefined, process.env.LV_RECEIVER_AUDIO_DIR || join(process.cwd(), '.receiver-audio'));
 const response = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 /** A leitura em espera fica abaixo dos prazos comuns de proxy (60 s) e do cliente. */
 const WAIT_MS = 10_000;

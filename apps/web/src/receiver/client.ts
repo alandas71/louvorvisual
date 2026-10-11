@@ -29,7 +29,7 @@ export async function relayRequest<T>(method: string, connection: Connection | n
 }
 const AUDIO_CACHE = 'lv-receiver-audio';
 const AUDIO_CACHE_ENTRIES = 12;
-async function cachedAudio(sha256: string): Promise<Blob | null> {
+export async function cachedAudio(sha256: string): Promise<Blob | null> {
   try { return (await (await caches.open(AUDIO_CACHE)).match('/receiver-audio/' + sha256))?.blob() ?? null; } catch { return null; }
 }
 async function keepAudio(sha256: string, blob: Blob) {
@@ -121,7 +121,7 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
   // Com o som no projetor, o player daqui segue tocando quase inaudível em vez de mudo: no Android,
   // uma página que toca áudio continua viva com a tela bloqueada, e é este player o relógio da letra
   // e da faixa do projetor. Onde o volume não pode ser mudado (iOS), fica mudo mesmo.
-  let silenced = false; let volume = element.volume;
+  let silenced = false; let volume = element.volume; let projectorHasIt = false;
   function silence(on: boolean) {
     if (on === silenced) return;
     silenced = on;
@@ -136,10 +136,10 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
     if (uploading || closed) return; uploading = true;
     const queue = [...missing];
     const send = async () => {
-      for (let offset = queue.shift(); offset !== undefined && !closed; offset = queue.shift()) {
+      for (let offset = queue.shift(); offset !== undefined && !closed && !projectorHasIt; offset = queue.shift()) {
         const part = blob.slice(offset, offset + AUDIO_CHUNK_BYTES);
         const reply = await relayRequest<{ received: number; total: number }>('PUT', connection, undefined, { query: `sha=${sha256}&total=${blob.size}&offset=${offset}`, timeoutMs: 60_000, raw: { body: part, type: blob.type || 'application/octet-stream' } });
-        if (!closed) setRemoteAudio('sending', Math.floor((reply.received / reply.total) * 100));
+        if (!closed && !projectorHasIt) setRemoteAudio('sending', Math.floor((reply.received / reply.total) * 100));
       }
     };
     try { await Promise.all(Array.from({ length: UPLOAD_LANES }, send)); void beat(); }
@@ -157,12 +157,14 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
       latencyMs = latencyMs * 0.7 + (performance.now() - startedAt) * 0.3;
       if (closed) return;
       answeredAt = performance.now();
-      const pending = reply.file ? reply.file.missing : Array.from({ length: Math.ceil(blob.size / AUDIO_CHUNK_BYTES) }, (_, index) => index * AUDIO_CHUNK_BYTES);
-      if (pending.length) void upload(pending);
       const reported = reply.audioStatus?.sha256 === sha256 ? reply.audioStatus.status : null;
+      const pending = reply.file ? reply.file.missing : Array.from({ length: Math.ceil(blob.size / AUDIO_CHUNK_BYTES) }, (_, index) => index * AUDIO_CHUNK_BYTES);
+      // O projetor já tem a faixa guardada de outra vez: não há por que gastar a internet do celular com o envio.
+      projectorHasIt = reply.peerOnline && reported === 'ready';
+      if (pending.length && !projectorHasIt) void upload(pending);
       silence(reply.peerOnline && reported === 'ready');
       if (!reply.peerOnline) setRemoteAudio('offline');
-      else if (pending.length) setRemoteAudio('sending', Math.floor(((reply.file?.received ?? 0) / blob.size) * 100));
+      else if (pending.length && !projectorHasIt) setRemoteAudio('sending', Math.floor(((reply.file?.received ?? 0) / blob.size) * 100));
       else setRemoteAudio(reported === 'ready' ? 'projector' : reported === 'blocked' || reported === 'failed' ? reported : 'loading');
     } catch (error) {
       if (error instanceof ConnectionError && error.expired) { close(); return; }
