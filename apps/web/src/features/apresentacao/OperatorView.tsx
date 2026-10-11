@@ -76,15 +76,16 @@ export function OperatorView() {
   if (local.status === 'error') return <p role="alert" className="p-6">{local.message}</p>;
   const setlistId = query.get('repertorio');
   const itemId = query.get('item');
+  const audioBindingId = query.get('faixa');
   return (
-    <Operator key={`${songId}:${query.get('arranjo') ?? ''}:${setlistId ?? ''}:${itemId ?? ''}`} local={local.session} songId={songId} arrangementId={query.get('arranjo')} setlistId={setlistId} itemId={itemId} sessionHint={query.get('sessao')} />
+    <Operator key={`${songId}:${query.get('arranjo') ?? ''}:${setlistId ?? ''}:${itemId ?? ''}:${audioBindingId ?? ''}`} local={local.session} songId={songId} arrangementId={query.get('arranjo')} setlistId={setlistId} itemId={itemId} audioBindingId={audioBindingId} sessionHint={query.get('sessao')} />
   );
 }
 
-type OperatorProps = { local: LocalSession; songId: Uuid; arrangementId: Uuid | null; setlistId: Uuid | null; itemId: Uuid | null; sessionHint: Uuid | null };
+type OperatorProps = { local: LocalSession; songId: Uuid; arrangementId: Uuid | null; setlistId: Uuid | null; itemId: Uuid | null; audioBindingId: Uuid | null; sessionHint: Uuid | null };
 
-function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint }: OperatorProps) {
-  const state = useOperatorSession(local, { songId, arrangementId, setlistId, itemId, sessionHint });
+function Operator({ local, songId, arrangementId, setlistId, itemId, audioBindingId, sessionHint }: OperatorProps) {
+  const state = useOperatorSession(local, { songId, arrangementId, setlistId, itemId, audioBindingId, sessionHint });
   const back = (
     <button type="button" className={buttonClass('secondary', 'md', 'self-start')} onClick={leave}>
       ← Biblioteca
