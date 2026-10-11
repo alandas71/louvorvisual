@@ -5,7 +5,7 @@
 </style><script src="/controller.js" defer></script></head><body><main>
 <h1>LouvorVisual</h1><p class="muted">Controle do projetor · celular livre para ficar em pé</p>
 <p id="connection" role="status">Conectando…</p><p id="feedback" role="alert" class="error"></p>
-<section id="pairing"><h2>Conectar ao projetor</h2><p>Digite o código exibido em “Controlar pelo celular” no projetor.</p><form id="pair-form"><label for="code">Código de 6 dígitos</label><input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required><button class="primary wide" type="submit">Conectar</button></form></section>
+<section id="pairing"><h2>Conectar ao projetor</h2><p>Digite o código exibido em “Controlar pelo celular” no projetor.</p><form id="pair-form"><label for="code">Código de 4 dígitos</label><input id="code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" required><button class="primary wide" type="submit">Conectar</button></form></section>
 <div id="control" hidden>
 <section><h2 id="title">Escolha um louvor</h2><p id="slide-info" class="muted"></p><div id="preview" aria-label="Prévia da apresentação"></div><p id="notice" class="small muted"></p>
 <button id="start" class="primary wide" data-command="start">Iniciar apresentação</button>

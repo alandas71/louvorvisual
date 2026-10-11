@@ -21,7 +21,8 @@ internal class PhoneServer(
     private val now: () -> Long = System::currentTimeMillis,
 ) : NanoHTTPD(0) {
     private val random = SecureRandom()
-    private val code = random.nextInt(1000000).toString().padStart(6, '0')
+    /** Código curto, suficiente apenas para o pareamento local temporário. */
+    private val code = random.nextInt(10000).toString().padStart(4, '0')
     private val expires = now() + 10 * 60 * 1000
     @Volatile private var token: String? = null
     @Volatile private var seenAt = 0L

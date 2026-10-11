@@ -18,7 +18,29 @@ function ReceivedSlide({ connection, message, armed }: { connection: Connection;
   // The receiver is a physical landscape output. `rotation` is a preference
   // for a local output window and is not applied to the phone preview; using
   // it here can therefore turn an otherwise correct slide sideways.
-  return armed ? <SlideView fit="fill" text={state.frame.slide.text} style={state.frame.slide.style} fontId={state.frame.slide.fontId} visualMode={state.frame.visualMode} rotation={0} /> : null;
+  if (!armed) return null;
+  // Empty Introduction/Instrumental occurrences are valid slides. Give them a
+  // gentle worship transition instead of showing an unexplained blank frame.
+  if (state.frame.visualMode === 'normal' && state.frame.slide.text.trim() === '') return <WorshipWaiting variant="intro" label={state.controls.label} />;
+  return (
+    <div key={state.sequenceNumber} className="lv-receiver-slide-enter h-full w-full">
+      <SlideView fit="fill" text={state.frame.slide.text} style={state.frame.slide.style} fontId={state.frame.slide.fontId} visualMode={state.frame.visualMode} rotation={0} />
+    </div>
+  );
+}
+
+function WorshipWaiting({ variant = 'waiting', label }: { variant?: 'waiting' | 'intro'; label?: string }) {
+  const introduction = variant === 'intro';
+  return (
+    <div className="lv-receiver-waiting flex h-full w-full items-center justify-center overflow-hidden" data-testid="receiver-waiting">
+      <div className="lv-receiver-glow" aria-hidden="true" />
+      <div className="relative flex flex-col items-center gap-5 px-8 text-center text-white">
+        <div className="lv-receiver-cross" aria-hidden="true"><span /><span /></div>
+        <p className="text-xl font-medium tracking-wide sm:text-3xl">{introduction ? label || 'Introdução' : 'Prepare o seu coração'}</p>
+        <p className="text-sm tracking-[0.18em] text-white/65 uppercase sm:text-base">{introduction ? 'Momento instrumental' : 'Aguardando o próximo louvor'}</p>
+      </div>
+    </div>
+  );
 }
 
 export function ReceiverView() {
@@ -44,6 +66,9 @@ export function ReceiverView() {
         const data = await relayRequest<RelayState>('GET', connection);
         if (stopped) return;
         setPaired(data.paired); setOnline(data.peerOnline); setError('');
+        // Parear o celular já é a autorização para ocupar a saída. A espera
+        // visual substitui a antiga pergunta "Exibir apresentação".
+        if (data.paired) setArmed(true);
         if (data.message?.type === 'SESSION_SNAPSHOT') {
           setMessage(data.message);
           // Sequence zero is the prepared state. Once the operator advances
@@ -57,7 +82,9 @@ export function ReceiverView() {
         setOnline(false); setError(error instanceof Error ? error.message : 'Sem conexão.');
         if (error instanceof ConnectionError && error.expired) { sessionStorage.removeItem(RECEIVER_KEY); setConnection(null); setMessage(null); setArmed(false); return; }
       }
-      if (!stopped) timer = setTimeout(() => void poll(), 500);
+      // The receiver carries only compact visual state; a short polling
+      // interval keeps projector changes perceptibly aligned with the phone.
+      if (!stopped) timer = setTimeout(() => void poll(), 100);
     }
     void poll();
     return () => { stopped = true; clearTimeout(timer); };
@@ -118,7 +145,7 @@ export function ReceiverView() {
   }, []);
   return <main className="relative min-h-dvh bg-black text-white" data-testid="pwa-receiver" data-online={online} data-armed={armed} data-sequence={message?.state.sequenceNumber ?? ''}>
     <ServiceWorkerRegistration holdsSession />
-    {message && <div className="absolute inset-0 cursor-none"><ReceivedSlide connection={connection!} message={message} armed={armed} /></div>}
+    {armed && <div className="absolute inset-0 cursor-none">{message ? <ReceivedSlide connection={connection!} message={message} armed /> : <WorshipWaiting />}</div>}
     {!armed && <section className="relative mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-5 p-6">
       <h1 className="text-2xl font-bold">Projetor e controle pelo celular</h1>
       <p className="text-sm text-muted">No projetor, ative o receptor. No celular, abra este mesmo sistema e informe o código. Os dois precisam de conexão com o servidor.</p>
@@ -126,11 +153,8 @@ export function ReceiverView() {
         <h2 className="text-lg font-semibold">Modo receptor</h2>
         {!paired && <><p>Digite este código no celular (válido por 10 minutos):</p><p data-testid="receiver-code" className="font-mono text-4xl tracking-widest">{connection.code}</p></>}
         <p role="status">{paired ? online ? 'Celular conectado.' : 'Aguardando a conexão do celular…' : 'Aguardando o celular…'}</p>
-        <div className="flex flex-wrap gap-3">
-          <button className={buttonClass('secondary')} onClick={() => void fullscreen()}>Tela cheia</button>
-          <button className={buttonClass('primary')} onClick={() => { void fullscreen(); setArmed(true); }}>Exibir apresentação</button>
-        </div>
-        <p className="text-sm text-muted">A saída fica preta até você apresentar um louvor pelo celular. A tecla M reabre esta preparação. O áudio toca no celular.</p>
+        <div className="flex flex-wrap gap-3"><button className={buttonClass('secondary')} onClick={() => void fullscreen()}>Tela cheia</button></div>
+        <p className="text-sm text-muted">Assim que o celular conectar, esta tela entra automaticamente na projeção e mostra uma espera até você iniciar um louvor. A tecla M reabre esta preparação. O áudio toca no celular.</p>
         <button disabled={busy} className={buttonClass('secondary')} onClick={() => { void relayRequest('DELETE', connection).catch(() => {}); void activate(); }}>Gerar novo código</button>
       </> : <>
         {!controlling && <button disabled={busy} className={buttonClass('primary')} onClick={() => void activate()}>Ativar receptor neste dispositivo</button>}
