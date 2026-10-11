@@ -53,7 +53,7 @@ const LIBRARY_VIEWS = [
   { id: 'editor', Component: EditorView },
 ] as const;
 
-const CLEAR_DETAIL = { song: null, arranjo: null, repertorio: null, item: null, conflito: null };
+const CLEAR_DETAIL = { song: null, arranjo: null, repertorio: null, item: null, conflito: null, faixa: null };
 
 /** Clique simples troca a vista localmente; abrir em outra aba continua funcionando pelo endereço. */
 function goTo(event: MouseEvent, view: string, after?: () => void) {

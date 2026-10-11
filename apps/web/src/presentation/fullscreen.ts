@@ -26,23 +26,60 @@ export function subscribeDeviceOrientation(update: () => void): () => void {
   };
 }
 
+type LockableOrientation = ScreenOrientation & {
+  lock?: (orientation: 'landscape-primary') => Promise<void>;
+};
+let orientationRequested = false;
+
+export function releasePresentationOrientation(): void {
+  if (!orientationRequested) return;
+  orientationRequested = false;
+  try { screen.orientation?.unlock(); } catch { /* O sistema pode já ter liberado. */ }
+}
+
+export async function requestPresentationLandscape(): Promise<boolean> {
+  const orientation = screen.orientation as LockableOrientation | undefined;
+  if (!orientation?.lock) return false;
+  try {
+    // Uma direção definida evita alternar entre os dois sentidos horizontais.
+    await orientation.lock('landscape-primary');
+    orientationRequested = true;
+    if (deviceOrientation() === 'landscape') return true;
+    releasePresentationOrientation();
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function enterPresentationFullscreen(): Promise<'entered' | 'rotate-device'> {
-  // Não iniciar tela cheia na vertical, nem simular paisagem por CSS.
-  if (deviceOrientation() === 'portrait') return 'rotate-device';
-  if (document.fullscreenElement) return 'entered';
   const installed = window.matchMedia('(display-mode: standalone)').matches
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  try {
-    if (!document.documentElement.requestFullscreen) throw new Error('Fullscreen unavailable');
-    await document.documentElement.requestFullscreen();
-  } catch (error) {
-    // O PWA já ocupa uma janela própria; alguns sistemas não oferecem outra API.
-    if (!installed) throw error;
+  const portrait = deviceOrientation() === 'portrait';
+  const orientation = screen.orientation as LockableOrientation | undefined;
+  if (portrait && !orientation?.lock) return 'rotate-device';
+
+  // No PWA, pedir a rotação ao sistema antes de abrir a tela cheia adicional.
+  // Em abas comuns, o navegador normalmente exige tela cheia para autorizar.
+  if (portrait && installed && !await requestPresentationLandscape()) return 'rotate-device';
+  const alreadyFullscreen = Boolean(document.fullscreenElement);
+  if (!alreadyFullscreen) {
+    try {
+      if (!document.documentElement.requestFullscreen) throw new Error('Fullscreen unavailable');
+      await document.documentElement.requestFullscreen();
+    } catch (error) {
+      if (!installed) throw error;
+    }
+  }
+  if (portrait && !installed && !await requestPresentationLandscape()) {
+    if (!alreadyFullscreen && document.fullscreenElement) await document.exitFullscreen();
+    return 'rotate-device';
   }
   return 'entered';
 }
 
-/** Sair da tela cheia preserva a orientação escolhida pelo usuário no sistema. */
+/** Sair devolve ao sistema o controle da orientação, sem forçar outro sentido. */
 export async function exitPresentationFullscreen(): Promise<void> {
   if (document.fullscreenElement) await document.exitFullscreen();
+  releasePresentationOrientation();
 }
