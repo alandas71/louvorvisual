@@ -51,9 +51,16 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled") override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); store=LocalStore(this); importer=PackageImporter(store); nativeSession=NativeSessionStore(this); api=NativeApi(BuildConfig.API_BASE_URL)
         player=ExoPlayer.Builder(this).build().also { p -> p.addListener(object: Player.Listener { override fun onIsPlayingChanged(playing:Boolean)=audio( if(playing) "playing" else "paused", !playing ); override fun onPlaybackStateChanged(state:Int) { if(state==Player.STATE_ENDED) audio("ended",false) } }) }
-        val assets=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(this)).build()
-        webView=WebView(this).apply { setBackgroundColor(Color.rgb(16,18,23)); isFocusableInTouchMode=true; settings.javaScriptEnabled=true; settings.allowFileAccess=false; settings.allowContentAccess=false; settings.blockNetworkLoads=true; settings.domStorageEnabled=false; webViewClient=LocalOnlyClient(assets); loadUrl(ENTRY) }
-        WebViewCompat.addWebMessageListener(webView,GLOBAL,setOf(ORIGIN)) { _, msg, origin, frame, proxy -> if(origin.toString()==ORIGIN && frame && msg.type==WebMessageCompat.TYPE_STRING) executor.execute { handle(msg.data ?: return@execute,proxy) } }
+        // The APK is only a receiver for the PWA: no local library, import or
+        // controller page. Loading the official HTTPS PWA puts both devices in
+        // the exact same four-digit relay room and visual renderer.
+        val projectorUrl=BuildConfig.API_BASE_URL.trimEnd('/')+"/?view=receptor&receiver=apk"
+        webView=WebView(this).apply {
+            setBackgroundColor(Color.rgb(16,18,23)); isFocusableInTouchMode=true
+            settings.javaScriptEnabled=true; settings.allowFileAccess=false; settings.allowContentAccess=false
+            settings.blockNetworkLoads=false; settings.domStorageEnabled=true; settings.mediaPlaybackRequiresUserGesture=false
+            webViewClient=RemoteReceiverClient(BuildConfig.API_BASE_URL); loadUrl(projectorUrl)
+        }
         setContentView(webView); hideSystemBars(); webView.post { webView.requestFocus() }
     }
     private fun handle(raw:String,proxy:JavaScriptReplyProxy) {
@@ -177,6 +184,13 @@ class MainActivity : ComponentActivity() {
     private fun onPlayer(action:()->Unit){ runOnUiThread(action) }
     private fun audio(type:String,external:Boolean)=emit("audio.state",JSONObject().put("type",type).put("positionMs",player.currentPosition.coerceAtLeast(0)).put("external",external))
     private fun emit(event:String,payload:JSONObject){if(!::webView.isInitialized)return;val message=JSONObject().put("v",1).put("kind","event").put("event",event).put("payload",payload).toString();webView.post { webView.evaluateJavascript("window.$GLOBAL&&window.$GLOBAL.onmessage&&window.$GLOBAL.onmessage({data:${JSONObject.quote(message)}});",null) }}
-    private class LocalOnlyClient(private val assets:WebViewAssetLoader):WebViewClient(){override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=assets.shouldInterceptRequest(request.url);override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest)=true}
+    /** Keep the APK locked to the configured HTTPS PWA; external links cannot replace the receiver. */
+    private class RemoteReceiverClient(baseUrl:String):WebViewClient(){
+        private val allowedHost=Uri.parse(baseUrl).host
+        override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean {
+            val uri=request.url
+            return uri.scheme!="https" || uri.host!=allowedHost
+        }
+    }
     companion object { const val ORIGIN="https://appassets.androidplatform.net";const val ENTRY="$ORIGIN/assets/index.html";const val GLOBAL="louvorvisualHost";val METHODS=setOf("phone.open","phone.close","phone.status","phone.publish","phone.ack","host.info","host.setKeepAwake","host.exit","prefs.get","prefs.set","library.listSetlists","library.getSetlist","library.listSongs","library.getPresentable","session.create","session.saveCheckpoint","session.findRecoverable","session.end","files.pickPackage","files.applyImport","files.discardImport","audio.load","audio.play","audio.pause","audio.seek","audio.setVolume","audio.release","account.status","account.signIn","account.signOut","account.syncNow");val ERROR_CODES=setOf("invalid-request","unsupported","not-found","unavailable","blocked","storage","quota","offline","auth-required","cancelled","failed");val REJECTIONS=setOf("not-a-package","too-large","unsafe-path","manifest-missing","manifest-invalid","format-too-new","schema-too-new","schema-unsupported","font-pack-incompatible","catalog-missing","unexpected-file","missing-file","hash-mismatch","document-invalid","reference-broken","unreadable","quota") }
 }
