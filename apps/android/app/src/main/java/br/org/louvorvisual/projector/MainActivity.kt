@@ -16,6 +16,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -27,12 +30,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.util.UUID
+import java.net.NetworkInterface
+import java.net.Inet4Address
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.Executors
 
 /** Host da origem embarcada: a interface nunca recebe arquivos, tokens ou uma API arbitrária. */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView; private lateinit var store: LocalStore; private lateinit var importer: PackageImporter; private lateinit var player: ExoPlayer; private lateinit var nativeSession: NativeSessionStore; private lateinit var api: NativeApi
     private val executor=Executors.newSingleThreadExecutor(); private val epoch=UUID.randomUUID().toString(); private var sequence=0L
+    @Volatile private var phoneServer: PhoneServer? = null
+    @Volatile private var foreground = false
     private var pickerReply: ((JSONObject)->Unit)?=null
     private val picker=registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val reply=pickerReply; pickerReply=null
@@ -46,7 +54,7 @@ class MainActivity : ComponentActivity() {
         val assets=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(this)).build()
         webView=WebView(this).apply { setBackgroundColor(Color.rgb(16,18,23)); isFocusableInTouchMode=true; settings.javaScriptEnabled=true; settings.allowFileAccess=false; settings.allowContentAccess=false; settings.blockNetworkLoads=true; settings.domStorageEnabled=false; webViewClient=LocalOnlyClient(assets); loadUrl(ENTRY) }
         WebViewCompat.addWebMessageListener(webView,GLOBAL,setOf(ORIGIN)) { _, msg, origin, frame, proxy -> if(origin.toString()==ORIGIN && frame && msg.type==WebMessageCompat.TYPE_STRING) executor.execute { handle(msg.data ?: return@execute,proxy) } }
-        setContentView(webView); webView.post { webView.requestFocus() }
+        setContentView(webView); hideSystemBars(); webView.post { webView.requestFocus() }
     }
     private fun handle(raw:String,proxy:JavaScriptReplyProxy) {
         val id=runCatching { JSONObject(raw).getLong("id") }.getOrDefault(1)
@@ -54,9 +62,34 @@ class MainActivity : ComponentActivity() {
         catch(e:Exception) { proxy.postMessage(JSONObject().put("v",1).put("kind","error").put("id",id).put("error",JSONObject().put("code",e.message?.takeIf { it in ERROR_CODES } ?: "invalid-request").put("message","Pedido recusado pelo host.")).toString()) }
     }
     private fun dispatch(method:String,p:JSONObject,ok:(JSONObject)->Unit) { when(method) {
-        "host.info" -> ok(JSONObject().put("bridgeVersion",1).put("host","android").put("appVersion","0.1.0-e0").put("fontPackVersion","1"))
+        "host.info" -> ok(JSONObject().put("bridgeVersion",1).put("host","android").put("appVersion",BuildConfig.VERSION_NAME).put("fontPackVersion","1"))
         "host.setKeepAwake" -> { runOnUiThread { if(p.optBoolean("on")) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }; ok(JSONObject()) }
         "host.exit" -> { runOnUiThread { moveTaskToBack(true) }; ok(JSONObject()) }
+        "phone.open" -> {
+            phoneServer?.stop()
+            val addresses = localAddresses()
+            if (addresses.isEmpty()) { phoneServer = null; throw IllegalArgumentException("offline") }
+            val server = PhoneServer(
+                assets.open("phone/index.html").bufferedReader().use { it.readText() },
+                assets.open("phone/controller.js").bufferedReader().use { it.readText() },
+                ::localAddresses,
+                { kind, id, offset -> executor.submit<JSONObject> {
+                    when (kind) {
+                        "songs" -> page("song", JSONObject().put("cursor", offset.toString()).put("limit", 50))
+                        "setlists" -> page("setlist", JSONObject().put("cursor", offset.toString()).put("limit", 50))
+                        else -> setlist(id ?: throw IllegalArgumentException("not-found"))
+                    }
+                }.get(4, TimeUnit.SECONDS) },
+                { id, command -> executor.execute { if (foreground) emit("phone.command", JSONObject().put("id", id).put("command", command)) else phoneServer?.acknowledge(id, false, "Abra o LouvorVisual no projetor para continuar.") } },
+            )
+            server.foreground = foreground
+            try { server.start(5000, true); phoneServer = server; ok(server.connection()) }
+            catch (_: Exception) { server.stop(); phoneServer = null; throw IllegalArgumentException("unavailable") }
+        }
+        "phone.close" -> { phoneServer?.stop(); phoneServer = null; ok(JSONObject()) }
+        "phone.status" -> ok(phoneServer?.connection() ?: JSONObject().put("enabled", false).put("connected", false).put("urls", JSONArray()).put("code", JSONObject.NULL).put("expiresAt", JSONObject.NULL))
+        "phone.publish" -> { phoneServer?.publish(p); ok(JSONObject()) }
+        "phone.ack" -> { phoneServer?.acknowledge(p.getString("id"), p.getBoolean("ok"), p.getString("message")); ok(JSONObject()) }
         "prefs.get" -> ok(JSONObject().put("prefs",store.prefs())); "prefs.set" -> ok(JSONObject().put("prefs",store.setPrefs(p.getJSONObject("prefs"))))
         "library.listSetlists" -> ok(page("setlist",p)); "library.listSongs" -> ok(page("song",p)); "library.getSetlist" -> ok(setlist(p.getString("setlistId"))); "library.getPresentable" -> ok(presentable(p.getString("arrangementId")))
         "session.create" -> { store.createSession(p.getString("sessionId"),p.getJSONObject("snapshot"),p.getJSONObject("context")); ok(JSONObject()) }
@@ -105,7 +138,9 @@ class MainActivity : ComponentActivity() {
         fun page()=fields("cursor","limit")&&(p.isNull("cursor")||p.opt("cursor") is String)&&(p.optInt("limit",-1) in 1..50)
         fun opaque(name:String)=p.opt(name) is JSONObject
         return when(method) {
-        "host.info","host.exit","prefs.get","session.findRecoverable","files.pickPackage","audio.play","audio.release","account.status","account.signIn","account.signOut","account.syncNow"->fields()
+        "phone.open","phone.close","phone.status","host.info","host.exit","prefs.get","session.findRecoverable","files.pickPackage","audio.play","audio.release","account.status","account.signIn","account.signOut","account.syncNow"->fields()
+        "phone.publish"->PhoneServer.validPresentation(p)
+        "phone.ack"->fields("id","ok","message")&&uuid("id")&&p.opt("ok") is Boolean&&p.opt("message") is String&&p.getString("message").length<=1000
         "host.setKeepAwake"->fields("on")&&p.opt("on") is Boolean
         "prefs.set"->fields("prefs")&&p.opt("prefs") is JSONObject
         "library.listSetlists","library.listSongs"->page()
@@ -121,11 +156,27 @@ class MainActivity : ComponentActivity() {
         "audio.setVolume"->fields("volume")&&p.opt("volume") is Number&&p.optDouble("volume",-1.0) in 0.0..1.0
         else->false
     } }
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, webView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && ::webView.isInitialized) hideSystemBars()
+    }
+    private fun localAddresses(): List<String> = runCatching {
+        NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback && !it.name.startsWith("rmnet") && !it.name.startsWith("tun") }
+            .flatMap { it.inetAddresses.toList() }.filter { it is Inet4Address && it.isSiteLocalAddress }
+            .mapNotNull { it.hostAddress }.distinct()
+    }.getOrDefault(emptyList())
     override fun dispatchKeyEvent(event:KeyEvent):Boolean { val command=RemoteCommandMapper.fromKeyCode(event.keyCode)?:return super.dispatchKeyEvent(event); emit("remote.key",JSONObject().put("epoch",epoch).put("seq",++sequence).put("key",command.wireName).put("action",if(event.action==KeyEvent.ACTION_DOWN)"down" else "up").put("repeat",event.repeatCount)); return true }
-    override fun onPause(){super.onPause();player.pause();emit("host.lifecycle",JSONObject().put("state","background"))}; override fun onResume(){super.onResume();webView.post { webView.requestFocus() };emit("host.lifecycle",JSONObject().put("state","foreground"))}; override fun onDestroy(){player.release();executor.shutdown();webView.destroy();super.onDestroy()}
+    override fun onPause(){foreground=false;phoneServer?.foreground=false;super.onPause();player.pause();emit("host.lifecycle",JSONObject().put("state","background"))}; override fun onResume(){super.onResume();foreground=true;phoneServer?.foreground=true;webView.post { webView.requestFocus() };emit("host.lifecycle",JSONObject().put("state","foreground"))}; override fun onDestroy(){phoneServer?.stop();phoneServer=null;player.release();executor.shutdown();webView.destroy();super.onDestroy()}
     private fun onPlayer(action:()->Unit){ runOnUiThread(action) }
     private fun audio(type:String,external:Boolean)=emit("audio.state",JSONObject().put("type",type).put("positionMs",player.currentPosition.coerceAtLeast(0)).put("external",external))
     private fun emit(event:String,payload:JSONObject){if(!::webView.isInitialized)return;val message=JSONObject().put("v",1).put("kind","event").put("event",event).put("payload",payload).toString();webView.post { webView.evaluateJavascript("window.$GLOBAL&&window.$GLOBAL.onmessage&&window.$GLOBAL.onmessage({data:${JSONObject.quote(message)}});",null) }}
     private class LocalOnlyClient(private val assets:WebViewAssetLoader):WebViewClient(){override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=assets.shouldInterceptRequest(request.url);override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest)=true}
-    companion object { const val ORIGIN="https://appassets.androidplatform.net";const val ENTRY="$ORIGIN/assets/index.html";const val GLOBAL="louvorvisualHost";val METHODS=setOf("host.info","host.setKeepAwake","host.exit","prefs.get","prefs.set","library.listSetlists","library.getSetlist","library.listSongs","library.getPresentable","session.create","session.saveCheckpoint","session.findRecoverable","session.end","files.pickPackage","files.applyImport","files.discardImport","audio.load","audio.play","audio.pause","audio.seek","audio.setVolume","audio.release","account.status","account.signIn","account.signOut","account.syncNow");val ERROR_CODES=setOf("invalid-request","unsupported","not-found","unavailable","blocked","storage","quota","offline","auth-required","cancelled","failed");val REJECTIONS=setOf("not-a-package","too-large","unsafe-path","manifest-missing","manifest-invalid","format-too-new","schema-too-new","schema-unsupported","font-pack-incompatible","catalog-missing","unexpected-file","missing-file","hash-mismatch","document-invalid","reference-broken","unreadable","quota") }
+    companion object { const val ORIGIN="https://appassets.androidplatform.net";const val ENTRY="$ORIGIN/assets/index.html";const val GLOBAL="louvorvisualHost";val METHODS=setOf("phone.open","phone.close","phone.status","phone.publish","phone.ack","host.info","host.setKeepAwake","host.exit","prefs.get","prefs.set","library.listSetlists","library.getSetlist","library.listSongs","library.getPresentable","session.create","session.saveCheckpoint","session.findRecoverable","session.end","files.pickPackage","files.applyImport","files.discardImport","audio.load","audio.play","audio.pause","audio.seek","audio.setVolume","audio.release","account.status","account.signIn","account.signOut","account.syncNow");val ERROR_CODES=setOf("invalid-request","unsupported","not-found","unavailable","blocked","storage","quota","offline","auth-required","cancelled","failed");val REJECTIONS=setOf("not-a-package","too-large","unsafe-path","manifest-missing","manifest-invalid","format-too-new","schema-too-new","schema-unsupported","font-pack-incompatible","catalog-missing","unexpected-file","missing-file","hash-mismatch","document-invalid","reference-broken","unreadable","quota") }
 }

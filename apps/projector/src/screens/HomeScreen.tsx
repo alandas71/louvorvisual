@@ -95,6 +95,10 @@ export function HomeScreen({ focusKey }: { focusKey: string | null }) {
           <span className="card-sub">Equipe, sincronização e ajuste da imagem</span>
         </Action>
       </div>
+      <Action className="button" focusKey="home:phone" autoFocus={wanted === 'home:phone'} testId="card-phone" onSelect={() => app.go({ name: 'phone' })}>
+          <span className="card-title">Controlar pelo celular</span>
+          <span className="card-sub">Conectar por Wi-Fi · projetor na horizontal</span>
+        </Action>
       <p className="hint">Setas escolhem · OK abre · Voltar sai do aplicativo</p>
 
       {asking && recoverable && (

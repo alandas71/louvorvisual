@@ -6,7 +6,7 @@ import { createContext, useContext } from 'react';
 import type { HostClient } from './host/client';
 
 export type PresentationRequest =
-  | { kind: 'start'; arrangementId: Uuid; context: SessionContext; /** Itens do repertório, para "Próximo louvor". */ queue: SetlistEntry[] }
+  | { kind: 'start'; remote?: boolean; selectionId?: string; arrangementId: Uuid; context: SessionContext; /** Itens do repertório, para "Próximo louvor". */ queue: SetlistEntry[] }
   | { kind: 'recover'; session: RecoverableSession };
 
 export type Screen =
@@ -16,6 +16,7 @@ export type Screen =
   | { name: 'songs' }
   | { name: 'import' }
   | { name: 'settings' }
+  | { name: 'phone' }
   | { name: 'presentation'; request: PresentationRequest };
 
 export type AppServices = {

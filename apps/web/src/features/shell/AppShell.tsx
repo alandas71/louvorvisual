@@ -21,6 +21,8 @@ import { SyncStatusChip } from '../sync/SyncStatusChip';
 import { SyncToast } from '../sync/SyncToast';
 import { SyncView } from '../sync/SyncView';
 import { ThemesView } from '../temas/ThemesView';
+import { ReceiverView } from '@/receiver/ReceiverView';
+import { CONTROLLER_KEY, ConnectionError, RECEIVER_PREFERENCE, relayRequest, storedConnection } from '@/receiver/client';
 import { BrandMark } from './BrandMark';
 import { DataNoticeBanner } from './DataNoticeBanner';
 
@@ -31,6 +33,7 @@ const VIEWS = [
   { id: 'biblioteca', label: 'Biblioteca', short: 'Biblioteca', group: 'culto', hidden: false, Icon: LibraryIcon as IconType, Component: LibraryView },
   { id: 'repertorios', label: 'Repertórios', short: 'Repertórios', group: 'culto', hidden: true, Icon: SetlistIcon as IconType, Component: SetlistsView },
   { id: 'temas', label: 'Temas e fontes', short: 'Temas', group: 'culto', hidden: true, Icon: ThemesIcon as IconType, Component: ThemesView },
+  { id: 'receptor', label: 'Projetor e celular', short: 'Projetor', group: 'dispositivo', hidden: false, Icon: InstallIcon as IconType, Component: ReceiverView },
   { id: 'lixeira', label: 'Lixeira e histórico', short: 'Lixeira', group: 'dispositivo', hidden: false, Icon: TrashIcon as IconType, Component: TrashView },
   { id: 'offline', label: 'Disponível offline', short: 'Offline', group: 'dispositivo', hidden: false, Icon: OfflineIcon as IconType, Component: OfflineView },
   { id: 'sync', label: 'Sincronização', short: 'Sincronizar', group: 'dispositivo', hidden: false, Icon: SyncIcon as IconType, Component: SyncView },
@@ -75,6 +78,24 @@ const DEVICE_TEXT: Record<OfflineState['phase'], string | null> = {
 /** Shell local: as vistas trocam pela query (`?view=`), sem ida ao servidor. */
 export function AppShell() {
   const query = useLocalQuery();
+  useEffect(() => {
+    try { if (!window.location.search && localStorage.getItem(RECEIVER_PREFERENCE) === '1') setLocalQuery({ view: 'receptor' }); } catch { /* Manual choice remains available. */ }
+  }, []);
+  const selectedView = query.get('view');
+  useEffect(() => {
+    if (selectedView === 'apresentar') return;
+    let stopped = false; let timer: ReturnType<typeof setTimeout>;
+    const keepAlive = async () => {
+      const connection = storedConnection(CONTROLLER_KEY);
+      if (connection) {
+        try { await relayRequest('GET', connection); }
+        catch (error) { if (error instanceof ConnectionError && error.expired) sessionStorage.removeItem(CONTROLLER_KEY); }
+      }
+      if (!stopped) timer = setTimeout(() => void keepAlive(), 2000);
+    };
+    void keepAlive();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [selectedView]);
   const offline = useOfflineState();
   const online = useOnline();
   const { install } = useInstallPrompt();
@@ -114,6 +135,8 @@ export function AppShell() {
     setMenuOpen(false);
     menuButton.current?.focus();
   }
+
+  if (query.get('view') === 'receptor') return <ReceiverView />;
 
   // A área do operador ocupa a janela inteira, sem a navegação do aplicativo.
   if (query.get('view') === 'apresentar') {

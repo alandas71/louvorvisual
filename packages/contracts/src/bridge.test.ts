@@ -13,9 +13,9 @@ import {
 import { arrangement, song } from './fixtures';
 
 describe('ponte do projetor', () => {
-  it('a superfície é a declarada: 26 métodos e 5 eventos, cada um com esquema', () => {
-    expect(HOST_METHODS).toHaveLength(26);
-    expect(HOST_EVENTS).toEqual(['remote.key', 'audio.state', 'files.progress', 'account.changed', 'host.lifecycle']);
+  it('a superfície é a declarada: 31 métodos e 6 eventos, cada um com esquema', () => {
+    expect(HOST_METHODS).toHaveLength(31);
+    expect(HOST_EVENTS).toEqual(['remote.key', 'phone.command', 'audio.state', 'files.progress', 'account.changed', 'host.lifecycle']);
     for (const method of HOST_METHODS) {
       expect(typeof hostMethods[method].params.safeParse).toBe('function');
       expect(typeof hostMethods[method].result.safeParse).toBe('function');
