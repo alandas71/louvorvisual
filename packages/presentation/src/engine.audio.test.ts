@@ -541,21 +541,80 @@ describe('preparação, recuperação e suspensão', () => {
     expect(engine.getState().elapsedInSlideMs).toBe(2000);
   });
 
-  it('suspensão detectada pausa a sessão e a faixa, em qualquer política', async () => {
-    for (const policy of ['linked', 'independent'] as const) {
-      const { engine, transport, play } = session([8000, 8000], { policy }, { mode: 'automatic' });
-      await flush();
-      engine.execute({ type: 'start' });
-      await flush();
-      await play(2000);
-      engine.notifySuspension();
-      expect(engine.getState().status, policy).toBe('paused');
-      expect(engine.getView().notice).toBe('suspension-detected');
-      expect(transport.isPlaying(), policy).toBe(false);
-      engine.execute({ type: 'resume' });
-      await flush();
-      expect(transport.isPlaying(), policy).toBe(true);
-    }
+  it('suspensão detectada sem como seguir a faixa pausa a sessão e a faixa', async () => {
+    // Um slide sem tempo: não há linha do tempo para alcançar a música.
+    const { engine, transport, play } = session([8000, null], { policy: 'independent' }, { mode: 'automatic' });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    await play(2000);
+    engine.notifySuspension();
+    expect(engine.getState().status).toBe('paused');
+    expect(engine.getView().notice).toBe('suspension-detected');
+    expect(transport.isPlaying()).toBe(false);
+    engine.execute({ type: 'resume' });
+    await flush();
+    expect(transport.isPlaying()).toBe(true);
+  });
+});
+
+describe('letra acertada pela faixa independente', () => {
+  it('arrastar a faixa leva a letra ao slide daquele ponto, para frente e para trás', async () => {
+    const { engine, transport, play } = session([4000, 4000, 4000], { policy: 'independent' }, { mode: 'automatic' });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    await play(1000);
+    expect(engine.getState().currentIndex).toBe(0);
+    engine.execute({ type: 'audioSeek', positionMs: 9000 });
+    await flush();
+    transport.tick();
+    expect(engine.getState().currentIndex).toBe(2);
+    expect(engine.remainingMs()).toBe(3000);
+    engine.execute({ type: 'audioSeek', positionMs: 4500 });
+    await flush();
+    transport.tick();
+    expect(engine.getState().currentIndex).toBe(1);
+    // Dali em diante o automático segue normalmente.
+    await play(3600);
+    expect(engine.getState().currentIndex).toBe(2);
+  });
+
+  it('tela bloqueada com a faixa tocando: ao voltar, a letra alcança a música em vez de pausar', async () => {
+    const { engine, transport, play } = session([4000, 4000, 4000], { policy: 'independent' }, { mode: 'automatic' });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    await play(1000);
+    // A faixa andou sem o motor acordar.
+    void transport.seek(6500);
+    await flush();
+    engine.notifySuspension();
+    expect(engine.getState().status).toBe('running');
+    expect(engine.getView().notice).toBeNull();
+    expect(engine.getState().currentIndex).toBe(1);
+    expect(transport.isPlaying()).toBe(true);
+    expect(engine.remainingMs()).toBe(1500);
+  });
+
+  it('avançar à mão vale: o slide escolhido fica, e o automático continua a partir dele', async () => {
+    const { engine, transport, play } = session([4000, 4000, 4000], { policy: 'independent' }, { mode: 'automatic' });
+    await flush();
+    engine.execute({ type: 'start' });
+    await flush();
+    await play(1000);
+    engine.execute({ type: 'next' });
+    expect(engine.getState().currentIndex).toBe(1);
+    // A faixa está em 1 s, onde o arranjo ainda mostraria o primeiro slide: a escolha do operador não é desfeita.
+    await play(3000);
+    expect(engine.getState().currentIndex).toBe(1);
+    await play(1250);
+    expect(engine.getState().currentIndex).toBe(2);
+    // Arrastar a faixa respeita o mesmo deslocamento.
+    engine.execute({ type: 'audioSeek', positionMs: 200 });
+    await flush();
+    transport.tick();
+    expect(engine.getState().currentIndex).toBe(0);
   });
 });
 

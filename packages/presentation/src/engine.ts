@@ -267,6 +267,8 @@ export const SUSPENSION_THRESHOLD_MS = 5000;
 
 /** Com a faixa como relógio, o despertador nunca é rearmado mais rápido que isto (faixa travada perto de uma troca). */
 const AUDIO_WAKE_MIN_MS = 40;
+/** Diferença tolerada entre o relógio do slide e a posição da faixa antes de acertar a letra por ela. */
+const TRACK_DRIFT_MS = 300;
 
 const OK: CommandResult = { ok: true };
 const fail = (reason: CommandFailure): CommandResult => ({ ok: false, reason });
@@ -322,6 +324,12 @@ export class PresentationEngine {
   private seekGeneration = 0;
   private playGeneration = 0;
   private unsubscribeTransport: (() => void) | null = null;
+  /**
+   * Quanto a escolha do operador deslocou a letra em relação à faixa. Zero é a
+   * linha do tempo do arranjo; avançar ou voltar à mão fixa o slide escolhido no
+   * ponto em que a faixa está, e o automático segue a partir dali.
+   */
+  private trackShiftMs = 0;
   /** Um comando está em execução: pausas e retomadas da faixa vêm dele e são publicadas uma vez, no fim. */
   private inCommand = false;
 
@@ -389,6 +397,57 @@ export class PresentationEngine {
   /** No automático vinculado, o relógio é a posição da faixa; não há outro cronômetro. */
   private get audioClock(): boolean {
     return this.linked && this.mode === 'automatic';
+  }
+
+  /**
+   * Início de cada slide na faixa independente (e o fim do último), contado do
+   * fim da introdução. Só existe com tempo em todos os slides.
+   */
+  private trackTimeline(): number[] | null {
+    if (!this.audioActive || this.linked) return null;
+    const starts = [this.introDurationMs ?? this.snapshot.audio?.offsetMs ?? 0];
+    for (let index = 0; index < this.snapshot.occurrences.length; index += 1) {
+      const duration = this.slideAt(index).durationMs;
+      if (duration === null) return null;
+      starts.push((starts[index] as number) + duration);
+    }
+    return starts;
+  }
+
+  /** O operador escolheu o slide: ele passa a começar onde a faixa está agora. */
+  private pinTrack(index: number): void {
+    const starts = this.trackTimeline();
+    if (starts) this.trackShiftMs = (starts[index] as number) - (this.transport as AudioTransport).positionMs();
+  }
+
+  /**
+   * Acerta a letra pela posição da faixa: tela bloqueada, navegador em segundo
+   * plano ou a faixa arrastada para outro ponto deixam o relógio do slide para
+   * trás, e a faixa é o que o público está ouvindo. Entre um acerto e outro o
+   * relógio do slide segue normalmente. Devolve se a faixa pôde ser usada.
+   */
+  private syncToTrack(): boolean {
+    if (this.disposed || this.cover || this.mode !== 'automatic' || this.pendingSeek !== null) return false;
+    if (this.status !== 'running' && this.status !== 'paused' && this.status !== 'finished') return false;
+    const starts = this.trackTimeline();
+    if (!starts) return false;
+    const last = this.snapshot.occurrences.length - 1;
+    const at = (this.transport as AudioTransport).positionMs() + this.trackShiftMs;
+    let index = 0;
+    while (index < last && at >= (starts[index + 1] as number)) index += 1;
+    const duration = (starts[index + 1] as number) - (starts[index] as number);
+    const within = Math.min(duration, Math.max(0, at - (starts[index] as number)));
+    const ended = index === last && within >= duration;
+    if (this.status === 'finished' ? ended : index === this.index && Math.abs(within - this.elapsed()) < TRACK_DRIFT_MS) return true;
+    const moved = index !== this.index || this.status === 'finished';
+    this.index = index;
+    if (this.status === 'finished') this.status = 'running';
+    this.accumulatedMs = within;
+    this.anchor = null;
+    if (this.status === 'running') this.arm();
+    else this.disarm();
+    if (moved) this.changed();
+    return true;
   }
 
   private cueAt(index: number): AudioCue {
@@ -489,11 +548,13 @@ export class PresentationEngine {
     switch (event.type) {
       case 'time':
         if (this.cover) this.reconcileIntro();
-        else this.followAudio();
+        else if (this.audioClock) this.followAudio();
+        else this.syncToTrack();
         return;
       case 'playing':
         if (this.notice === 'audio-stalled' || this.notice === 'autoplay-blocked') this.notice = null;
         this.arm();
+        this.syncToTrack();
         this.changed();
         return;
       case 'paused':
@@ -542,6 +603,12 @@ export class PresentationEngine {
     // Sem relógio de slide nem faixa tocando, não há o que proteger: o manual segue como estava.
     const audioPlaying = this.audioActive && (this.transport as AudioTransport).isPlaying();
     if (!audioPlaying && !(this.mode === 'automatic' && this.currentDuration() !== null)) return;
+    // A faixa seguiu tocando enquanto a tela estava bloqueada: em vez de pausar, a letra alcança a música.
+    if (audioPlaying && this.introByAudio) {
+      this.reconcileIntro();
+      return;
+    }
+    if (audioPlaying && this.syncToTrack()) return;
     this.disarm();
     this.status = 'paused';
     this.accumulatedMs = 0;
@@ -848,6 +915,8 @@ export class PresentationEngine {
       this.followAudio();
       return;
     }
+    // Com a faixa tocando, o tempo vencido é o dela: um despertador atrasado não vira "suspensão".
+    if (this.status === 'running' && this.audioActive && (this.transport as AudioTransport).isPlaying()) this.syncToTrack();
     if (this.disposed || this.status !== 'running' || this.mode !== 'automatic' || this.anchor === null) return;
     let duration = this.currentDuration();
     if (duration === null) return;
@@ -911,6 +980,11 @@ export class PresentationEngine {
       return;
     }
     this.leaveCover();
+    if (byAudio) {
+      // A introdução acabou pela posição da faixa: vale a linha do tempo do arranjo, sem deslocamento.
+      this.trackShiftMs = 0;
+      this.syncToTrack();
+    }
     this.changed();
   }
 
@@ -934,6 +1008,7 @@ export class PresentationEngine {
       this.arm();
       return OK;
     }
+    this.pinTrack(this.index);
     this.restartInterval();
     this.beginManualTiming();
     return OK;
@@ -959,6 +1034,7 @@ export class PresentationEngine {
     // Sair do fim por navegação volta a executar; pausa e pronto são mantidos.
     if (this.status === 'finished') this.status = 'running';
     this.notice = null;
+    this.pinTrack(index);
     this.restartInterval();
     return OK;
   }
@@ -1022,6 +1098,7 @@ export class PresentationEngine {
         this.status = 'running';
         this.notice = null;
         this.cover = this.withCover;
+        this.trackShiftMs = 0;
         if (this.linked) {
           // A faixa parte do início do slide escolhido e a sessão segue a posição confirmada.
           this.requestSeek(this.cueAt(this.index).startMs, this.index);

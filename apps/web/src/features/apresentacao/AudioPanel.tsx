@@ -71,7 +71,7 @@ const REMOTE_AUDIO_TEXT: Record<Exclude<RemoteAudioStatus['state'], 'none'>, str
   offline: '🔈 Projetor sem conexão: o som sai neste dispositivo.',
   sending: '🔈 Enviando a faixa ao projetor; por enquanto o som sai neste dispositivo',
   loading: '🔈 O projetor está carregando a faixa; por enquanto o som sai neste dispositivo.',
-  projector: '🔊 O som está saindo no projetor. Este dispositivo fica mudo.',
+  projector: '🔊 O som está saindo no projetor. Este dispositivo fica em silêncio.',
   blocked: '⚠ O projetor recusou tocar a faixa sem um toque na tela dele. O som sai neste dispositivo.',
   failed: '⚠ O projetor não conseguiu abrir a faixa. O som sai neste dispositivo.',
 };

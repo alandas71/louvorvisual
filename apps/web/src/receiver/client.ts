@@ -101,6 +101,7 @@ export function subscribeRemoteAudio(listener: () => void) { remoteAudioListener
 
 type AudioReply = { peerOnline: boolean; audioStatus: { sha256: string; status: ReceiverAudioStatus } | null; file: { received: number; total: number; missing: number[] } | null };
 const UPLOAD_LANES = 4;
+const QUIET_VOLUME = 0.001;
 const AUDIO_BEAT_MS = 1000;
 /** Sem notícia do outro lado por este tempo, cada dispositivo assume que o par sumiu. */
 export const SILENT_PEER_MS = 6000;
@@ -117,6 +118,19 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
   const { sha256, blob, element } = source;
   let closed = false; let timer: ReturnType<typeof setTimeout> | undefined; let sending = false; let again = false;
   let latencyMs = 60; let uploading = false; let answeredAt = performance.now();
+  // Com o som no projetor, o player daqui segue tocando quase inaudível em vez de mudo: no Android,
+  // uma página que toca áudio continua viva com a tela bloqueada, e é este player o relógio da letra
+  // e da faixa do projetor. Onde o volume não pode ser mudado (iOS), fica mudo mesmo.
+  let silenced = false; let volume = element.volume;
+  function silence(on: boolean) {
+    if (on === silenced) return;
+    silenced = on;
+    if (on) { volume = element.volume; element.volume = QUIET_VOLUME; element.muted = element.volume > QUIET_VOLUME * 2; }
+    else { element.muted = false; element.volume = volume; }
+  }
+  // O operador mexeu no volume enquanto o som está no projetor: guarda o valor e mantém este player quieto.
+  const keepQuiet = () => { if (silenced && element.volume > QUIET_VOLUME * 2 && !element.muted) { volume = element.volume; element.volume = QUIET_VOLUME; } };
+  element.addEventListener('volumechange', keepQuiet);
   /** Envia as partes que faltam, algumas ao mesmo tempo: em rede lenta o que pesa é a espera de cada pedido. */
   async function upload(missing: number[]) {
     if (uploading || closed) return; uploading = true;
@@ -138,7 +152,7 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
     sending = true; clearTimeout(timer);
     try {
       const startedAt = performance.now();
-      const state: RelayAudioState = { sha256, playing: !element.paused && !element.ended, positionMs: element.currentTime * 1000, volume: element.volume };
+      const state: RelayAudioState = { sha256, playing: !element.paused && !element.ended, positionMs: element.currentTime * 1000, volume: silenced ? volume : element.volume };
       const reply = await relayRequest<AudioReply>('POST', connection, { action: 'audio', state, latencyMs: latencyMs / 2 });
       latencyMs = latencyMs * 0.7 + (performance.now() - startedAt) * 0.3;
       if (closed) return;
@@ -146,7 +160,7 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
       const pending = reply.file ? reply.file.missing : Array.from({ length: Math.ceil(blob.size / AUDIO_CHUNK_BYTES) }, (_, index) => index * AUDIO_CHUNK_BYTES);
       if (pending.length) void upload(pending);
       const reported = reply.audioStatus?.sha256 === sha256 ? reply.audioStatus.status : null;
-      element.muted = reply.peerOnline && reported === 'ready';
+      silence(reply.peerOnline && reported === 'ready');
       if (!reply.peerOnline) setRemoteAudio('offline');
       else if (pending.length) setRemoteAudio('sending', Math.floor(((reply.file?.received ?? 0) / blob.size) * 100));
       else setRemoteAudio(reported === 'ready' ? 'projector' : reported === 'blocked' || reported === 'failed' ? reported : 'loading');
@@ -154,7 +168,7 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
       if (error instanceof ConnectionError && error.expired) { close(); return; }
       // Uma falha isolada não muda nada; sem servidor por mais tempo, o projetor
       // também para de tocar (ver useReceiverAudio) e o som volta ao celular.
-      if (performance.now() - answeredAt > SILENT_PEER_MS) { element.muted = false; setRemoteAudio('offline'); }
+      if (performance.now() - answeredAt > SILENT_PEER_MS) { silence(false); setRemoteAudio('offline'); }
     } finally {
       sending = false;
       if (!closed) { if (again) { again = false; void beat(); } else timer = setTimeout(() => void beat(), AUDIO_BEAT_MS); }
@@ -168,7 +182,7 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
     if (closed) return;
     closed = true; clearTimeout(timer);
     for (const name of events) element.removeEventListener(name, onEvent);
-    element.muted = false; setRemoteAudio('none');
+    silence(false); element.removeEventListener('volumechange', keepQuiet); setRemoteAudio('none');
     void relayRequest('POST', connection, { action: 'audio', state: null }).catch(() => {});
   }
   return { close };

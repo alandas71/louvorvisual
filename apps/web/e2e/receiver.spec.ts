@@ -72,7 +72,7 @@ test('receptor do projetor: código, espera, slides, som no projetor, reconexão
     await expect(operator(phone)).toHaveAttribute('data-audio-playing', 'true');
     await expect.poll(async () => (await receiverAudio(projector))?.paused, { timeout: 20_000 }).toBe(false);
     const phoneAudio = phone.locator('audio[data-testid="session-audio"]');
-    await expect.poll(() => phoneAudio.evaluate((audio: HTMLAudioElement) => audio.muted), { timeout: 10_000 }).toBe(true);
+    await expect.poll(() => phoneAudio.evaluate((audio: HTMLAudioElement) => audio.muted || audio.volume < 0.01), { timeout: 10_000 }).toBe(true);
     await expect(phone.getByTestId('audio-output')).toHaveAttribute('data-state', 'projector');
     await expect.poll(async () => {
       const [there, here] = await Promise.all([receiverAudio(projector), phoneAudio.evaluate((audio: HTMLAudioElement) => audio.currentTime * 1000)]);
@@ -95,7 +95,7 @@ test('receptor do projetor: código, espera, slides, som no projetor, reconexão
     await projectorContext.setOffline(true);
     await expect(operator(phone)).toHaveAttribute('data-projection', 'lost', { timeout: 20_000 });
     // Sem projetor, o som volta ao celular.
-    await expect.poll(() => phoneAudio.evaluate((audio: HTMLAudioElement) => audio.muted), { timeout: 15_000 }).toBe(false);
+    await expect.poll(() => phoneAudio.evaluate((audio: HTMLAudioElement) => audio.muted || audio.volume < 0.01), { timeout: 15_000 }).toBe(false);
     await phone.keyboard.press('ArrowLeft'); await projectorContext.setOffline(false);
     await expect(text).toHaveText(SLIDE_TEXTS[0]!); await expect(operator(phone)).toHaveAttribute('data-projection-armed', 'true');
     await projector.screenshot({ path: 'tmp/pwa-receiver-screen.png' });
