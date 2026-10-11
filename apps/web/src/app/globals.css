@@ -321,29 +321,9 @@
     opacity: 0;
   }
 }
-/* Espera da saída: uma luz acolhedora, sem imagem ou movimento brusco. */
-@keyframes lv-receiver-light {
-  0%, 100% { opacity: 0.42; transform: scale(0.92); }
-  50% { opacity: 0.82; transform: scale(1.08); }
-}
+/* Troca de slide no receptor: curta, para a letra não chegar depois da música. A espera é desenhada em canvas (WaitingLight). */
 @keyframes lv-receiver-enter {
-  from { opacity: 0; transform: scale(1.012); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.lv-receiver-waiting {
-  position: relative;
-  background: radial-gradient(ellipse at 50% 54%, #6d5529 0%, #282018 30%, #0a0b0e 72%);
-}
-.lv-receiver-glow {
-  position: absolute;
-  width: min(75vw, 75vh);
-  aspect-ratio: 1;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgb(255 222 151 / 0.44), rgb(244 189 106 / 0.12) 36%, transparent 69%);
-  animation: lv-receiver-light 5s ease-in-out infinite;
-}
-.lv-receiver-cross { position: relative; width: 3rem; height: 3rem; filter: drop-shadow(0 0 1.4rem rgb(255 215 140 / 0.85)); }
-.lv-receiver-cross span { position: absolute; display: block; border-radius: 999px; background: #ffe1a2; }
-.lv-receiver-cross span:first-child { inset: 0 auto 0 50%; width: 0.28rem; transform: translateX(-50%); }
-.lv-receiver-cross span:last-child { inset: 34% 0 auto 0; height: 0.28rem; }
-.lv-receiver-slide-enter { animation: lv-receiver-enter 420ms ease-out both; }
+.lv-receiver-slide-enter { animation: lv-receiver-enter 140ms ease-out both; }

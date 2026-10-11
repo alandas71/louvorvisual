@@ -19,7 +19,8 @@ export class HtmlAudioTransport implements AudioTransport {
   private pendingSeek: PendingSeek | null = null;
   private disposed = false;
 
-  constructor(blob: Blob) {
+  /** `blob`: os bytes da faixa, que um projetor pareado recebe para tocar no lugar deste dispositivo. */
+  constructor(readonly blob: Blob) {
     this.url = URL.createObjectURL(blob);
     const element = document.createElement('audio');
     element.preload = 'auto';

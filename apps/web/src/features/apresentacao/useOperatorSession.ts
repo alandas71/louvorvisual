@@ -25,6 +25,7 @@ import {
   type PresentationSessionRow,
 } from '@/local';
 import { SESSION_LOCK } from '@/pwa/serviceWorker';
+import { openRemoteAudio } from '@/receiver/client';
 import { HtmlAudioTransport } from '../audio/htmlTransport';
 import { SessionController } from './controller';
 
@@ -160,12 +161,15 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
         },
       });
       controller.start();
+      // Com um projetor pareado, a faixa toca nele; o player deste dispositivo segue como relógio.
+      const remoteAudio = options.transport && row.snapshot.audio ? openRemoteAudio({ sha256: row.snapshot.audio.sha256, blob: options.transport.blob, element: options.transport.element }) : null;
       // Enquanto a sessão existir, o aplicativo não troca de versão por baixo dela.
       let releaseSession = () => {};
       if (navigator.locks) {
         void navigator.locks.request(SESSION_LOCK, { mode: 'shared' }, () => new Promise<void>((resolve) => (releaseSession = resolve)));
       }
       const leave = () => {
+        remoteAudio?.close();
         controller.dispose();
         releaseSession();
       };

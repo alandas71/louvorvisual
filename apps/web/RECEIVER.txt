@@ -1,26 +1,35 @@
-# PWA no projetor: modo receptor
+# Projetor: modo receptor
 
-Não é necessário instalar o APK para este modo. Abra o mesmo endereço do LouvorVisual nos dois dispositivos, pelo navegador ou PWA.
+O projetor só mostra o que o celular apresenta. Toda a interface (biblioteca, escolha do louvor, controles) fica no PWA do celular.
 
-1. No projetor: menu **Projetor e celular**, **Ativar receptor neste dispositivo**.
-2. No celular: menu **Projetor e celular**, informe o código de oito dígitos e clique em **Conectar como controle**.
-3. No projetor: clique em **Exibir apresentação**. O navegador tenta entrar em tela cheia e solicitar orientação horizontal. Se recusar, use **Tela cheia** novamente.
-4. No celular: escolha um louvor pela biblioteca e inicie a apresentação. Os controles existentes enviam o slide completo ao receptor.
+1. No projetor: abra o aplicativo LouvorVisual (APK). Ele abre a página **/receptor** e mostra um código de quatro dígitos. Não há menus nem botões.
+2. No celular: abra o LouvorVisual, menu **Projetor e celular**, informe o código e toque em **Conectar como controle**.
+3. O projetor passa para a tela de espera (luz animada, sem texto). No celular, escolha um louvor e inicie a apresentação.
 
-O áudio continua no celular. A biblioteca não precisa ser importada no projetor. Não há identificação automática do modelo A1: escolher o receptor salva uma preferência neste navegador, retomada ao abrir /app sem parâmetros. A tecla M ou Esc reabre a preparação. Voltar à biblioteca desativa essa preferência e encerra o receptor.
+Sem o APK, um navegador ligado ao projetor serve de saída: abra **/receptor** nele, ou use **Ativar receptor neste dispositivo** no menu **Projetor e celular**.
+
+## O que o projetor mostra
+
+- Sem celular pareado: o código.
+- Pareado, antes de **Iniciar** e depois de **Encerrar**: a espera.
+- Slide com letra: o slide, com o mesmo renderizador do PWA.
+- Slide sem letra (Introdução, Instrumental): a mesma luz da espera, no lugar de uma tela vazia.
+- **Tela preta** no celular continua sendo preto.
+
+## Som
+
+A faixa do louvor toca no projetor. Ao abrir a apresentação, o celular envia o arquivo ao servidor em partes de 256 KB e o projetor o baixa; a posição do player do celular é publicada a cada segundo e a cada play, pausa ou salto, e o projetor a acompanha (corrige pela velocidade até 0,4 s de desvio e reposiciona acima disso). Quando o projetor confirma que está pronto, o celular fica mudo; se o projetor sumir ou não conseguir tocar, o som volta ao celular. Em um navegador comum, a reprodução automática pode ser bloqueada até um toque na tela do receptor; no APK não há esse bloqueio.
 
 ## Conexão e operação
 
-Os dois dispositivos precisam alcançar o mesmo servidor durante a apresentação. Não é necessário estarem no mesmo Wi-Fi se o servidor for acessível pela internet. O modo receptor não comunica dispositivos sem servidor; o uso offline da biblioteca continua disponível.
+Os dois dispositivos precisam alcançar o mesmo servidor durante a apresentação; não precisam estar no mesmo Wi-Fi. O projetor mantém uma leitura em espera no servidor, que responde no instante em que o slide muda.
 
-Uma perda de conexão conserva a imagem já recebida. Quando a rede volta, o receptor busca o estado completo atual. Recarregar recupera o pareamento da aba, mas pede para exibir a apresentação novamente. Encerrar um louvor limpa a saída; iniciar outro reutiliza o receptor. O código só pode conectar um controle, expira em dez minutos e pode ser regenerado no projetor. Sessões expiram após seis horas ou dois minutos sem atividade dos dispositivos já pareados.
+Uma perda de conexão conserva a imagem já recebida; quando a rede volta, o receptor busca o estado completo atual. O APK guarda o pareamento: fechar e abrir o aplicativo retoma o mesmo celular enquanto a sala existir. O código é de uso único e é renovado sozinho antes de expirar (dez minutos). Se o celular ficar mais de 20 segundos sem responder, um código de reconexão aparece discreto no canto da espera (nunca sobre um slide); OK/Enter no controle remoto mostra o código em tela cheia. Parear com esse código substitui o celular anterior. Salas expiram após dois minutos sem atividade de nenhum dos dois dispositivos, ou 24 horas depois do pareamento.
 
 ## Publicação
 
-A rota dinâmica **/receiver-link** é servida pelo próprio Next (não depende de BACKEND_URL), não passa pelo proxy /api e não é armazenada pelo service worker. Publique o build web completo com **next start**, em **um processo Node persistente**, com HTTPS em produção. A biblioteca/PWA é pré-renderizada, mas esta rota precisa do servidor.
+A rota dinâmica **/receiver-link** é servida pelo próprio Next (não depende de BACKEND_URL), não passa pelo proxy /api e não é armazenada pelo service worker. A página **/receptor** também fica fora do service worker, para o projetor abrir sempre a versão publicada. Publique o build web completo com **next start**, em **um processo Node persistente**, com HTTPS em produção. O proxy precisa aceitar respostas que demoram até 10 segundos (leitura em espera) e corpos de 512 KB.
 
-O relay guarda somente o último estado visual e confirmação, em memória limitada e com tokens separados por dispositivo. Reiniciar o servidor encerra os pareamentos. Esta implementação não atende hospedagem apenas estática, funções serverless ou múltiplas réplicas sem afinidade: nesses ambientes, use um armazenamento compartilhado para as salas antes de habilitar o recurso. Tokens não são colocados na URL; o código é de uso único, e tentativas de pareamento são limitadas.
+O relay guarda em memória o último estado visual, a confirmação e a faixa da sessão (até 64 MB por sala, 256 MB no total), com tokens separados por dispositivo. Reiniciar o servidor encerra os pareamentos. Esta implementação não atende hospedagem apenas estática, funções serverless ou múltiplas réplicas sem afinidade. Tokens não são colocados na URL, e tentativas de pareamento são limitadas.
 
-Validação: teste de navegador em dois contextos isolados cobre biblioteca no celular, apresentação, navegação, tela preta, perda de rede, reconexão, recarga e encerramento. O A1 físico ainda precisa ser validado quanto ao navegador, instalação do PWA, tela cheia e orientação.
-
-Verificação adicional da projeção local: o fluxo funcional passou, mas a checagem de console da suíte existente falhou por três respostas 404 de /api/v1/auth/me. O ambiente de teste não configura BACKEND_URL; o modo receptor não depende dessa API.
+O APK aponta para a origem definida em apps/android/app/build.gradle (louvorvisualApiBaseUrl). Enquanto essa origem não tiver a página /receptor publicada, o aplicativo mostra o erro do servidor e tenta de novo a cada 4 segundos.
