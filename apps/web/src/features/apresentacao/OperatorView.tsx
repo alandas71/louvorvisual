@@ -11,6 +11,7 @@ import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
 import { cn } from '@/lib/utils';
 import { readAssetBlob, saveDocuments, useLocalSession, type LocalSession, type PresentationSessionRow } from '@/local';
 import { useFontFace, useSlideFit } from '@/presentation/measure';
+import { remoteAudioStatus, subscribeRemoteAudio } from '@/receiver/client';
 import { firstVoiceMs } from '../audio/firstVoice';
 import { AudioPanel, LinkedTiming } from './AudioPanel';
 import type { SessionController } from './controller';
@@ -259,6 +260,8 @@ type PanelProps = {
 
 function OperatorPanel({ local, controller, row, warnings, audioChoices, onChooseAudio, setlist, onEnd, onNextSong }: PanelProps) {
   const { view, link, checkpoint, wakeLock, lastConfirmMs } = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  const remoteAudio = useSyncExternalStore(subscribeRemoteAudio, remoteAudioStatus, remoteAudioStatus);
+  const projectorLoading = remoteAudio.state === 'sending' || remoteAudio.state === 'loading';
   const { state, controls, current, next, slides, output } = view;
   const compact = useCompactLayout();
   const [interactive, setInteractive] = useState(false);
@@ -707,7 +710,18 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
           <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'previous' })}>
             ← Voltar
           </button>
-          {state.status === 'ready' && (
+          {/* Com projetor pareado, começar antes de a faixa chegar nele deixaria os slides rodando sem som lá. */}
+          {state.status === 'ready' && projectorLoading && (
+            <>
+              <button type="button" disabled className={buttonClass('primary', 'lg', 'max-sm:flex-1 max-sm:px-3')} data-testid="start-waiting">
+                <span className="lv-auto-spinner" aria-hidden="true" /> {remoteAudio.state === 'sending' ? `Enviando o som ao projetor… ${remoteAudio.progress}%` : 'O projetor está carregando o som…'}
+              </button>
+              <button type="button" className={buttonClass('secondary', 'lg', 'max-sm:px-3')} onClick={() => dispatch({ type: 'start' })}>
+                Iniciar sem esperar
+              </button>
+            </>
+          )}
+          {state.status === 'ready' && !projectorLoading && (
             <button type="button" className={buttonClass('primary', 'lg', 'max-sm:flex-1 max-sm:px-3')} onClick={() => dispatch({ type: 'start' })}>
               ▶ Iniciar
             </button>

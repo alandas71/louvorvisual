@@ -307,10 +307,10 @@
  * por cima do outro. Só opacidade: nada se desloca nem muda de tamanho.
  */
 .lv-slide-enter {
-  animation: lv-slide-in 0.4s ease-out 0.22s both;
+  animation: lv-slide-in var(--lv-slide-in, 0.4s) ease-out var(--lv-slide-out, 0.22s) both;
 }
 .lv-slide-leave {
-  animation: lv-slide-out 0.22s ease-in both;
+  animation: lv-slide-out var(--lv-slide-out, 0.22s) ease-in both;
   pointer-events: none;
 }
 @keyframes lv-slide-in {
@@ -329,3 +329,7 @@
   to { opacity: 1; }
 }
 .lv-receiver-slide-enter { animation: lv-receiver-enter 1.2s ease-in-out both; }
+/* Projetor tem menos contraste que uma tela: com a força da prévia, as luzes atrás da letra somem na parede. */
+.lv-output-motion .lv-lights-soft {
+  opacity: 0.6;
+}

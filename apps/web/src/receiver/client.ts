@@ -27,11 +27,29 @@ export async function relayRequest<T>(method: string, connection: Connection | n
   if (!response.ok) throw new ConnectionError(data.error ?? 'Não foi possível conectar.', response.status === 401);
   return data as T;
 }
+const AUDIO_CACHE = 'lv-receiver-audio';
+const AUDIO_CACHE_ENTRIES = 12;
+async function cachedAudio(sha256: string): Promise<Blob | null> {
+  try { return (await (await caches.open(AUDIO_CACHE)).match('/receiver-audio/' + sha256))?.blob() ?? null; } catch { return null; }
+}
+async function keepAudio(sha256: string, blob: Blob) {
+  try {
+    const cache = await caches.open(AUDIO_CACHE);
+    await cache.put('/receiver-audio/' + sha256, new Response(blob, { headers: { 'content-type': blob.type || 'application/octet-stream' } }));
+    const keys = await cache.keys();
+    for (const old of keys.slice(0, Math.max(0, keys.length - AUDIO_CACHE_ENTRIES))) await cache.delete(old);
+  } catch { /* Sem cache (ou sem espaço), a faixa é baixada de novo na próxima vez. */ }
+}
 /** Bytes da faixa que o celular enviou a esta sala. */
 export async function relayAudioBlob(connection: Connection, sha256: string): Promise<Blob> {
+  // O projetor guarda as faixas que já tocou: repetir um louvor não baixa nada.
+  const kept = await cachedAudio(sha256);
+  if (kept) return kept;
   const response = await relayFetch('GET', connection, undefined, { query: 'audio=' + sha256, timeoutMs: 120_000 });
   if (!response.ok) throw new ConnectionError('Áudio indisponível.', response.status === 401);
-  return response.blob();
+  const blob = await response.blob();
+  void keepAudio(sha256, blob);
+  return blob;
 }
 /** Ordered writes, bounded queue, retrying reads. Every state contains the full frame. */
 export function openRemoteController(onMessage: (message: unknown) => void) {
@@ -81,7 +99,8 @@ function setRemoteAudio(state: RemoteAudioStatus['state'], progress = 0) {
 export const remoteAudioStatus = () => remoteAudio;
 export function subscribeRemoteAudio(listener: () => void) { remoteAudioListeners.add(listener); return () => { remoteAudioListeners.delete(listener); }; }
 
-type AudioReply ={ peerOnline: boolean; audioStatus: { sha256: string; status: ReceiverAudioStatus } | null; file: { received: number; total: number } | null };
+type AudioReply = { peerOnline: boolean; audioStatus: { sha256: string; status: ReceiverAudioStatus } | null; file: { received: number; total: number; missing: number[] } | null };
+const UPLOAD_LANES = 4;
 const AUDIO_BEAT_MS = 1000;
 /** Sem notícia do outro lado por este tempo, cada dispositivo assume que o par sumiu. */
 export const SILENT_PEER_MS = 6000;
@@ -97,18 +116,20 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
   if (!connection) return null;
   const { sha256, blob, element } = source;
   let closed = false; let timer: ReturnType<typeof setTimeout> | undefined; let sending = false; let again = false;
-  let latencyMs = 60; let uploading = false; let uploaded = false; let answeredAt = performance.now();
-  async function upload(from: number) {
-    if (uploading || uploaded || closed) return; uploading = true;
-    try {
-      let offset = from;
-      while (!closed && offset < blob.size) {
+  let latencyMs = 60; let uploading = false; let answeredAt = performance.now();
+  /** Envia as partes que faltam, algumas ao mesmo tempo: em rede lenta o que pesa é a espera de cada pedido. */
+  async function upload(missing: number[]) {
+    if (uploading || closed) return; uploading = true;
+    const queue = [...missing];
+    const send = async () => {
+      for (let offset = queue.shift(); offset !== undefined && !closed; offset = queue.shift()) {
         const part = blob.slice(offset, offset + AUDIO_CHUNK_BYTES);
-        const reply = await relayRequest<{ received: number }>('PUT', connection, undefined, { query: `sha=${sha256}&total=${blob.size}&offset=${offset}`, timeoutMs: 30_000, raw: { body: part, type: blob.type || 'application/octet-stream' } });
-        offset = reply.received;
+        const reply = await relayRequest<{ received: number; total: number }>('PUT', connection, undefined, { query: `sha=${sha256}&total=${blob.size}&offset=${offset}`, timeoutMs: 60_000, raw: { body: part, type: blob.type || 'application/octet-stream' } });
+        if (!closed) setRemoteAudio('sending', Math.floor((reply.received / reply.total) * 100));
       }
-      uploaded = offset >= blob.size;
-    } catch { /* A próxima batida retoma de onde o servidor parou. */ }
+    };
+    try { await Promise.all(Array.from({ length: UPLOAD_LANES }, send)); void beat(); }
+    catch { /* A próxima batida pergunta ao servidor o que falta e retoma dali. */ }
     finally { uploading = false; }
   }
   async function beat() {
@@ -122,11 +143,12 @@ export function openRemoteAudio(source: { sha256: string; blob: Blob; element: H
       latencyMs = latencyMs * 0.7 + (performance.now() - startedAt) * 0.3;
       if (closed) return;
       answeredAt = performance.now();
-      if (!reply.file || reply.file.received < reply.file.total) { uploaded = false; void upload(reply.file?.received ?? 0); }
+      const pending = reply.file ? reply.file.missing : Array.from({ length: Math.ceil(blob.size / AUDIO_CHUNK_BYTES) }, (_, index) => index * AUDIO_CHUNK_BYTES);
+      if (pending.length) void upload(pending);
       const reported = reply.audioStatus?.sha256 === sha256 ? reply.audioStatus.status : null;
       element.muted = reply.peerOnline && reported === 'ready';
       if (!reply.peerOnline) setRemoteAudio('offline');
-      else if (!reply.file || reply.file.received < reply.file.total) setRemoteAudio('sending', Math.floor(((reply.file?.received ?? 0) / blob.size) * 100));
+      else if (pending.length) setRemoteAudio('sending', Math.floor(((reply.file?.received ?? 0) / blob.size) * 100));
       else setRemoteAudio(reported === 'ready' ? 'projector' : reported === 'blocked' || reported === 'failed' ? reported : 'loading');
     } catch (error) {
       if (error instanceof ConnectionError && error.expired) { close(); return; }

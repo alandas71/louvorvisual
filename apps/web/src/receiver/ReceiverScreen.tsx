@@ -108,6 +108,12 @@ function useReceiverAudio(connection: Connection | null, audio: RelayAudio | nul
 }
 
 function CodeScreen({ code, paired, error, kiosk, onFullscreen, onLeave }: { code: string | null; paired: boolean; error: string; kiosk: boolean; onFullscreen: () => void; onLeave?: () => void }) {
+  const [engine, setEngine] = useState('');
+  useEffect(() => {
+    const agent = navigator.userAgent;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- o navegador só existe depois da hidratação
+    setEngine([/Chrome\/(\d+)/.exec(agent)?.[0], /Android [\d.]+/.exec(agent)?.[0]].filter(Boolean).join(' · '));
+  }, []);
   return (
     <div style={{ ...fill, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '4vh 6vw', color: '#fff' }}>
       <p style={{ fontSize: '2.6vh', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', margin: 0 }}>LouvorVisual</p>
@@ -115,6 +121,8 @@ function CodeScreen({ code, paired, error, kiosk, onFullscreen, onLeave }: { cod
       <p data-testid="receiver-code" style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '24vh', fontWeight: 700, lineHeight: 1.1, letterSpacing: '0.18em', margin: 0, paddingLeft: '0.18em', color: '#ffe1a2', textShadow: '0 0 6vh rgba(255,215,140,0.45)' }}>{code ?? '····'}</p>
       <p style={{ fontSize: '2.6vh', margin: '4vh 0 0', color: 'rgba(255,255,255,0.6)', maxWidth: '80vw' }}>No celular, abra o LouvorVisual, toque em “Projetor e celular” e informe o código.</p>
       <p role="status" style={{ fontSize: '2.2vh', margin: '2vh 0 0', minHeight: '3vh', color: error ? '#ff9d9d' : 'rgba(255,255,255,0.45)' }}>{error || (code ? 'Aguardando o celular…' : 'Conectando ao servidor…')}</p>
+      {/* Versão do navegador embutido do projetor: é o que se pede ao investigar algo que só acontece nele. */}
+      <p data-testid="receiver-engine" style={{ position: 'absolute', left: '2vw', bottom: '2vh', margin: 0, fontSize: '1.8vh', color: 'rgba(255,255,255,0.3)' }}>{engine}</p>
       {!kiosk && (
         <div style={{ display: 'flex', gap: '2vh', marginTop: '3vh' }}>
           <button type="button" onClick={onFullscreen} style={{ padding: '1.4vh 2.4vh', borderRadius: 12, border: '1px solid rgba(255,255,255,0.35)', color: '#fff', fontSize: '2.2vh', cursor: 'pointer' }}>Tela cheia</button>
@@ -234,6 +242,11 @@ export function ReceiverScreen({ kiosk = false, onLeave }: { kiosk?: boolean; on
   const mode = showCode || !data ? 'code' : live && frame ? 'slide' : 'waiting';
   const [covered, setCovered] = useState(false);
   if (covered && mode !== 'slide') setCovered(false);
+  // Da abertura para a primeira letra a troca é lenta, como um respiro; entre letras continua curta.
+  const frameKey = frame ? `${frame.occurrenceId}:${frame.cover ? 'abertura' : 'letra'}` : '';
+  const [shown, setShown] = useState({ key: frameKey, cover: Boolean(frame?.cover), slow: false });
+  if (shown.key !== frameKey) setShown({ key: frameKey, cover: Boolean(frame?.cover), slow: shown.cover && frame !== undefined && !frame.cover });
+  const pace = (shown.slow ? { '--lv-slide-out': '0.9s', '--lv-slide-in': '1.2s' } : {}) as CSSProperties;
 
   useReceiverAudio(connection, data?.audio ?? null, relay?.at ?? 0, online, message?.state.controls.audio?.volume ?? null, latency);
 
@@ -250,8 +263,8 @@ export function ReceiverScreen({ kiosk = false, onLeave }: { kiosk?: boolean; on
         louvor e artista), as luzes atrás da letra e a troca suave entre slides.
       */}
       {mode === 'slide' && frame && (
-        <div className="lv-receiver-slide-enter" style={fill} onAnimationEnd={event => { if (event.target === event.currentTarget) setCovered(true); }}>
-          <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={0} cover={frame.cover} transitionKey={`${frame.occurrenceId}:${frame.cover ? 'abertura' : 'letra'}`} />
+        <div className="lv-receiver-slide-enter" style={{ ...fill, ...pace }} onAnimationEnd={event => { if (event.target === event.currentTarget) setCovered(true); }}>
+          <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={0} cover={frame.cover} transitionKey={frameKey} />
         </div>
       )}
       {hint && <p data-testid="receiver-code-hint" style={{ position: 'absolute', right: '3vw', bottom: '3vh', margin: 0, fontSize: '2.2vh', color: 'rgba(255,255,255,0.4)' }}>Reconectar o celular: {code}</p>}

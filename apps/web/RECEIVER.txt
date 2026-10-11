@@ -15,11 +15,13 @@ Sem o APK, um navegador ligado ao projetor serve de saída: abra **/receptor** n
 - Com a apresentação no ar: exatamente o quadro da prévia "O público vê agora" do PWA. É a mesma chamada do SlideView, com a abertura (nome do louvor e artista sobre as luzes), as luzes mais fracas atrás da letra e a troca suave entre slides.
 - **Tela preta** no celular continua sendo preto.
 
-A apresentação surge sobre a espera em 1,2 s, sem corte.
+A apresentação surge sobre a espera em 1,2 s, sem corte. No projetor, a passagem da abertura para a primeira letra é mais lenta que no PWA (0,9 s para sair, 1,2 s para entrar) e as luzes atrás da letra são mais fortes (60% em vez de 28%), porque a projeção tem menos contraste que uma tela. A tela do código mostra, no canto, a versão do navegador embutido do projetor.
 
 ## Som
 
 A faixa do louvor toca no projetor. Ao abrir a apresentação, o celular envia o arquivo ao servidor em partes de 256 KB e o projetor o baixa; a posição do player do celular é publicada a cada segundo e a cada play, pausa ou salto, e o projetor a acompanha (corrige pela velocidade até 0,4 s de desvio e reposiciona acima disso). Quando o projetor confirma que está pronto, o celular fica mudo; se o projetor sumir ou não conseguir tocar, o som volta ao celular. Em um navegador comum, a reprodução automática pode ser bloqueada até um toque na tela do receptor; no APK não há esse bloqueio.
+
+O envio é o que demora, e depende da internet do celular. Para encurtar: as partes sobem quatro de cada vez; o servidor guarda a faixa pelo hash do conteúdo, então um louvor já enviado fica pronto na hora nos pareamentos seguintes (até reiniciar o servidor); e o projetor guarda as últimas 12 faixas que tocou. Enquanto a faixa não chega, o botão Iniciar do celular mostra o progresso do envio; "Iniciar sem esperar" começa assim mesmo, com o som no celular até o projetor assumir.
 
 ## Conexão e operação
 

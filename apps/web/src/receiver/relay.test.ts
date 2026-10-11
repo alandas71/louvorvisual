@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ReceiverRelay } from './relay';
+import { createHash } from 'node:crypto';
+import { AUDIO_CHUNK_BYTES, ReceiverRelay } from './relay';
 import { PresentationEngine, ControllerLink } from '@louvorvisual/presentation';
 import { timedSong } from '../../../../packages/presentation/src/testing';
 function frame(sessionId = 'session-1') {
@@ -83,24 +84,35 @@ describe('receptor do PWA', () => {
     expect(renewed).not.toBe(screen.code); expect(() => relay.pair(screen.code)).toThrow('Código inválido');
     expect(relay.pair(renewed).id).toBe(screen.id);
   });
-  it('leva a faixa em partes ao projetor e a posição com a idade no servidor', () => {
+  it('leva a faixa em partes ao projetor, em qualquer ordem, e a posição com a idade no servidor', () => {
     let now = 1_000_000; const relay = new ReceiverRelay(() => now); const screen = relay.create(); const phone = relay.pair(screen.code);
-    const sha256 = 'a'.repeat(64); const state = { sha256, playing: true, positionMs: 5000, volume: 0.8 };
+    const content = new Uint8Array(AUDIO_CHUNK_BYTES + 5).map((_, index) => index % 251);
+    const sha256 = createHash('sha256').update(content).digest('hex'); const state = { sha256, playing: true, positionMs: 5000, volume: 0.8 };
     expect(relay.setAudio(phone.id, phone.token, state, 100)).toMatchObject({ file: null, audioStatus: null });
     expect(relay.read(screen.id, screen.token).audio).toMatchObject({ sha256, playing: true, positionMs: 5000, ageMs: 100, available: false });
-    const file = { sha256, mime: 'audio/mpeg', total: 6 };
-    expect(relay.putAudio(phone.id, phone.token, { ...file, offset: 0 }, new Uint8Array([1, 2, 3]))).toEqual({ received: 3, total: 6 });
-    // Parte repetida ou fora de ordem não é gravada; a resposta diz de onde retomar.
-    expect(relay.putAudio(phone.id, phone.token, { ...file, offset: 0 }, new Uint8Array([1, 2, 3]))).toEqual({ received: 3, total: 6 });
+    const file = { sha256, mime: 'audio/mpeg', total: content.byteLength };
+    const tail = content.slice(AUDIO_CHUNK_BYTES); const head = content.slice(0, AUDIO_CHUNK_BYTES);
+    expect(relay.putAudio(phone.id, phone.token, { ...file, offset: AUDIO_CHUNK_BYTES }, tail)).toEqual({ received: 5, total: content.byteLength, missing: [0] });
+    // Parte repetida não é gravada de novo; tamanho ou posição errados são recusados.
+    expect(relay.putAudio(phone.id, phone.token, { ...file, offset: AUDIO_CHUNK_BYTES }, tail).received).toBe(5);
+    expect(() => relay.putAudio(phone.id, phone.token, { ...file, offset: 3 }, tail)).toThrow('Áudio inválido');
     expect(() => relay.getAudio(screen.id, screen.token, sha256)).toThrow('Áudio indisponível');
-    relay.putAudio(phone.id, phone.token, { ...file, offset: 3 }, new Uint8Array([4, 5, 6]));
+    expect(relay.putAudio(phone.id, phone.token, { ...file, offset: 0 }, head).missing).toEqual([]);
     now += 250;
     expect(relay.read(screen.id, screen.token).audio).toMatchObject({ available: true, ageMs: 350 });
-    expect([...relay.getAudio(screen.id, screen.token, sha256).bytes]).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(() => relay.putAudio(screen.id, screen.token, { ...file, offset: 0 }, new Uint8Array([1]))).toThrow('Somente o controle');
+    expect(Buffer.compare(relay.getAudio(screen.id, screen.token, sha256).bytes, Buffer.from(content))).toBe(0);
+    expect(() => relay.putAudio(screen.id, screen.token, { ...file, offset: 0 }, head)).toThrow('Somente o controle');
     relay.setAudioStatus(screen.id, screen.token, sha256, 'ready');
-    expect(relay.setAudio(phone.id, phone.token, state)).toMatchObject({ peerOnline: true, audioStatus: { sha256, status: 'ready' }, file: { received: 6, total: 6 } });
+    expect(relay.setAudio(phone.id, phone.token, state)).toMatchObject({ peerOnline: true, audioStatus: { sha256, status: 'ready' }, file: { received: content.byteLength, missing: [] } });
     relay.setAudio(phone.id, phone.token, null); expect(relay.read(screen.id, screen.token).audio).toBeNull();
+    // Outro pareamento, mesmo louvor: a faixa já está no servidor, nada é enviado de novo.
+    const other = relay.create(); const otherPhone = relay.pair(other.code);
+    expect(relay.setAudio(otherPhone.id, otherPhone.token, state).file).toMatchObject({ missing: [] });
+    expect(relay.read(other.id, other.token).audio).toMatchObject({ available: true });
+  });
+  it('recusa uma faixa cujo conteúdo não confere com o hash', () => {
+    const relay = new ReceiverRelay(); const screen = relay.create(); const phone = relay.pair(screen.code);
+    expect(() => relay.putAudio(phone.id, phone.token, { sha256: 'a'.repeat(64), mime: 'audio/mpeg', total: 3, offset: 0 }, new Uint8Array([1, 2, 3]))).toThrow('diferente do original');
   });
   it('limita tentativas de adivinhar códigos', () => {
     const relay = new ReceiverRelay(); for (let i = 0; i < 10; i++) relay.limit('client');

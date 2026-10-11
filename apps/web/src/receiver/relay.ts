@@ -1,16 +1,16 @@
-import { randomBytes, randomInt } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { ChannelMessage } from '@louvorvisual/presentation';
 
 /** Estado da faixa publicado pelo celular: a posição vale para o instante `at` do relógio do servidor. */
 export type RelayAudioState = { sha256: string; playing: boolean; positionMs: number; volume: number };
 export type ReceiverAudioStatus = 'loading' | 'ready' | 'blocked' | 'failed';
-type AudioFile = { sha256: string; mime: string; total: number; received: number; chunks: Buffer[] };
+type AudioFile = { sha256: string; mime: string; total: number; received: number; parts: (Buffer | undefined)[]; usedAt: number };
 type Room = {
   id: string; code: string | null; codeCreated: number; receiver: string; controller: string | null; created: number; touched: number;
   visual: ChannelMessage | null; ack: ChannelMessage | null; visualVersion: number; ackVersion: number; receiverSeen: number; controllerSeen: number; generation: number;
   /** Cresce a cada mudança que o projetor precisa ver; é o que a leitura em espera acompanha. */
   receiverVersion: number; waiters: Set<() => void>;
-  file: AudioFile | null; audio: (RelayAudioState & { at: number }) | null; audioStatus: { sha256: string; status: ReceiverAudioStatus } | null;
+  audio: (RelayAudioState & { at: number }) | null; audioStatus: { sha256: string; status: ReceiverAudioStatus } | null;
 };
 export class RelayError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 const secret = () => randomBytes(32).toString('hex');
@@ -19,7 +19,7 @@ const ONLINE_MS = 3000;
 /** Sem sinal do celular por este tempo, o projetor volta a oferecer um código. */
 const CONTROLLER_GONE_MS = 20_000;
 export const AUDIO_CHUNK_BYTES = 256 * 1024;
-const AUDIO_ROOM_BYTES = 64 * 1024 * 1024;
+const AUDIO_FILE_BYTES = 64 * 1024 * 1024;
 const AUDIO_TOTAL_BYTES = 256 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
 
@@ -27,6 +27,11 @@ const SHA256 = /^[0-9a-f]{64}$/;
 export class ReceiverRelay {
   private rooms = new Map<string, Room>();
   private attempts = new Map<string, { count: number; until: number }>();
+  /**
+   * Faixas por hash do conteúdo, fora das salas: um louvor já enviado uma vez
+   * fica pronto para o projetor na hora, em qualquer pareamento seguinte.
+   */
+  private files = new Map<string, AudioFile>();
   constructor(private now = () => Date.now()) {}
   private sweep() {
     for (const [id, room] of this.rooms) {
@@ -55,7 +60,7 @@ export class ReceiverRelay {
     this.sweep();
     if (this.rooms.size >= 1000) throw new RelayError(503, 'Receptor temporariamente indisponível.');
     const code = this.newCode();
-    const room: Room = { id: secret(), code, codeCreated: this.now(), receiver: secret(), controller: null, created: this.now(), touched: this.now(), visual: null, ack: null, visualVersion: 0, ackVersion: 0, receiverSeen: this.now(), controllerSeen: 0, generation: -1, receiverVersion: 0, waiters: new Set(), file: null, audio: null, audioStatus: null };
+    const room: Room = { id: secret(), code, codeCreated: this.now(), receiver: secret(), controller: null, created: this.now(), touched: this.now(), visual: null, ack: null, visualVersion: 0, ackVersion: 0, receiverSeen: this.now(), controllerSeen: 0, generation: -1, receiverVersion: 0, waiters: new Set(), audio: null, audioStatus: null };
     this.rooms.set(room.id, room);
     return { id: room.id, token: room.receiver, code };
   }
@@ -92,7 +97,7 @@ export class ReceiverRelay {
     }
     this.refreshCode(room);
     const playing = room.audio;
-    const audio = playing && { sha256: playing.sha256, playing: playing.playing, positionMs: playing.positionMs, volume: playing.volume, ageMs: Math.max(0, this.now() - playing.at), available: room.file?.sha256 === playing.sha256 && room.file.received === room.file.total };
+    const audio = playing && { sha256: playing.sha256, playing: playing.playing, positionMs: playing.positionMs, volume: playing.volume, ageMs: Math.max(0, this.now() - playing.at), available: this.complete(playing.sha256) };
     return { paired: Boolean(room.controller), peerOnline: this.now() - room.controllerSeen < ONLINE_MS, version: room.receiverVersion, message: room.visual, code: room.code, audio };
   }
   /** Leitura do projetor que só responde quando algo muda (ou no fim do prazo): troca de slide sem esperar a próxima consulta. */
@@ -144,7 +149,8 @@ export class ReceiverRelay {
       room.audio = { sha256: state.sha256, playing: state.playing, positionMs: state.positionMs, volume: Math.min(1, Math.max(0, state.volume)), at: this.now() - lag };
       this.changed(room);
     }
-    const file = room.file && room.file.sha256 === state?.sha256 ? { received: room.file.received, total: room.file.total } : null;
+    const stored = state ? this.files.get(state.sha256) : undefined;
+    const file = stored ? { received: stored.received, total: stored.total, missing: this.missing(stored) } : null;
     return { peerOnline: room.waiters.size > 0 || this.now() - room.receiverSeen < ONLINE_MS, audioStatus: room.audioStatus, file };
   }
   /** Projetor: se a faixa está pronta para tocar aqui. Enquanto não estiver, o celular continua audível. */
@@ -154,30 +160,57 @@ export class ReceiverRelay {
     if (!SHA256.test(sha256) || !['loading', 'ready', 'blocked', 'failed'].includes(status)) throw new RelayError(400, 'Estado de áudio inválido.');
     room.audioStatus = { sha256, status };
   }
-  private audioBytesInUse() {
-    let bytes = 0;
-    for (const room of this.rooms.values()) bytes += room.file?.received ?? 0;
-    return bytes;
+  private complete(sha256: string) {
+    const file = this.files.get(sha256);
+    return file !== undefined && file.received === file.total;
   }
-  /** Celular: envia a faixa em partes, em ordem. Devolve quanto já chegou, para retomar um envio interrompido. */
-  putAudio(id: string, token: string, file: { sha256: string; mime: string; total: number; offset: number }, bytes: Uint8Array) {
-    const { room, controller } = this.authorize(id, token);
-    if (!controller) throw new RelayError(403, 'Somente o controle envia o áudio.');
-    if (!SHA256.test(file.sha256) || !Number.isSafeInteger(file.total) || file.total <= 0 || !Number.isSafeInteger(file.offset) || bytes.byteLength > AUDIO_CHUNK_BYTES * 2) throw new RelayError(400, 'Áudio inválido.');
-    if (file.total > AUDIO_ROOM_BYTES) throw new RelayError(413, 'A faixa é grande demais para tocar no projetor.');
-    if (room.file?.sha256 !== file.sha256 || room.file.total !== file.total) room.file = { sha256: file.sha256, mime: /^audio\/[\w.+-]+$/.test(file.mime) ? file.mime : 'application/octet-stream', total: file.total, received: 0, chunks: [] };
-    const stored = room.file;
-    if (file.offset === stored.received && bytes.byteLength > 0 && stored.received + bytes.byteLength <= stored.total) {
-      if (this.audioBytesInUse() + bytes.byteLength > AUDIO_TOTAL_BYTES) throw new RelayError(507, 'Sem espaço no servidor para enviar a faixa ao projetor.');
-      stored.chunks.push(Buffer.from(bytes)); stored.received += bytes.byteLength;
-      if (stored.received === stored.total) this.changed(room);
+  private missing(file: AudioFile) {
+    const offsets: number[] = [];
+    for (let offset = 0; offset < file.total; offset += AUDIO_CHUNK_BYTES) if (!file.parts[offset / AUDIO_CHUNK_BYTES]) offsets.push(offset);
+    return offsets;
+  }
+  /** Abre espaço descartando as faixas usadas há mais tempo; a que está chegando nunca sai. */
+  private reserve(bytes: number, keep: string) {
+    const used = () => [...this.files.values()].reduce((sum, file) => sum + file.received, 0);
+    for (const file of [...this.files.values()].sort((a, b) => a.usedAt - b.usedAt)) {
+      if (used() + bytes <= AUDIO_TOTAL_BYTES) return;
+      if (file.sha256 !== keep) this.files.delete(file.sha256);
     }
-    return { received: stored.received, total: stored.total };
+    if (used() + bytes > AUDIO_TOTAL_BYTES) throw new RelayError(507, 'Sem espaço no servidor para enviar a faixa ao projetor.');
+  }
+  /** Celular: envia a faixa em partes de tamanho fixo, em qualquer ordem e em paralelo. Devolve o que ainda falta. */
+  putAudio(id: string, token: string, file: { sha256: string; mime: string; total: number; offset: number }, bytes: Uint8Array) {
+    const { controller } = this.authorize(id, token);
+    if (!controller) throw new RelayError(403, 'Somente o controle envia o áudio.');
+    if (!SHA256.test(file.sha256) || !Number.isSafeInteger(file.total) || file.total <= 0 || !Number.isSafeInteger(file.offset) || file.offset < 0 || file.offset >= file.total || file.offset % AUDIO_CHUNK_BYTES !== 0) throw new RelayError(400, 'Áudio inválido.');
+    if (bytes.byteLength !== Math.min(AUDIO_CHUNK_BYTES, file.total - file.offset)) throw new RelayError(400, 'Áudio inválido.');
+    if (file.total > AUDIO_FILE_BYTES) throw new RelayError(413, 'A faixa é grande demais para tocar no projetor.');
+    let stored = this.files.get(file.sha256);
+    if (!stored || stored.total !== file.total) {
+      stored = { sha256: file.sha256, mime: /^audio\/[\w.+-]+$/.test(file.mime) ? file.mime : 'application/octet-stream', total: file.total, received: 0, parts: [], usedAt: this.now() };
+      this.files.set(file.sha256, stored);
+    }
+    stored.usedAt = this.now();
+    const index = file.offset / AUDIO_CHUNK_BYTES;
+    if (!stored.parts[index]) {
+      this.reserve(bytes.byteLength, file.sha256);
+      stored.parts[index] = Buffer.from(bytes); stored.received += bytes.byteLength;
+      if (stored.received === stored.total) {
+        // A chave é o hash do conteúdo: o que não confere não entra, e ninguém troca a faixa de outro.
+        const hash = createHash('sha256');
+        for (const part of stored.parts) hash.update(part as Buffer);
+        if (hash.digest('hex') !== file.sha256) { this.files.delete(file.sha256); throw new RelayError(400, 'A faixa chegou diferente do original.'); }
+        for (const room of this.rooms.values()) if (room.audio?.sha256 === file.sha256) this.changed(room);
+      }
+    }
+    return { received: stored.received, total: stored.total, missing: this.missing(stored) };
   }
   getAudio(id: string, token: string, sha256: string) {
     const { room } = this.authorize(id, token);
-    if (room.file?.sha256 !== sha256 || room.file.received !== room.file.total) throw new RelayError(404, 'Áudio indisponível.');
-    return { mime: room.file.mime, bytes: Buffer.concat(room.file.chunks) };
+    const file = this.files.get(sha256);
+    if (room.audio?.sha256 !== sha256 || !file || file.received !== file.total) throw new RelayError(404, 'Áudio indisponível.');
+    file.usedAt = this.now();
+    return { mime: file.mime, bytes: Buffer.concat(file.parts as Buffer[]) };
   }
   close(id: string, token: string) {
     const { room } = this.authorize(id, token);
