@@ -24,6 +24,8 @@ const MOTES: Mote[] = Array.from({ length: 44 }, () => ({ x: next(), y: next(), 
 /** Altura interna do desenho: baixa de propósito, a ampliação suaviza a luz e poupa o processador do projetor. */
 const HEIGHT = 360;
 const FRAME_MS = 1000 / 30;
+/** Quanto a cor do tema cobre o fundo da espera quando há letra na tela. */
+const TINT_ALPHA = 0.88;
 
 function sprite(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -46,9 +48,13 @@ function sprite(): HTMLCanvasElement {
  * conteúdo projetado: "remover animações" no sistema do projetor não deve
  * congelá-la.
  */
-export function WaitingLight({ strength = 1 }: { strength?: number }) {
+export function WaitingLight({ strength = 1, tint = null }: { strength?: number; /** Cor de fundo do tema, quando a luz fica atrás da letra. */ tint?: string | null }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // O desenho persegue estes alvos aos poucos: mudar de espera para introdução ou letra nunca é um corte.
+  const target = useRef({ strength, tint });
+  useEffect(() => { target.current = { strength, tint }; }, [strength, tint]);
   useEffect(() => {
+    let strength = target.current.strength; let tintColor = target.current.tint ?? '#000000'; let tintAlpha = target.current.tint ? TINT_ALPHA : 0;
     const canvas = ref.current;
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return;
@@ -62,7 +68,13 @@ export function WaitingLight({ strength = 1 }: { strength?: number }) {
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
       if (now - drawnAt < FRAME_MS) return;
+      // Cerca de um segundo para chegar ao alvo, qualquer que seja a taxa de quadros.
+      const ease = Math.min(1, (now - drawnAt) / 350);
       drawnAt = now;
+      const wanted = target.current;
+      strength += (wanted.strength - strength) * ease;
+      if (wanted.tint) tintColor = wanted.tint;
+      tintAlpha += ((wanted.tint ? TINT_ALPHA : 0) - tintAlpha) * ease;
       const time = now / 1000;
       const breath = 0.78 + 0.22 * Math.sin(time * 0.45);
       const originX = width / 2; const originY = -HEIGHT * 0.28; const reach = HEIGHT * 1.75;
@@ -71,6 +83,7 @@ export function WaitingLight({ strength = 1 }: { strength?: number }) {
       const night = context.createLinearGradient(0, 0, 0, HEIGHT);
       night.addColorStop(0, '#1b1509'); night.addColorStop(0.45, '#0b0c14'); night.addColorStop(1, '#040509');
       context.fillStyle = night; context.fillRect(0, 0, width, HEIGHT);
+      if (tintAlpha > 0.01) { context.globalAlpha = tintAlpha; context.fillStyle = tintColor; context.fillRect(0, 0, width, HEIGHT); context.globalAlpha = 1; }
 
       context.globalCompositeOperation = 'lighter';
       const source = context.createRadialGradient(originX, originY, 0, originX, originY, HEIGHT * 1.15);
@@ -122,6 +135,6 @@ export function WaitingLight({ strength = 1 }: { strength?: number }) {
     window.addEventListener('resize', resize);
     frame = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', resize); };
-  }, [strength]);
+  }, []);
   return <canvas ref={ref} aria-hidden="true" data-testid="receiver-waiting" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'block', background: '#05060a' }} />;
 }

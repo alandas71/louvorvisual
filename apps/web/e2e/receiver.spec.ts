@@ -46,6 +46,7 @@ test('receptor do projetor: código, espera, slides, som no projetor, reconexão
     await phone.goto(`${ORIGIN}/app`);
     await phone.getByRole('button', { name: 'Novo louvor' }).click();
     await phone.getByLabel('Título').fill('Em União');
+    await phone.getByLabel('Artista').fill('Coral da Vila');
     await phone.getByLabel('Letra').fill(`[Introdução]\n\n[Estrofe 1]\n${SLIDE_TEXTS[0]}\n\n[Estrofe 2]\n${SLIDE_TEXTS[1]}`);
     await phone.getByRole('button', { name: 'Salvar e revisar slides' }).click();
     await expect(phone.getByTestId('occurrence')).toHaveCount(3);
@@ -57,9 +58,11 @@ test('receptor do projetor: código, espera, slides, som no projetor, reconexão
     await expect(projector.locator('[data-slide-text]')).toHaveCount(0);
 
     await phone.getByRole('button', { name: '▶ Iniciar', exact: true }).click();
-    // Slide inicial de introdução: aparece como luz, não como tela preta.
-    await expect(projector.getByTestId('pwa-receiver')).toHaveAttribute('data-live', 'true');
-    await expect(projector.locator('[data-receiver-light="instrumental"]')).toBeVisible();
+    // Slide inicial de introdução: nome do louvor e artista sobre a luz, não tela preta.
+    await expect(projector.getByTestId('pwa-receiver')).toHaveAttribute('data-mode', 'title');
+    await expect(projector.getByTestId('receiver-title')).toHaveText('Em UniãoCoral da Vila');
+    await expect(projector.getByTestId('receiver-title')).toHaveCSS('opacity', '1');
+    await projector.screenshot({ path: 'tmp/pwa-receiver-title.png' });
     // A faixa toca no projetor, perto da posição do celular, e o celular fica mudo.
     // (Faixa independente: quem dá o play é o operador.)
     await phone.getByTestId('audio-toggle').click();
@@ -67,6 +70,7 @@ test('receptor do projetor: código, espera, slides, som no projetor, reconexão
     await expect.poll(async () => (await receiverAudio(projector))?.paused, { timeout: 20_000 }).toBe(false);
     const phoneAudio = phone.locator('audio[data-testid="session-audio"]');
     await expect.poll(() => phoneAudio.evaluate((audio: HTMLAudioElement) => audio.muted), { timeout: 10_000 }).toBe(true);
+    await expect(phone.getByTestId('audio-output')).toHaveAttribute('data-state', 'projector');
     await expect.poll(async () => {
       const [there, here] = await Promise.all([receiverAudio(projector), phoneAudio.evaluate((audio: HTMLAudioElement) => audio.currentTime * 1000)]);
       return Math.abs((there?.positionMs ?? -9999) - here);
@@ -76,9 +80,13 @@ test('receptor do projetor: código, espera, slides, som no projetor, reconexão
     const sent = Date.now();
     await phone.keyboard.press('ArrowRight'); await expect(text).toHaveText(SLIDE_TEXTS[0]!);
     console.log(`troca de slide no projetor em ${Date.now() - sent} ms`);
+    // A letra fica sobre a luz: o slide não pinta fundo próprio e a introdução esmaece.
+    await expect(projector.locator('[data-slide-frame]')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(projector.getByTestId('receiver-title')).toHaveCSS('opacity', '0');
+    await projector.screenshot({ path: 'tmp/pwa-receiver-lyrics.png' });
     await phone.keyboard.press('ArrowRight'); await expect(text).toHaveText(SLIDE_TEXTS[1]!);
-    await phone.keyboard.press('b'); await expect(projector.locator('[data-slide-frame]')).toHaveAttribute('data-visual-mode', 'black');
-    await phone.keyboard.press('b');
+    await phone.keyboard.press('b'); await expect(projector.getByTestId('pwa-receiver')).toHaveAttribute('data-mode', 'black');
+    await phone.keyboard.press('b'); await expect(projector.getByTestId('pwa-receiver')).toHaveAttribute('data-mode', 'slide');
     await projectorContext.setOffline(true);
     await expect(operator(phone)).toHaveAttribute('data-projection', 'lost', { timeout: 20_000 });
     // Sem projetor, o som volta ao celular.

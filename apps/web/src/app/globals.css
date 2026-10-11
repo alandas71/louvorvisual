@@ -114,10 +114,12 @@
     background-color: var(--color-accent);
   }
 
+  /* A saída do projetor fica de fora: ali o movimento é o conteúdo projetado, e
+     "remover animações" no sistema do aparelho não é uma escolha do público. */
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    *:not(.lv-output-motion, .lv-output-motion *),
+    *:not(.lv-output-motion, .lv-output-motion *)::before,
+    *:not(.lv-output-motion, .lv-output-motion *)::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -152,4 +154,4 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.lv-receiver-slide-enter { animation: lv-receiver-enter 140ms ease-out both; }
+.lv-receiver-slide-enter { animation: lv-receiver-enter 220ms ease-out both; }
