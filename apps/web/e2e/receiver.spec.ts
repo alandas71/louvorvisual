@@ -20,10 +20,9 @@ test('PWA receptor: celular e projetor isolados, slides, reconexão e encerramen
     await phone.screenshot({ path: 'tmp/pwa-receiver-phone.png' });
     await phone.getByLabel('Código exibido no projetor').fill(code);
     await phone.getByRole('button', { name: 'Conectar como controle' }).click();
-    await expect(projector.getByRole('status')).toHaveText('Celular conectado.');
-    await projector.getByRole('button', { name: 'Exibir apresentação' }).click();
+    await expect(projector.getByTestId('receiver-waiting')).toBeVisible();
     await createSong(phone, { durations: [null, null] }); await openOperator(phone);
-    await expect(operator(phone)).toHaveAttribute('data-projection-armed', 'true');
+    await expect(projector.getByTestId('receiver-waiting')).toBeVisible();
     await phone.getByRole('button', { name: '▶ Iniciar', exact: true }).click();
     const text = projector.locator('[data-slide-text]');
     await expect(text).toHaveText(SLIDE_TEXTS[0]!);
@@ -35,9 +34,8 @@ test('PWA receptor: celular e projetor isolados, slides, reconexão e encerramen
     await phone.keyboard.press('ArrowLeft'); await projectorContext.setOffline(false);
     await expect(text).toHaveText(SLIDE_TEXTS[0]!); await expect(operator(phone)).toHaveAttribute('data-projection-armed', 'true');
     await projector.screenshot({ path: 'tmp/pwa-receiver-screen.png' });
-    // Reload restores pairing, but requires arming again before exposing slides.
-    await projector.reload(); await expect(projector.getByRole('status')).toHaveText('Celular conectado.');
-    await projector.getByRole('button', { name: 'Exibir apresentação' }).click(); await expect(text).toHaveText(SLIDE_TEXTS[0]!);
+    // Reload restores the paired receiver and immediately returns to the output.
+    await projector.reload(); await expect(text).toHaveText(SLIDE_TEXTS[0]!);
     await phone.getByRole('button', { name: /Encerrar/ }).click();
     await expect(projector.locator('[data-slide-text]')).toHaveCount(0);
     expect(errors).toEqual([]);

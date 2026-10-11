@@ -7,7 +7,7 @@ LouvorVisual no A1 com controle pelo celular
 4. Conecte o projetor e o celular à mesma rede Wi-Fi.
 5. Abra "Controlar pelo celular" no início do aplicativo do projetor.
 6. No navegador do celular, digite o endereço http://IP:PORTA mostrado no A1.
-7. Digite o código de seis dígitos mostrado no projetor.
+7. Digite o código de quatro dígitos mostrado no projetor.
 8. Escolha um louvor/repertório no celular e toque em "Iniciar apresentação".
 
 O projetor fica na horizontal. O celular pode continuar em pé.
