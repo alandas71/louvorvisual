@@ -115,6 +115,8 @@ export type OperatorSource = {
   arrangementId: Uuid | null;
   setlistId: Uuid | null;
   itemId: Uuid | null;
+  /** Faixa escolhida ao abrir pela biblioteca; `null` usa a selecionada no arranjo. */
+  audioBindingId: Uuid | null;
   /** ID combinado com a janela de projeção para a sessão nova (próximo louvor do repertório). */
   sessionHint: Uuid | null;
 };
@@ -124,7 +126,7 @@ export type OperatorSource = {
  * área do operador estiver aberta. Tudo vem do banco local; nada usa rede.
  */
 export function useOperatorSession(local: LocalSession, source: OperatorSource): OperatorSessionState {
-  const { songId, arrangementId, setlistId, itemId, sessionHint } = source;
+  const { songId, arrangementId, setlistId, itemId, audioBindingId, sessionHint } = source;
   const [state, setState] = useState<OperatorSessionState>({ status: 'loading' });
   const cleanup = useRef<(() => void) | null>(null);
 
@@ -293,7 +295,8 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       };
 
       /** Usa a cópia preparada do repertório: a base é a revisão que foi conferida, não a biblioteca viva. */
-      const start = () => (copy ? open({ ...copy.item.snapshot, id: sessionHint ?? crypto.randomUUID(), createdAt: new Date().toISOString() }, copy.item.baseArrangement, fromSetlist, () => undefined) : prepare());
+      const requested = arrangement.audioBindings.some((binding) => binding.id === audioBindingId) ? audioBindingId : undefined;
+      const start = () => (copy ? open({ ...copy.item.snapshot, id: sessionHint ?? crypto.randomUUID(), createdAt: new Date().toISOString() }, copy.item.baseArrangement, fromSetlist, () => undefined) : prepare(requested));
 
       const found = await findRecoverableSession(local.db, arrangement.id);
       if (!current) return;
@@ -333,7 +336,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
       cleanup.current?.();
       cleanup.current = null;
     };
-  }, [local, songId, arrangementId, setlistId, itemId, sessionHint, activate]);
+  }, [local, songId, arrangementId, setlistId, itemId, audioBindingId, sessionHint, activate]);
 
   return state;
 }

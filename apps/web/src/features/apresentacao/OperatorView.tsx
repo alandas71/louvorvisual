@@ -20,8 +20,8 @@ import { useOperatorSession, type AudioChoice, type AudioProblem, type SessionWa
 
 /** Volta para de onde a apresentação foi aberta: o repertório ou o editor do louvor. */
 function leave(songId: Uuid, arrangementId: Uuid | null, setlistId: Uuid | null) {
-  if (setlistId) setLocalQuery({ view: 'repertorios', repertorio: setlistId, song: null, arranjo: null, item: null, sessao: null });
-  else setLocalQuery({ view: 'editor', song: songId, arranjo: arrangementId, repertorio: null, item: null, sessao: null });
+  if (setlistId) setLocalQuery({ view: 'repertorios', repertorio: setlistId, song: null, arranjo: null, item: null, sessao: null, faixa: null });
+  else setLocalQuery({ view: 'editor', song: songId, arranjo: arrangementId, repertorio: null, item: null, sessao: null, faixa: null });
 }
 
 const SESSION_WARNING_TEXT: Record<SessionWarning, string> = {
@@ -76,14 +76,14 @@ export function OperatorView() {
   const setlistId = query.get('repertorio');
   const itemId = query.get('item');
   return (
-    <Operator key={`${songId}:${query.get('arranjo') ?? ''}:${setlistId ?? ''}:${itemId ?? ''}`} local={local.session} songId={songId} arrangementId={query.get('arranjo')} setlistId={setlistId} itemId={itemId} sessionHint={query.get('sessao')} />
+    <Operator key={`${songId}:${query.get('arranjo') ?? ''}:${setlistId ?? ''}:${itemId ?? ''}:${query.get('faixa') ?? ''}`} local={local.session} songId={songId} arrangementId={query.get('arranjo')} setlistId={setlistId} itemId={itemId} audioBindingId={query.get('faixa')} sessionHint={query.get('sessao')} />
   );
 }
 
-type OperatorProps = { local: LocalSession; songId: Uuid; arrangementId: Uuid | null; setlistId: Uuid | null; itemId: Uuid | null; sessionHint: Uuid | null };
+type OperatorProps = { local: LocalSession; songId: Uuid; arrangementId: Uuid | null; setlistId: Uuid | null; itemId: Uuid | null; audioBindingId: Uuid | null; sessionHint: Uuid | null };
 
-function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint }: OperatorProps) {
-  const state = useOperatorSession(local, { songId, arrangementId, setlistId, itemId, sessionHint });
+function Operator({ local, songId, arrangementId, setlistId, itemId, audioBindingId, sessionHint }: OperatorProps) {
+  const state = useOperatorSession(local, { songId, arrangementId, setlistId, itemId, audioBindingId, sessionHint });
   const back = (
     <button type="button" className={buttonClass('secondary', 'md', 'self-start')} onClick={() => leave(songId, arrangementId, setlistId)}>
       {setlistId ? '← Voltar ao repertório' : '← Voltar ao editor'}
@@ -103,7 +103,7 @@ function Operator({ local, songId, arrangementId, setlistId, itemId, sessionHint
           <button type="button" className={buttonClass('primary')} onClick={state.continueWithoutAudio}>
             Seguir sem áudio
           </button>
-          <button type="button" className={buttonClass('secondary')} onClick={() => setLocalQuery({ view: 'editor', song: songId, arranjo: arrangementId, repertorio: null, item: null })}>
+          <button type="button" className={buttonClass('secondary')} onClick={() => setLocalQuery({ view: 'editor', song: songId, arranjo: arrangementId, repertorio: null, item: null, faixa: null })}>
             Abrir o editor para importar o áudio
           </button>
         </div>

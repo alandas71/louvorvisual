@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { SlideView } from '@/components/SlideView';
 import { cn } from '@/lib/utils';
 import { buttonClass } from '@/components/ui/buttonStyles';
-import { deviceOrientation, enterPresentationFullscreen, exitPresentationFullscreen, subscribeDeviceOrientation } from '@/presentation/fullscreen';
+import { deviceOrientation, enterPresentationFullscreen, exitPresentationFullscreen, releasePresentationOrientation, requestPresentationLandscape, subscribeDeviceOrientation } from '@/presentation/fullscreen';
 import { FullscreenIcon, LargerIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, RotateIcon, SmallerIcon, TimerIcon } from './icons';
 import { formatSeconds } from './labels';
 import { LiveMenu, type Dispatch } from './LiveMenu';
@@ -103,10 +103,16 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      if (!document.fullscreenElement) displayRequested.current = false;
+      if (!document.fullscreenElement) {
+        displayRequested.current = false;
+        releasePresentationOrientation();
+      }
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      releasePresentationOrientation();
+    };
   }, []);
 
   useEffect(() => {
@@ -137,6 +143,21 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
 
   const visible = active || menuOpen || pinned || needsRotation;
 
+  async function rotateMobileDisplay() {
+    if (physicalOrientation === 'landscape' || fullscreenBusy.current) return;
+    fullscreenBusy.current = true;
+    try {
+      const rotated = await requestPresentationLandscape();
+      if (!root.current) {
+        releasePresentationOrientation();
+        return;
+      }
+      setNeedsRotation(!rotated);
+    } finally {
+      fullscreenBusy.current = false;
+    }
+  }
+
   async function exitPresentation() {
     if (fullscreenBusy.current) return;
     fullscreenBusy.current = true;
@@ -163,7 +184,10 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
     setFullscreenError(false);
     try {
       const result = await enterPresentationFullscreen();
-      if (!root.current) return;
+      if (!root.current) {
+        releasePresentationOrientation();
+        return;
+      }
       if (result === 'rotate-device') {
         setNeedsRotation(true);
         return;
@@ -201,7 +225,7 @@ export function InteractiveStage({ frame, rotation, controls, dispatch, countdow
         )}
         <CornerButton label={physicalOrientation === 'desktop' ? `Girar a saída 90° (agora ${rotation}°)` : 'Girar o celular para a horizontal'} testId="corner-rotate" onClick={() => {
           if (physicalOrientation === 'desktop') dispatch({ type: 'rotate' });
-          else setNeedsRotation(true);
+          else void rotateMobileDisplay();
         }}>
           <RotateIcon />
         </CornerButton>

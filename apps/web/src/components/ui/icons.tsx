@@ -21,7 +21,9 @@ export const OfflineIcon = make(<><path d="M12 3v11M7.5 10.5 12 15l4.5-4.5" /><p
 export const SyncIcon = make(<><path d="M20 11a8 8 0 0 0-14.3-4.3L4 8.5" /><path d="M4 4v4.5h4.5M4 13a8 8 0 0 0 14.3 4.3L20 15.5" /><path d="M20 20v-4.5h-4.5" /></>);
 export const AccountIcon = make(<><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.300A6.5 6.5 0 0 1 21.5 20" /></>);
 export const MoreIcon = make(<><path d="M4 7h16M4 12h16M4 17h16" /></>);
-export const PlusIcon = make(<path d="M12 5v14M5 12h14" />);
+export const PlayIcon = make(<path d="M7.5 4.5v15l12-7.500-12-7.500Z" />);
+export const MicIcon = make(<><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.500V21" /></>);
+export const PlusIcon =make(<path d="M12 5v14M5 12h14" />);
 export const SearchIcon = make(<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.8-3.8" /></>);
 export const CloseIcon = make(<path d="M6 6l12 12M18 6 6 18" />);
 export const CopyIcon = make(<><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>);

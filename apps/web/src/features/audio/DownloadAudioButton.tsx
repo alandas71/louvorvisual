@@ -1,16 +1,14 @@
 'use client';
 
-import type { Asset } from '@louvorvisual/domain';
-import { ListenAudio } from './ListenAudio';
 import { useEffect, useRef, useState } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
 import { CheckIcon, OfflineIcon } from '@/components/ui/icons';
+import { pillClass } from '@/components/ui/PageHeader';
 import { assetPresent, type LocalSession } from '@/local';
 import { syncEngine } from '@/sync/engine';
 import { useLibraryVersion } from '@/sync/hooks';
 
 export function DownloadAudioButton({ session, songId, assetId, title }: { session: LocalSession; songId?: string; assetId?: string; title: string }) {
-  const [tracks, setTracks] = useState<Asset[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
   const [hasAudio, setHasAudio] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,7 +23,7 @@ export function DownloadAudioButton({ session, songId, assetId, title }: { sessi
       const absent: string[] = [];
       for (const asset of assets) if (asset && asset.remoteState === 'ready' && !(await assetPresent(session.db, asset))) absent.push(asset.id);
       const present = assets.length > 0 && (await Promise.all(assets.map(a => assetPresent(session.db, a!)))).every(Boolean);
-      if (current) { setMissing(absent); setHasAudio(present); setTracks(assets.filter((a): a is Asset => a !== undefined)); }
+      if (current) { setMissing(absent); setHasAudio(present); }
     })().catch(() => { if (current) setError('Não foi possível conferir os áudios.'); });
     return () => { current = false; };
   }, [session, songId, assetId, version]);
@@ -45,11 +43,10 @@ export function DownloadAudioButton({ session, songId, assetId, title }: { sessi
   }
 
   if (!session.team) return null;
-  return <div className="flex flex-col gap-1">
-    {songId && tracks.filter(a => a.remoteState === 'ready').map(a => <div key={a.id}><span className="text-xs text-muted">{a.audioKind === 'original' ? 'Original' : 'Playback'}</span><ListenAudio session={session} asset={a} /></div>)}
+  return <div className="flex flex-col justify-center gap-1">
     {missing.length > 0 ? <button type="button" className={buttonClass('secondary', 'sm')} disabled={busy} aria-label={(busy ? 'Baixando ' : 'Baixar ') + title} onClick={() => void download()}>
       <OfflineIcon size={15} />{busy ? 'Baixando…' : 'Baixar para offline'}
-    </button> : hasAudio ? <span className="flex items-center gap-1 text-xs text-muted"><CheckIcon size={15} />Áudio neste dispositivo</span> : null}
+    </button> : hasAudio ? <span className={pillClass('success', 'self-start')} title="Áudio neste dispositivo"><CheckIcon size={13} />Áudio offline</span> : null}
     {error && <p role="alert" className="max-w-xs text-xs text-danger">{error}</p>}
   </div>;
 }
