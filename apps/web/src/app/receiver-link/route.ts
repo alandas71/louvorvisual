@@ -5,6 +5,12 @@ export const dynamic = 'force-dynamic';
 const shared = globalThis as typeof globalThis & { lvReceiverRelay?: ReceiverRelay };
 const relay = shared.lvReceiverRelay ??= new ReceiverRelay();
 const response = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
+function publicOrigin(request: Request) {
+  const url = new URL(request.url);
+  const protocol = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || url.protocol.slice(0, -1);
+  const host = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() || request.headers.get('host') || url.host;
+  return `${protocol}://${host}`;
+}
 function credentials(request: Request) {
   const id = new URL(request.url).searchParams.get('id') ?? '';
   const token = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
@@ -21,7 +27,7 @@ async function body(request: Request) {
 async function handle(request: Request) {
   try {
     const origin = request.headers.get('origin');
-    if ((origin && origin !== new URL(request.url).origin) || request.headers.get('sec-fetch-site') === 'cross-site') throw new RelayError(403, 'Origem não permitida.');
+    if ((origin && origin !== publicOrigin(request)) || request.headers.get('sec-fetch-site') === 'cross-site') throw new RelayError(403, 'Origem não permitida.');
     const { id, token } = credentials(request);
     if (request.method === 'GET') return response(relay.read(id, token));
     if (request.method === 'DELETE') { relay.close(id, token); return response({ closed: true }); }
