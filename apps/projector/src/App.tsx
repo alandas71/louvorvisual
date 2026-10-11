@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_PROJECTOR_PREFS, type HostResult, type ProjectorPrefs, type RecoverableSession } from '@louvorvisual/contracts';
+import { IDLE_PHONE_PRESENTATION, DEFAULT_PROJECTOR_PREFS, type HostResult, type ProjectorPrefs, type RecoverableSession } from '@louvorvisual/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { AppContext, type AppServices, type Screen } from './app-context';
@@ -15,6 +15,8 @@ import { SetlistScreen } from './screens/SetlistScreen';
 import { SetlistsScreen } from './screens/SetlistsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SongsScreen } from './screens/SongsScreen';
+import { PhoneScreen } from './screens/PhoneScreen';
+import { acknowledgePhone, phoneSelection } from './phone/commands';
 
 type Boot =
   | { status: 'loading' }
@@ -119,6 +121,25 @@ export function App() {
     [boot, updatePrefs, setRecoverable, go, replace, back],
   );
 
+  const screenName = stack.at(-1)?.screen.name;
+  useEffect(() => {
+    if (!host || screenName === 'presentation') return;
+    void host.request('phone.publish', IDLE_PHONE_PRESENTATION).catch(() => undefined);
+    let selecting = false;
+    return host.on('phone.command', event => {
+      if (event.command.type !== 'select' || selecting) {
+        void acknowledgePhone(host, event.id, false, selecting ? 'Aguarde o louvor carregar.' : 'Escolha um louvor primeiro.');
+        return;
+      }
+      selecting = true;
+      void phoneSelection(host, event).then(async request => {
+        await host.request('phone.publish', { ...IDLE_PHONE_PRESENTATION, phase: 'loading' }).catch(() => undefined);
+        go({ name: 'presentation', request });
+        await acknowledgePhone(host, event.id, true);
+      }).catch(() => acknowledgePhone(host, event.id, false, 'Não foi possível abrir este louvor.')).finally(() => { selecting = false; });
+    });
+  }, [host, screenName, go]);
+
   if (boot.status === 'loading') {
     return (
       <div className="app" data-testid="boot-loading">
@@ -152,7 +173,8 @@ export function App() {
         {screen.name === 'songs' && <SongsScreen focusKey={entry.focusKey} />}
         {screen.name === 'import' && <ImportScreen />}
         {screen.name === 'settings' && <SettingsScreen />}
-        {screen.name === 'presentation' && <PresentationScreen request={screen.request} />}
+        {screen.name === 'phone' && <PhoneScreen />}
+        {screen.name === 'presentation' && <PresentationScreen key={screen.request.kind === 'start' ? screen.request.selectionId ?? screen.request.arrangementId : screen.request.session.sessionId} request={screen.request} />}
       </div>
     </AppContext.Provider>
   );

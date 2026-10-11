@@ -1,5 +1,7 @@
 import {
   BRIDGE_VERSION,
+  IDLE_PHONE_PRESENTATION,
+  type PhonePresentation,
   DEFAULT_PROJECTOR_PREFS,
   hostMethods,
   hostRequestSchema,
@@ -68,6 +70,8 @@ export type MockControls = {
   audio(): { loaded: boolean; playing: boolean; positionMs: number; volume: number };
   /** Pausa vinda de fora do aplicativo (foco de áudio, tecla de mídia). */
   interruptAudio(): void;
+  phonePresentation: PhonePresentation;
+  phoneSongs(): SongSummary[];
   keepAwake: boolean;
   exited: boolean;
 };
@@ -98,6 +102,8 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
   let seq = 0;
   let online = query.get('mock') !== 'offline';
   let syncing = false;
+  let phoneEnabled = false;
+  const phoneUrls = [window.location.origin];
   const failures = new Map<HostMethod, HostErrorCode>();
   const imports = new Map<string, true>();
 
@@ -159,6 +165,11 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
       controls.exited = true;
       return {};
     },
+    'phone.open': () => { phoneEnabled = true; return { enabled: true, connected: false, urls: phoneUrls, code: '123456', expiresAt: new Date(Date.now() + 600000).toISOString() }; },
+    'phone.close': () => { phoneEnabled = false; return {}; },
+    'phone.status': () => ({ enabled: phoneEnabled, connected: false, urls: phoneEnabled ? phoneUrls : [], code: phoneEnabled ? '123456' : null, expiresAt: phoneEnabled ? new Date(Date.now() + 600000).toISOString() : null }),
+    'phone.publish': (value: PhonePresentation) => { controls.phonePresentation = value; return {}; },
+    'phone.ack': () => ({}),
     'prefs.get': () => ({ prefs: state.prefs }),
     'prefs.set': ({ prefs }: { prefs: Partial<ProjectorPrefs> }) => {
       state.prefs = { ...state.prefs, ...prefs };
@@ -361,6 +372,8 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
       stopPlayer();
       emit('audio.state', { type: 'paused', positionMs: player.base, external: true });
     },
+    phonePresentation: { ...IDLE_PHONE_PRESENTATION },
+    phoneSongs: () => [...library.arrangements.values()].map(summary).sort((a, b) => a.title.localeCompare(b.title, 'pt-BR')),
     keepAwake: false,
     exited: false,
   };

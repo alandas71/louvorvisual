@@ -1,0 +1,40 @@
+LouvorVisual no A1 com controle pelo celular
+
+1. Instale o APK LouvorVisual no projetor Android.
+2. No LouvorVisual do computador/celular, exporte o pacote do repertório.
+3. No projetor, use "Importar pacote" e escolha o arquivo .louvorvisual.zip.
+   A biblioteca e os arquivos de áudio passam a ficar no próprio projetor.
+4. Conecte o projetor e o celular à mesma rede Wi-Fi.
+5. Abra "Controlar pelo celular" no início do aplicativo do projetor.
+6. No navegador do celular, digite o endereço http://IP:PORTA mostrado no A1.
+7. Digite o código de seis dígitos mostrado no projetor.
+8. Escolha um louvor/repertório no celular e toque em "Iniciar apresentação".
+
+O projetor fica na horizontal. O celular pode continuar em pé.
+Áudio, letras e avanço automático são executados no projetor.
+O celular oferece prévia, próximo/anterior, pausa/retomada, apagar/mostrar
+letras e encerramento. A apresentação continua se a conexão do celular cair;
+ao reconectar, a prévia recebe o estado atual. O aplicativo precisa continuar
+aberto no projetor. Ao sair dele, a sessão pausa e comandos são bloqueados.
+
+Este controle funciona na rede local, sem internet. A rede precisa permitir
+comunicação entre aparelhos: redes de visitantes com isolamento podem impedir
+conexão. Não é necessário espelhar a tela do celular nem instalar aplicativo nele.
+O controle usa os louvores importados no projetor; ainda não envia a biblioteca
+do celular nem realiza sincronização pela conta.
+
+O código vale por dez minutos e aceita um único pareamento. Gerar novo código
+ou desligar o controle invalida o celular anterior. Reabrir a página no mesmo
+navegador/aba mantém o pareamento enquanto o aplicativo continua aberto.
+
+Compilação de teste (JDK 17+ e Android SDK com API 36):
+  Na pasta apps/android: ./gradlew testDebugUnitTest assembleDebug
+  APK: apps/android/app/build/outputs/apk/debug/app-debug.apk
+  O APK de debug é para teste local; não utiliza a chave de distribuição.
+
+Validação no aparelho:
+- Importar um repertório com áudio e parear o celular.
+- Iniciar, avançar/voltar, pausar/retomar e apagar/mostrar letras.
+- Selecionar outro louvor durante a apresentação e conferir a troca de áudio.
+- Desconectar o Wi-Fi do celular e reconectar: prévia atualiza sem repetir comando.
+- Gerar novo código e confirmar que o pareamento anterior deixou de controlar.

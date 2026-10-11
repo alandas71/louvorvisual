@@ -1,5 +1,7 @@
 'use client';
 
+import { IDLE_PHONE_PRESENTATION } from '@louvorvisual/contracts';
+import { acknowledgePhone, phoneOperatorCommand, phoneSelection } from '@/phone/commands';
 import type { OperatorCommand } from '@louvorvisual/presentation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useApp, type PresentationRequest } from '@/app-context';
@@ -68,6 +70,21 @@ export function PresentationScreen({ request }: { request: PresentationRequest }
 
 function Pending({ phase }: { phase: Exclude<Phase, { status: 'live' }> }) {
   const app = useApp();
+  useEffect(() => {
+    void app.host.request('phone.publish', { ...IDLE_PHONE_PRESENTATION, phase: phase.status === 'failed' ? 'error' : 'loading', message: phase.status === 'failed' ? failureText(phase.failure) : '' }).catch(() => undefined);
+    let selecting = false;
+    return app.host.on('phone.command', event => {
+      if (phase.status !== 'failed' || event.command.type !== 'select' || selecting) {
+        void acknowledgePhone(app.host, event.id, false, 'Aguarde o louvor carregar.');
+        return;
+      }
+      selecting = true;
+      void phoneSelection(app.host, event).then(request => {
+        app.replace({ name: 'presentation', request });
+        return acknowledgePhone(app.host, event.id, true);
+      }).catch(() => acknowledgePhone(app.host, event.id, false, 'Não foi possível abrir este louvor.')).finally(() => { selecting = false; });
+    });
+  }, [app, phase]);
   const ref = useFocusLayer<HTMLElement>({ name: 'presentation-pending', level: 0, repeat: 'directions', onBack: () => app.back() });
   return (
     <main className="stage" ref={ref} data-layer="presentation-pending" data-testid="presentation-pending">
@@ -96,7 +113,8 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
   const { session } = opened;
   const { view } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const { controls } = view;
-  const [overlay, setOverlay] = useState<Overlay>(view.state.status === 'ready' ? 'ready' : 'none');
+  const [controlledByPhone, setControlledByPhone] = useState(request.kind === 'start' && request.remote === true);
+  const [overlay, setOverlay] = useState<Overlay>(view.state.status === 'ready' && !(request.kind === 'start' && request.remote) ? 'ready' : 'none');
   const [exiting, setExiting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [toast, setToast] = useState<{ text: string; id: number } | null>(opened.recovered ? { text: 'Sessão recuperada em pausa', id: 0 } : null);
@@ -138,6 +156,42 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
   const leave = () => void end(() => app.back(opened.context.itemId ? `item:${opened.context.itemId}` : undefined));
   const changeSong = (entry: (typeof queue)[number]) =>
     void end(() => app.replace({ name: 'presentation', request: { kind: 'start', arrangementId: entry.arrangementId, context: { setlistId: opened.context.setlistId, itemId: entry.itemId }, queue } }));
+
+  useEffect(() => {
+    void app.host.request('phone.publish', {
+      sessionId: session.sessionId, phase: leaving ? 'loading' : view.state.status,
+      title: opened.title.slice(0, 1000), text: view.output.slide.text.slice(0, 50000),
+      index: controls.index, total: controls.total, visualMode: view.output.visualMode,
+      transport: controls.capabilities.transport,
+      message: opened.audioUnavailable ? 'O áudio não está disponível neste projetor.' : view.notice ? NOTICE_TEXT[view.notice] : '',
+    }).catch(() => undefined);
+  }, [app.host, session, view, controls, opened, leaving]);
+
+  useEffect(() => {
+    let busy = false;
+    return app.host.on('phone.command', event => {
+      const { command } = event;
+      if (busy || leaving) { void acknowledgePhone(app.host, event.id, false, 'Aguarde a troca de louvor.'); return; }
+      if (command.type !== 'select' && command.sessionId !== session.sessionId) { void acknowledgePhone(app.host, event.id, false, 'O louvor mudou. Aguarde o celular atualizar.'); return; }
+      if (command.type === 'select') {
+        busy = true;
+        void phoneSelection(app.host, event).then(selected => end(() => app.replace({ name: 'presentation', request: selected })))
+          .then(() => acknowledgePhone(app.host, event.id, true))
+          .catch(() => acknowledgePhone(app.host, event.id, false, 'Não foi possível abrir este louvor.'));
+        return;
+      }
+      if (command.type === 'end') {
+        busy = true;
+        void end(() => app.back()).then(() => acknowledgePhone(app.host, event.id, true));
+        return;
+      }
+      const action = phoneOperatorCommand(command);
+      if (!action) return;
+      const result = session.execute(action);
+      if (result.ok) { setControlledByPhone(true); setOverlay('none'); setExiting(false); setToast(null); }
+      void acknowledgePhone(app.host, event.id, result.ok, result.ok ? '' : COMMAND_FAILURE_TEXT[result.reason]);
+    });
+  }, [app, end, session, leaving]);
 
   // Apresentação limpa: a área do slide tem o foco e as teclas são comandos diretos.
   const stage = useFocusLayer<HTMLElement>({
@@ -194,14 +248,14 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
       data-font-size={controls.appearance.fontSizePx}
       data-theme={controls.appearance.themePresetId ?? ''}
     >
-      {leaving ? (
+      {leaving || (controlledByPhone && view.state.status === 'ready') ? (
         <div className="stage-slide" style={{ background: '#000' }} />
       ) : (
         <SlideView text={output.slide.text} style={output.slide.style} fontId={output.slide.fontId} visualMode={output.visualMode} rotation={view.rotation} />
       )}
       <div className="stage-focus" tabIndex={-1} data-focusable="" data-autofocus="" data-testid="slide-focus" aria-label={`Slide ${controls.index + 1} de ${controls.total}`} />
 
-      {clean && status && !leaving && (
+      {clean && status && !leaving && !controlledByPhone && (
         <p className="pill pill-top" data-testid="stage-status" role="status">
           {status}
         </p>

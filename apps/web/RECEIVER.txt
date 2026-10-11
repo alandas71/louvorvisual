@@ -1,0 +1,26 @@
+# PWA no projetor: modo receptor
+
+Não é necessário instalar o APK para este modo. Abra o mesmo endereço do LouvorVisual nos dois dispositivos, pelo navegador ou PWA.
+
+1. No projetor: menu **Projetor e celular**, **Ativar receptor neste dispositivo**.
+2. No celular: menu **Projetor e celular**, informe o código de oito dígitos e clique em **Conectar como controle**.
+3. No projetor: clique em **Exibir apresentação**. O navegador tenta entrar em tela cheia e solicitar orientação horizontal. Se recusar, use **Tela cheia** novamente.
+4. No celular: escolha um louvor pela biblioteca e inicie a apresentação. Os controles existentes enviam o slide completo ao receptor.
+
+O áudio continua no celular. A biblioteca não precisa ser importada no projetor. Não há identificação automática do modelo A1: escolher o receptor salva uma preferência neste navegador, retomada ao abrir /app sem parâmetros. A tecla M ou Esc reabre a preparação. Voltar à biblioteca desativa essa preferência e encerra o receptor.
+
+## Conexão e operação
+
+Os dois dispositivos precisam alcançar o mesmo servidor durante a apresentação. Não é necessário estarem no mesmo Wi-Fi se o servidor for acessível pela internet. O modo receptor não comunica dispositivos sem servidor; o uso offline da biblioteca continua disponível.
+
+Uma perda de conexão conserva a imagem já recebida. Quando a rede volta, o receptor busca o estado completo atual. Recarregar recupera o pareamento da aba, mas pede para exibir a apresentação novamente. Encerrar um louvor limpa a saída; iniciar outro reutiliza o receptor. O código só pode conectar um controle, expira em dez minutos e pode ser regenerado no projetor. Sessões expiram após seis horas ou dois minutos sem atividade dos dispositivos já pareados.
+
+## Publicação
+
+A rota dinâmica **/receiver-link** é servida pelo próprio Next (não depende de BACKEND_URL), não passa pelo proxy /api e não é armazenada pelo service worker. Publique o build web completo com **next start**, em **um processo Node persistente**, com HTTPS em produção. A biblioteca/PWA é pré-renderizada, mas esta rota precisa do servidor.
+
+O relay guarda somente o último estado visual e confirmação, em memória limitada e com tokens separados por dispositivo. Reiniciar o servidor encerra os pareamentos. Esta implementação não atende hospedagem apenas estática, funções serverless ou múltiplas réplicas sem afinidade: nesses ambientes, use um armazenamento compartilhado para as salas antes de habilitar o recurso. Tokens não são colocados na URL; o código é de uso único, e tentativas de pareamento são limitadas.
+
+Validação: teste de navegador em dois contextos isolados cobre biblioteca no celular, apresentação, navegação, tela preta, perda de rede, reconexão, recarga e encerramento. O A1 físico ainda precisa ser validado quanto ao navegador, instalação do PWA, tela cheia e orientação.
+
+Verificação adicional da projeção local: o fluxo funcional passou, mas a checagem de console da suíte existente falhou por três respostas 404 de /api/v1/auth/me. O ambiente de teste não configura BACKEND_URL; o modo receptor não depende dessa API.

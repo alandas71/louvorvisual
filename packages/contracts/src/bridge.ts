@@ -214,6 +214,34 @@ export const audioStateEventSchema = z.object({
 });
 export type AudioStateEvent = z.infer<typeof audioStateEventSchema>;
 
+// ── controle local pelo celular ────────────────────────────────────────────
+
+export const phoneCommandSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('select'), arrangementId: uuidSchema, setlistId: uuidSchema.nullable(), itemId: uuidSchema.nullable() }),
+  z.strictObject({ type: z.enum(['start', 'next', 'previous', 'toggle', 'black', 'normal', 'end']), sessionId: uuidSchema }),
+]);
+export type PhoneCommand = z.infer<typeof phoneCommandSchema>;
+export const phoneCommandEventSchema = z.strictObject({ id: uuidSchema, command: phoneCommandSchema });
+export type PhoneCommandEvent = z.infer<typeof phoneCommandEventSchema>;
+export const phonePresentationSchema = z.strictObject({
+  sessionId: uuidSchema.nullable(),
+  phase: z.enum(['idle', 'loading', 'ready', 'running', 'paused', 'finished', 'error']),
+  title: z.string().max(1000),
+  text: z.string().max(50000),
+  index: count,
+  total: count,
+  visualMode: z.enum(['normal', 'black', 'lyricsHidden']),
+  transport: z.boolean(),
+  message: z.string().max(1000),
+});
+export type PhonePresentation = z.infer<typeof phonePresentationSchema>;
+export const IDLE_PHONE_PRESENTATION: PhonePresentation = { sessionId: null, phase: 'idle', title: '', text: '', index: 0, total: 0, visualMode: 'normal', transport: false, message: '' };
+export const phoneConnectionSchema = z.object({
+  enabled: z.boolean(), connected: z.boolean(), urls: z.array(z.string().max(300)),
+  code: z.string().regex(/^[0-9]{6}$/).nullable(), expiresAt: isoInstantSchema.nullable(),
+});
+export type PhoneConnection = z.infer<typeof phoneConnectionSchema>;
+
 // ── métodos ─────────────────────────────────────────────────────────────────
 
 /** Tudo o que o bundle pode pedir ao host: parâmetros (estritos) e resultado. */
@@ -231,6 +259,12 @@ export const hostMethods = {
   'host.setKeepAwake': { params: z.strictObject({ on: z.boolean() }), result: empty },
   /** Voltar na tela inicial: o host decide como sair do aplicativo. */
   'host.exit': { params: empty, result: empty },
+
+  'phone.open': { params: empty, result: phoneConnectionSchema },
+  'phone.close': { params: empty, result: empty },
+  'phone.status': { params: empty, result: phoneConnectionSchema },
+  'phone.publish': { params: phonePresentationSchema, result: empty },
+  'phone.ack': { params: z.strictObject({ id: uuidSchema, ok: z.boolean(), message: z.string().max(1000) }), result: empty },
 
   'prefs.get': { params: empty, result: z.object({ prefs: projectorPrefsSchema }) },
   'prefs.set': { params: z.strictObject({ prefs: projectorPrefsSchema.partial() }), result: z.object({ prefs: projectorPrefsSchema }) },
@@ -278,6 +312,7 @@ export const HOST_METHODS = Object.keys(hostMethods) as HostMethod[];
 /** Tudo o que o host avisa sem ser perguntado. */
 export const hostEvents = {
   'remote.key': remoteKeyEventSchema,
+  'phone.command': phoneCommandEventSchema,
   'audio.state': audioStateEventSchema,
   'files.progress': z.object({ phase: z.enum(['copying', 'verifying', 'importing']), loadedBytes: count, totalBytes: count }),
   'account.changed': accountStatusSchema,

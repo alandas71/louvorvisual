@@ -1,3 +1,4 @@
+import { HOST_METHODS } from '@louvorvisual/contracts';
 import { expect, test } from '@playwright/test';
 import { expectFocus, focusState, open, press, requested, slideIndex, stage, startFromSetlist, watch } from './helpers';
 
@@ -112,7 +113,7 @@ test('nada privado no menu projetado: sem notas, conta, sincronização ou nome 
   expect(stored).not.toContain('NOTA-PRIVADA');
   // E nenhum pedido à ponte saiu do contrato.
   const methods = await page.evaluate(() => [...new Set(window.__lvMock.requests.map((request) => request.method))]);
-  expect(methods.every((method) => /^(host|prefs|library|session|files|audio|account)\.[A-Za-z]+$/.test(method))).toBe(true);
+  expect(methods.every((method) => HOST_METHODS.includes(method))).toBe(true);
 });
 
 test('fechar no meio do culto: ao reabrir, a sessão é oferecida e volta em pausa, sem tocar nada', async ({ page }) => {

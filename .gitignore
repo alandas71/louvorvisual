@@ -34,3 +34,5 @@ contexto_base.md
 **/.env.example
 !apps/api/.env.example
 louvores
+# Ferramentas portáteis e logs locais de validação
+/tmp/

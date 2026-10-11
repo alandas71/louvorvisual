@@ -9,8 +9,8 @@ android {
         applicationId 'br.org.louvorvisual.projector'
         minSdk 23
         targetSdk 36
-        versionCode 1
-        versionName '0.1.0-e0'
+        versionCode 2
+        versionName '0.2.0-phone'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         // A origem da API é do host, nunca é entregue ao bundle do WebView.
         def apiBaseUrl = project.findProperty('louvorvisualApiBaseUrl') ?: ''
@@ -33,9 +33,12 @@ android {
     }
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    kotlinOptions { jvmTarget = '17' }
 
     androidResources {
         // O padrão do aapt descarta pastas de assets que começam com "_", e a
@@ -54,11 +57,14 @@ tasks.named('preBuild').configure { dependsOn(buildProjectorAssets) }
 android.sourceSets.main.assets.srcDirs += ['../../projector/dist']
 
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
     implementation 'androidx.activity:activity:1.10.1'
     implementation 'androidx.webkit:webkit:1.12.1'
     implementation 'androidx.media3:media3-exoplayer:1.5.1'
     implementation 'androidx.media3:media3-common:1.5.1'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }
 
 // A chave fica fora do repositório. Sem este arquivo, o release continua
