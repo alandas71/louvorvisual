@@ -16,8 +16,6 @@ type SlideViewProps = SlideInput & {
    */
   transitionKey?: string;
   className?: string;
-  /** Sem pintar o fundo do tema: quem hospeda desenha o fundo atrás da letra (receptor). */
-  transparent?: boolean;
 };
 
 type Layer = { model: SlideModel; cover: OutputFrame['cover'] };
@@ -53,9 +51,8 @@ function SlideLayer({ layer, animated, leaving = false, onGone }: { layer: Layer
  * Hospedeiro React do SlideRenderer. Toda a aparência vem de `slideModel`, o
  * mesmo usado por editor, miniaturas, prévia do operador e janela pública.
  */
-export function SlideView({ fit = 'ratio', className, cover, transitionKey, transparent = false, ...input }: SlideViewProps) {
+export function SlideView({ fit = 'ratio', className, cover, transitionKey, ...input }: SlideViewProps) {
   const model = slideModel(input);
-  const clear: CSSProperties = transparent && model.visualMode !== 'black' ? { backgroundColor: 'transparent' } : {};
   // Tela preta cobre também a abertura; com a letra oculta ficam só as luzes, sem o título.
   const showCover = cover !== undefined && model.visualMode !== 'black';
   // As luzes da abertura seguem atrás da letra nas saídas, bem mais fracas. Miniaturas e prévias de edição só as mostram na abertura.
@@ -77,11 +74,10 @@ export function SlideView({ fit = 'ratio', className, cover, transitionKey, tran
   const viewport: CSSProperties = {
     ...(model.viewport as CSSProperties),
     ...(fit === 'ratio' ? { aspectRatio: input.style.aspectRatio.replace(':', ' / ') } : {}),
-    ...clear,
   };
   return (
     <div className={cn(fit === 'fill' && 'h-full w-full', className)} style={viewport} data-slide-frame data-visual-mode={model.visualMode} data-rotation={model.rotation} data-cover={showCover || undefined}>
-      <div style={{ ...(model.composition as CSSProperties), ...clear }} data-slide-composition>
+      <div style={model.composition as CSSProperties} data-slide-composition>
         {showLights && (
           <div className={cn('lv-lights', !showCover && 'lv-lights-soft')} aria-hidden="true" data-slide-lights={showCover ? 'cover' : 'soft'}>
             <div className="lv-cover-rays" />

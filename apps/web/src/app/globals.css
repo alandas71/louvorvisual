@@ -323,9 +323,9 @@
     opacity: 0;
   }
 }
-/* Troca de slide no receptor: curta, para a letra não chegar depois da música. A espera é desenhada em canvas (WaitingLight). */
+/* Receptor: a apresentação surge sobre a espera sem corte. A troca entre slides é a do SlideView (lv-slide-enter). */
 @keyframes lv-receiver-enter {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.lv-receiver-slide-enter { animation: lv-receiver-enter 220ms ease-out both; }
+.lv-receiver-slide-enter { animation: lv-receiver-enter 1.2s ease-in-out both; }
