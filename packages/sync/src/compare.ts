@@ -48,7 +48,7 @@ export function dependenciesOf(entityType: SyncEntityType, document: SyncDoc): s
   if (theme?.kind === 'workspace' && theme.themeId) keys.push(entityKey('theme', theme.themeId));
   if (entityType === 'arrangement') {
     keys.push(entityKey('song', fields.songId as string));
-    for (const binding of (fields.audioBindings as { assetId: string }[] | undefined) ?? []) keys.push(entityKey('asset', binding.assetId));
+    for (const binding of (fields.audioBindings as { assetId: string | null }[] | undefined) ?? []) if (binding.assetId) keys.push(entityKey('asset', binding.assetId));
   }
   if (entityType === 'setlist') {
     for (const item of (fields.items as { arrangementId: string }[] | undefined) ?? []) keys.push(entityKey('arrangement', item.arrangementId));

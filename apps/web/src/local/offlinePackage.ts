@@ -83,9 +83,9 @@ export async function prepareOfflinePackage(db: LocalDatabase, setlistId: Uuid, 
 
     // Só a faixa escolhida é exigida; as demais associações podem faltar.
     const binding = arrangement.audioBindings.find((candidate) => candidate.id === arrangement.selectedAudioBindingId) ?? null;
-    const asset = binding ? await getAsset(db, binding.assetId) : null;
-    let audioOk = binding === null;
-    if (binding && !asset) problems.push({ code: 'asset-missing', ...subject });
+    const asset = binding?.assetId ? await getAsset(db, binding.assetId) : null;
+    let audioOk = binding === null || binding?.kind === 'youtube';
+    if (binding && binding.kind !== 'youtube' && !asset) problems.push({ code: 'asset-missing', ...subject });
     if (binding && asset) {
       let check = checkedAudio.get(asset.sha256);
       if (check === undefined) {
@@ -110,6 +110,7 @@ export async function prepareOfflinePackage(db: LocalDatabase, setlistId: Uuid, 
       songGeneration: songState?.localGeneration ?? 0,
       arrangementGeneration: arrangementState?.localGeneration ?? 0,
       audio: binding && asset && audioOk ? { binding, asset } : null,
+      youtubePlayback: binding?.kind === 'youtube' ? binding : null,
     });
     if (!prepared.ok) {
       problems.push({ code: 'snapshot-invalid', ...subject });

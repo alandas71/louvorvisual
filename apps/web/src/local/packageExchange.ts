@@ -61,6 +61,7 @@ export async function collectSetlistDocuments(db: LocalDatabase, setlistId: Uuid
     songs.set(song.id, song);
     await includeTheme(arrangement.themeRef, `"${song.title}"`);
     for (const binding of arrangement.audioBindings) {
+      if (!binding.assetId) continue;
       if (assets.has(binding.assetId)) continue;
       const asset = await db.assets.get(binding.assetId);
       if (asset && asset.deletedAt === null) assets.set(asset.id, asset);
@@ -81,7 +82,7 @@ export async function estimateSetlistPackage(db: LocalDatabase, setlistId: Uuid)
   const selected = new Set<Uuid>();
   for (const arrangement of documents.arrangements) {
     const binding = arrangement.audioBindings.find((item) => item.id === arrangement.selectedAudioBindingId);
-    if (binding) selected.add(binding.assetId);
+    if (binding?.assetId) selected.add(binding.assetId);
   }
   const bytes = (filter: (asset: Asset) => boolean) => [...new Map(documents.assets.filter(filter).map((asset) => [asset.sha256, asset.byteSize])).values()].reduce((total, size) => total + size, 0);
   return {

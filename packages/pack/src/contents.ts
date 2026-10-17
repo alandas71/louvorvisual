@@ -77,6 +77,7 @@ export function referenceProblems(documents: PackageDocuments): string[] {
     if (!songs.has(arrangement.songId)) problems.push(`arranjo ${arrangement.id} aponta para um louvor que não está no pacote: ${arrangement.songId}`);
     checkTheme(arrangement.themeRef, `arranjo ${arrangement.id}`);
     for (const binding of arrangement.audioBindings) {
+      if (!binding.assetId) continue;
       usedAssets.add(binding.assetId);
       if (!assets.has(binding.assetId)) problems.push(`arranjo ${arrangement.id} usa um arquivo que não está no pacote: ${binding.assetId}`);
     }

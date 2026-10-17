@@ -45,8 +45,9 @@ export const audioCueSchema = z.strictObject({
 
 export const audioBindingSchema = z.strictObject({
   id: uuidSchema,
-  assetId: uuidSchema,
+  assetId: uuidSchema.nullable(),
   kind: z.enum(AUDIO_KINDS),
+  youtubeUrl: z.string().url().max(2048).nullable().optional(),
   policy: z.enum(AUDIO_POLICIES),
   volume: z.number().min(0).max(1),
   offsetMs: z.int(),

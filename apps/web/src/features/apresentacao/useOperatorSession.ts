@@ -236,7 +236,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
 
       const audioChoices: AudioChoice[] = copy
         ? []
-        : await Promise.all(arrangement.audioBindings.map(async (binding) => ({ bindingId: binding.id, kind: binding.kind, filename: (await getAsset(local.db, binding.assetId))?.filename ?? null })));
+        : await Promise.all(arrangement.audioBindings.map(async (binding) => ({ bindingId: binding.id, kind: binding.kind, filename: binding.assetId ? (await getAsset(local.db, binding.assetId))?.filename ?? null : binding.youtubeUrl ?? null })));
 
       /** Cria a sessão a partir de um snapshot pronto, com ou sem a faixa dele. */
       const open = async (snapshot: SessionSnapshot, baseArrangement: Arrangement, warnings: SessionWarning[], chooseAudio: (bindingId: Uuid | null) => void) => {
@@ -277,7 +277,7 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
         const playback = live.arrangement.audioBindings.find((item) => item.kind === 'playback');
         const wanted = bindingId === undefined ? (playback?.id ?? live.arrangement.selectedAudioBindingId) : bindingId;
         const binding = live.arrangement.audioBindings.find((item) => item.id === wanted) ?? null;
-        const asset = binding ? await getAsset(local.db, binding.assetId) : null;
+        const asset = binding?.assetId ? await getAsset(local.db, binding.assetId) : null;
         const prepared = prepareSnapshot({
           id: sessionHint ?? crypto.randomUUID(),
           now: new Date().toISOString(),
@@ -286,13 +286,14 @@ export function useOperatorSession(local: LocalSession, source: OperatorSource):
           songGeneration: live.songGeneration,
           arrangementGeneration: live.arrangementGeneration,
           audio: binding && asset ? { binding, asset } : null,
+          youtubePlayback: binding?.kind === 'youtube' ? binding : null,
         });
         if (!current) return;
         if (!prepared.ok) {
           setState({ status: 'invalid', issues: prepared.issues });
           return;
         }
-        if (binding && !prepared.snapshot.audio) {
+        if (binding && binding.kind !== 'youtube' && !prepared.snapshot.audio) {
           // O registro do arquivo sumiu ou não tem duração conhecida: trata como arquivo ausente.
           setState({
             status: 'audio-problem',

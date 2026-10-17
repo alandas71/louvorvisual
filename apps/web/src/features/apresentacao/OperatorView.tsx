@@ -1,6 +1,6 @@
 'use client';
 
-import { touch, type Uuid } from '@louvorvisual/domain';
+import { normalizeYoutubeUrl, touch, type Uuid } from '@louvorvisual/domain';
 import { mergeOverridesIntoArrangement, shortcutCommand, type OperatorCommand, type OutputFrame, type ResolvedSlide, type SaveToArrangementResult } from '@louvorvisual/presentation';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { SlideView } from '@/components/SlideView';
@@ -611,7 +611,8 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
               ✓ Padrão automático preparado com os tempos deste ensaio.
             </p>
           )}
-          <AudioPanel controller={controller} view={view} dispatch={dispatch} choices={audioChoices} selectedBindingId={row.snapshot.audio?.bindingId ?? null} onChoose={onChooseAudio} />
+          <AudioPanel controller={controller} view={view} dispatch={dispatch} choices={audioChoices} selectedBindingId={row.snapshot.audio?.bindingId ?? row.snapshot.youtubePlayback?.bindingId ?? null} onChoose={onChooseAudio} />
+          {row.snapshot.youtubePlayback && <YoutubePlayback url={row.snapshot.youtubePlayback.url} />}
         </section>
 
         {/* No celular o slide do centro já é o que o público vê; sobram só as notas privadas. */}
@@ -758,6 +759,25 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
       </div>
     </main>
   );
+}
+
+/** O vídeo fica no player oficial e visível para o operador; o app nunca extrai mídia dele. */
+function YoutubePlayback({ url }: { url: string }) {
+  const normalized = normalizeYoutubeUrl(url);
+  const videoId = normalized ? new URL(normalized).searchParams.get('v') : null;
+  if (!videoId) return <p role="alert" className="text-sm text-danger">O vídeo do YouTube configurado não é válido.</p>;
+  return <section className="flex flex-col gap-2 rounded-lg border border-border p-3" data-testid="youtube-playback">
+    <h2 className="text-sm font-semibold text-muted">YouTube Playback</h2>
+    <iframe
+      className="aspect-video w-full rounded border border-border"
+      src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0`}
+      title="YouTube Playback"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerPolicy="strict-origin-when-cross-origin"
+      allowFullScreen
+    />
+    <p className="text-xs text-muted">Reprodução online pelo player oficial do YouTube. Os slides usam os tempos do arranjo; inicie o vídeo pelo próprio player.</p>
+  </section>;
 }
 
 /** O que a janela pública está mostrando, com a rotação da saída. */

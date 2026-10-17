@@ -749,7 +749,7 @@ export class SyncCoordinator {
       const used = new Set<string>();
       for (const arrangement of await tx.listDocuments('arrangement')) {
         if (arrangement.deletedAt !== null) continue;
-        for (const binding of ((arrangement as Record<string, unknown>).audioBindings as { assetId: string }[] | undefined) ?? []) used.add(binding.assetId);
+        for (const binding of ((arrangement as Record<string, unknown>).audioBindings as { assetId: string | null }[] | undefined) ?? []) if (binding.assetId) used.add(binding.assetId);
       }
       return ((await tx.listDocuments('asset')) as AssetDoc[]).filter((asset) => requested.has(asset.id) && used.has(asset.id) && asset.deletedAt === null && asset.remoteState === 'ready' && asset.workspaceId === this.deps.workspaceId);
     });

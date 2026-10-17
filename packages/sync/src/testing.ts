@@ -69,7 +69,7 @@ export class FakeServer {
       };
       const payload = operation.payload as Record<string, unknown>;
       const missing =
-        (operation.entityType === 'arrangement' && (!live('song', payload.songId as string) || (payload.audioBindings as { assetId: string }[]).some((binding) => !live('asset', binding.assetId)))) ||
+        (operation.entityType === 'arrangement' && (!live('song', payload.songId as string) || (payload.audioBindings as { assetId: string | null }[]).some((binding) => binding.assetId !== null && !live('asset', binding.assetId)))) ||
         (operation.entityType === 'setlist' && (payload.items as { arrangementId: string }[]).some((item) => !live('arrangement', item.arrangementId)));
       if (missing) return remember({ opId: operation.opId, status: 'rejected', code: 'DEPENDENCY_NOT_READY' });
     }

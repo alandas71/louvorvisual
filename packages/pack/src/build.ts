@@ -100,7 +100,7 @@ export async function buildPackage(source: PackageSource): Promise<BuiltPackage>
   const selected = new Set<string>();
   for (const arrangement of documents.arrangements) {
     const binding = arrangement.audioBindings.find((item) => item.id === arrangement.selectedAudioBindingId);
-    if (binding) selected.add(binding.assetId);
+    if (binding?.assetId) selected.add(binding.assetId);
   }
   const wanted = (asset: Asset) => source.mediaPolicy === 'all' || (source.mediaPolicy === 'selected' && selected.has(asset.id));
   const totalBytes = documents.assets.filter(wanted).reduce((total, asset) => total + asset.byteSize, 0);

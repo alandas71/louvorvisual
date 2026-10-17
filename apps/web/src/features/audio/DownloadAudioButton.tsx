@@ -18,7 +18,7 @@ export function DownloadAudioButton({ session, songId, assetId, title }: { sessi
   useEffect(() => {
     let current = true;
     void (async () => {
-      const ids = assetId ? [assetId] : [...new Set((await session.db.arrangements.where('songId').equals(songId!).toArray()).filter(a => a.deletedAt === null).flatMap(a => a.audioBindings.map(b => b.assetId)))];
+      const ids = assetId ? [assetId] : [...new Set((await session.db.arrangements.where('songId').equals(songId!).toArray()).filter(a => a.deletedAt === null).flatMap(a => a.audioBindings.flatMap(b => b.assetId ? [b.assetId] : [])))];
       const assets = (await session.db.assets.bulkGet(ids)).filter(a => a && a.deletedAt === null && a.workspaceId === session.profile.workspaceId);
       const absent: string[] = [];
       for (const asset of assets) if (asset && asset.remoteState === 'ready' && !(await assetPresent(session.db, asset))) absent.push(asset.id);

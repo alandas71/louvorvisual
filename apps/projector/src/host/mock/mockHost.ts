@@ -141,7 +141,7 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
   const audioOf = (arrangement: Arrangement): SongSummary['audio'] => {
     const binding = arrangement.audioBindings.find((item) => item.id === arrangement.selectedAudioBindingId);
     if (!binding) return 'none';
-    return library.missingAssets.has(binding.assetId) || !library.assets.has(binding.assetId) ? 'missing' : 'ready';
+    return !binding.assetId || library.missingAssets.has(binding.assetId) || !library.assets.has(binding.assetId) ? 'missing' : 'ready';
   };
   const summary = (arrangement: Arrangement): SongSummary => {
     const song = library.songs.get(arrangement.songId);
@@ -198,7 +198,7 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
       const song = arrangement && library.songs.get(arrangement.songId);
       if (!arrangement || !song) throw new MockFailure('not-found');
       const binding = arrangement.audioBindings.find((item) => item.id === arrangement.selectedAudioBindingId);
-      const asset = binding ? library.assets.get(binding.assetId) : undefined;
+      const asset = binding?.assetId ? library.assets.get(binding.assetId) : undefined;
       const missing = Boolean(binding) && (!asset || library.missingAssets.has(asset.id));
       return { song, arrangement, songGeneration: 1, arrangementGeneration: 1, audio: binding && asset && !missing ? { binding, asset } : null, audioMissing: missing };
     },

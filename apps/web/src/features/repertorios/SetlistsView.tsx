@@ -219,7 +219,7 @@ function SetlistDetail({ session, setlistId }: { session: LocalSession; setlistI
     const sizes = new Map<string, number>();
     for (const entry of entries) {
       const binding = entry.arrangement?.audioBindings.find((item) => item.id === entry.arrangement?.selectedAudioBindingId);
-      const asset = binding ? await getAsset(session.db, binding.assetId) : null;
+      const asset = binding?.assetId ? await getAsset(session.db, binding.assetId) : null;
       if (asset) sizes.set(asset.sha256, asset.byteSize);
     }
     return { setlist, entries, choices, status, audioBytes: [...sizes.values()].reduce((sum, size) => sum + size, 0) };

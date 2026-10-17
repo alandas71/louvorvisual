@@ -10,7 +10,7 @@ export type OccurrenceVisualKind = (typeof OCCURRENCE_VISUAL_KINDS)[number];
 export const PRESENTATION_MODES = ['manual', 'automatic'] as const;
 export type PresentationMode = (typeof PRESENTATION_MODES)[number];
 
-export const AUDIO_KINDS = ['original', 'playback'] as const;
+export const AUDIO_KINDS = ['original', 'playback', 'youtube'] as const;
 export type AudioKind = (typeof AUDIO_KINDS)[number];
 
 /** Independente: transporte próprio. Vinculado: áudio e slides seguem os mesmos intervalos. */
@@ -41,14 +41,21 @@ export type AudioCue = {
 
 export type AudioBinding = {
   id: Uuid;
-  assetId: Uuid;
+  /** Arquivo local para Original/Playback. A fonte YouTube não armazena mídia. */
+  assetId: Uuid | null;
   kind: AudioKind;
+  /** URL canônica do vídeo, usada exclusivamente pela fonte YouTube. */
+  youtubeUrl?: string | null;
   policy: AudioPolicy;
   volume: number;
   offsetMs: number;
   cuesVersion: number;
   cues: AudioCue[];
 };
+
+export function isYoutubeBinding(binding: AudioBinding): boolean {
+  return binding.kind === 'youtube' && typeof binding.youtubeUrl === 'string';
+}
 
 export type Arrangement = AggregateMeta & {
   id: Uuid;

@@ -60,7 +60,7 @@ export class InMemorySyncStore implements SyncStore {
     const live = (type: SyncOperation['entityType'], id: string) => { const entity = this.entities.get(this.entityKey(workspaceId, type, id)); return !!entity && !entity.document.deletedAt; };
     const p = operation.payload as Record<string, unknown>; const theme = p.themeRef as { kind?: string; themeId?: string } | null | undefined;
     if (theme?.kind === 'workspace' && (!theme.themeId || !live('theme', theme.themeId))) return 'DEPENDENCY_NOT_READY';
-    if (operation.entityType === 'arrangement') { if (!live('song', p.songId as string)) return 'DEPENDENCY_NOT_READY'; for (const binding of p.audioBindings as { assetId: string }[]) if (!live('asset', binding.assetId)) return 'DEPENDENCY_NOT_READY'; }
+    if (operation.entityType === 'arrangement') { if (!live('song', p.songId as string)) return 'DEPENDENCY_NOT_READY'; for (const binding of p.audioBindings as { assetId: string | null }[]) if (binding.assetId && !live('asset', binding.assetId)) return 'DEPENDENCY_NOT_READY'; }
     if (operation.entityType === 'setlist') for (const item of p.items as { arrangementId: string }[]) if (!live('arrangement', item.arrangementId)) return 'DEPENDENCY_NOT_READY'; return undefined;
   }
   private touchDevice(workspaceId: string, deviceId: string) { const key = `${workspaceId}:${deviceId}`; const lastSeen = this.devices.get(key); if (lastSeen !== undefined && lastSeen < Date.now() - 180 * 24 * 60 * 60_000) throw new AppError(410, 'DEVICE_EXPIRED', 'Dispositivo fora da janela de reconciliação.', { restartBootstrap: true }); this.devices.set(key, Date.now()); }

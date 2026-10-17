@@ -3,6 +3,7 @@
 import {
   AUDIO_KINDS,
   formatTimerSeconds,
+  normalizeYoutubeUrl,
   type Arrangement,
   type ArrangementStructure,
   type Asset,
@@ -24,6 +25,7 @@ import { estimateFreeSpace, formatBytes, formatClock, probeAudio } from '../audi
 const KIND_TEXT: Record<AudioKind, { title: string; importLabel: string }> = {
   original: { title: 'Áudio original', importLabel: 'Importar o áudio original' },
   playback: { title: 'Playback', importLabel: 'Importar o playback' },
+  youtube: { title: 'YouTube Playback', importLabel: 'Usar vídeo do YouTube' },
 };
 
 const PHASE_TEXT: Record<ImportProgress['phase'], string> = {
@@ -50,7 +52,7 @@ type AudioSectionProps = {
 export function AudioSection({ session, arrangement, onChange }: AudioSectionProps) {
   const [info, setInfo] = useState<Record<Uuid, AssetInfo>>({});
   const version = useLibraryVersion();
-  const assetIds = arrangement.audioBindings.map((binding) => binding.assetId).join(',');
+  const assetIds = arrangement.audioBindings.flatMap((binding) => (binding.assetId ? [binding.assetId] : [])).join(',');
 
   // Arranjos antigos podiam guardar uma faixa vinculada. Ao abri-los no editor,
   // convertemos a associação para o comportamento único atual.
@@ -145,11 +147,27 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
       <div className="grid gap-4 md:grid-cols-2">
         {AUDIO_KINDS.map((kind) => {
           const binding = arrangement.audioBindings.find((item) => item.kind === kind);
+          if (kind === 'youtube') return (
+            <div key={kind} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card" data-testid="audio-youtube" data-state={binding ? 'bound' : 'empty'}>
+              <h3 className="font-semibold">{KIND_TEXT.youtube.title}</h3>
+              <YoutubeTrack binding={binding} onChange={(url) => {
+                const context = session.context();
+                onChange((structure) => {
+                  const current = structure.audioBindings.find((item) => item.kind === 'youtube');
+                  const next: AudioBinding = current
+                    ? { ...current, assetId: null, youtubeUrl: url }
+                    : { id: context.newId(), assetId: null, kind: 'youtube', youtubeUrl: url, policy: 'independent', volume: 1, offsetMs: 0, cuesVersion: 0, cues: [] };
+                  const audioBindings = current ? structure.audioBindings.map((item) => item.id === current.id ? next : item) : [...structure.audioBindings, next];
+                  return { ...structure, audioBindings, selectedAudioBindingId: next.id };
+                });
+              }} onRemove={() => binding && remove(binding.id)} />
+            </div>
+          );
           return (
             <div key={kind} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-raised p-4 shadow-card" data-testid={`audio-${kind}`} data-state={binding ? 'bound' : 'empty'}>
               <h3 className="font-semibold">{KIND_TEXT[kind].title}</h3>
               {binding ? (
-                <Track session={session} arrangement={arrangement} binding={binding} info={info[binding.assetId]} onUpdate={(fields) => update(binding.id, fields)} onRemove={() => remove(binding.id)} />
+                <Track session={session} arrangement={arrangement} binding={binding} info={binding.assetId ? info[binding.assetId] : undefined} onUpdate={(fields) => update(binding.id, fields)} onRemove={() => remove(binding.id)} />
               ) : null}
               <AudioImport label={binding ? 'Trocar o arquivo desta faixa' : KIND_TEXT[kind].importLabel} testId={`audio-import-${kind}`} onImport={(file, onProgress) => importFile(kind, file, onProgress)} />
             </div>
@@ -158,6 +176,30 @@ export function AudioSection({ session, arrangement, onChange }: AudioSectionPro
       </div>
     </section>
   );
+}
+
+function YoutubeTrack({ binding, onChange, onRemove }: { binding: AudioBinding | undefined; onChange: (url: string) => void; onRemove: () => void }) {
+  const [url, setUrl] = useState(binding?.youtubeUrl ?? '');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => setUrl(binding?.youtubeUrl ?? ''), [binding?.youtubeUrl]);
+  const save = () => {
+    const normalized = normalizeYoutubeUrl(url);
+    if (!normalized) { setError('Informe a URL de um vídeo do YouTube.'); return; }
+    setError(null); onChange(normalized);
+  };
+  return <div className="flex flex-col gap-3 text-sm" data-testid="youtube-track" data-present={Boolean(binding?.youtubeUrl)}>
+    <p className="text-muted">Reprodução online pelo player oficial. Nenhum áudio ou vídeo é salvo neste dispositivo.</p>
+    <div>
+      <Label htmlFor="youtube-playback-url">URL do YouTube</Label>
+      <Input id="youtube-playback-url" type="url" value={url} onChange={(event) => { setUrl(event.target.value); setError(null); }} placeholder="https://www.youtube.com/watch?v=…" />
+    </div>
+    {error && <p role="alert" className="text-danger">{error}</p>}
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className={buttonClass('primary', 'sm')} onClick={save}>{binding ? 'Atualizar vídeo' : 'Adicionar YouTube Playback'}</button>
+      {binding && <button type="button" className={buttonClass('danger', 'sm')} onClick={onRemove}>Remover YouTube Playback</button>}
+    </div>
+    {binding?.youtubeUrl && <p className="break-all text-xs text-muted">✓ Vídeo configurado: {binding.youtubeUrl}</p>}
+  </div>;
 }
 
 type TrackProps = {

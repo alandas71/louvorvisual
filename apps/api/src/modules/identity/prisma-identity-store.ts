@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { sniffAudioType } from '@louvorvisual/domain';
 import { type Asset, type AssetUpload, type IdentityStore, IdentityError, type Invitation, type Membership, ROLES, type Role, safeUser, type User, type Workspace } from './identity-store';
@@ -24,7 +24,7 @@ const mapAsset = (value: { id: string; workspaceId: string; sha256: string; file
 export class LocalAssetStorage {
   private readonly root: string;
   constructor(root: string) { this.root = resolve(root); }
-  private path(key: string) { const path = resolve(this.root, key); if (!path.startsWith(`${this.root}/`)) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); return path; }
+  private path(key: string) { const path = resolve(this.root, key); const pathFromRoot = relative(this.root, path); if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); return path; }
   async put(key: string, bytes: Buffer) { const target = this.path(key); await mkdir(dirname(target), { recursive: true }); const temporary = `${target}.${randomUUID()}.partial`; await writeFile(temporary, bytes, { flag: 'wx' }); await rename(temporary, target); }
   async get(key: string) { try { return await readFile(this.path(key)); } catch (error: unknown) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new IdentityError('NOT_FOUND', 404, 'Arquivo não encontrado.'); throw error; } }
   async remove(key: string) { await rm(this.path(key), { force: true }); }

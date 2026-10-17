@@ -252,7 +252,7 @@ async function referencedHashes(db: LocalDatabase, workspaceId: Uuid): Promise<S
   for (const arrangement of arrangements) {
     if (arrangement.deletedAt !== null) continue;
     for (const binding of arrangement.audioBindings) {
-      const asset = assets.get(binding.assetId);
+      const asset = binding.assetId ? assets.get(binding.assetId) : undefined;
       if (asset) hashes.add(asset.sha256);
     }
   }

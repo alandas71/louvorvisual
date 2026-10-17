@@ -15,6 +15,7 @@ import {
   type AudioPolicy,
   type BundledFontId,
   type IsoInstant,
+  isYoutubeBinding,
   type LinkIssue,
   type OccurrenceVisualKind,
   type PresentationMode,
@@ -102,6 +103,15 @@ export type SnapshotAudio = {
   cues: AudioCue[];
 };
 
+/** Fonte online: o snapshot guarda somente o link canônico, nunca mídia do YouTube. */
+export type SnapshotYoutubePlayback = {
+  bindingId: Uuid;
+  kind: 'youtube';
+  url: string;
+  volume: number;
+  offsetMs: number;
+};
+
 /**
  * Base estável de uma sessão: tudo o que a apresentação precisa, copiado no
  * momento da preparação. Edições e sincronização posteriores não a alteram.
@@ -121,6 +131,8 @@ export type SessionSnapshot = {
   occurrences: SnapshotOccurrence[];
   /** Faixa escolhida para a sessão, com os bytes locais já conferidos; `null` sem áudio. */
   audio: SnapshotAudio | null;
+  /** Vídeo oficial a tocar no operador; não é distribuído ao projetor nem fica disponível offline. */
+  youtubePlayback: SnapshotYoutubePlayback | null;
 };
 
 export type SnapshotWarning = 'theme-unavailable' | 'font-unavailable' | 'font-pack-mismatch' | 'audio-link-unavailable';
@@ -135,6 +147,8 @@ export type PrepareInput = {
   arrangementGeneration: number;
   /** Faixa escolhida e seu arquivo, já disponível e íntegro neste dispositivo. */
   audio?: { binding: AudioBinding; asset: Asset } | null;
+  /** Fonte YouTube escolhida, sem arquivo local. */
+  youtubePlayback?: AudioBinding | null;
 };
 
 export type PreparedAudio = { audio: SnapshotAudio; linkIssues: LinkIssue[] };
@@ -161,6 +175,11 @@ export function prepareAudio(binding: AudioBinding, asset: Asset, occurrences: r
       cues: [],
     },
   };
+}
+
+function prepareYoutubePlayback(binding: AudioBinding | null | undefined): SnapshotYoutubePlayback | null {
+  if (!binding || !isYoutubeBinding(binding)) return null;
+  return { bindingId: binding.id, kind: 'youtube', url: binding.youtubeUrl!, volume: binding.volume, offsetMs: Math.max(0, binding.offsetMs) };
 }
 
 export type PrepareResult =
@@ -198,6 +217,7 @@ export function prepareSnapshot(input: PrepareInput): PrepareResult {
     }));
 
   const prepared = input.audio ? prepareAudio(input.audio.binding, input.audio.asset, occurrences) : null;
+  const youtubePlayback = prepareYoutubePlayback(input.youtubePlayback);
   if (prepared && prepared.linkIssues.length > 0) warnings.push('audio-link-unavailable');
 
   const snapshot: SessionSnapshot = {
@@ -220,6 +240,7 @@ export function prepareSnapshot(input: PrepareInput): PrepareResult {
     fontPackVersion: FONT_PACK_VERSION,
     occurrences,
     audio: prepared?.audio ?? null,
+    youtubePlayback,
   };
   // Cópia profunda: nada do documento original fica compartilhado com a sessão.
   return { ok: true, snapshot: clone(snapshot), warnings };

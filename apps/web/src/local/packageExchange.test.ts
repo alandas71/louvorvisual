@@ -114,7 +114,7 @@ describe('pacote de repertório sobre o banco local', () => {
 
     // Os arquivos chegam com os mesmos bytes, publicados como prontos e conferíveis.
     for (const [index, sourceAsset] of [source.playback, source.original].entries()) {
-      const asset = (await target.assets.get(arrangement.audioBindings[index]!.assetId))!;
+      const asset = (await target.assets.get(arrangement.audioBindings[index]!.assetId!))!;
       expect(asset).toMatchObject({ sha256: sourceAsset.sha256, byteSize: sourceAsset.byteSize, workspaceId: OTHER.workspaceId, remoteState: 'local', storageKey: null });
       expect(asset.id).not.toBe(sourceAsset.id);
       expect(await verifyAsset(target, asset, OTHER.now)).toBe('ok');
@@ -301,7 +301,7 @@ describe('pacote de repertório sobre o banco local', () => {
     const fresh = database();
     const imported = await applyImport(fresh, await openPackage(partial.file), context);
     const arrangement = (await resolveSetlist(fresh, (await fresh.setlists.get(imported.setlistId))!))[0]!.arrangement!;
-    const asset = (await fresh.assets.get(arrangement.audioBindings[0]!.assetId))!;
+    const asset = (await fresh.assets.get(arrangement.audioBindings[0]!.assetId!))!;
     // O documento do arquivo chega, mas sem bytes: a preparação do repertório acusa a falta.
     expect(await verifyAsset(fresh, asset, OTHER.now)).toBe('missing');
   });

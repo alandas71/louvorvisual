@@ -80,6 +80,11 @@ describe('arrangementSchema', () => {
     expect(arrangementSchema.safeParse({ ...arrangement, themeRef: { kind: 'workspace', themeId: theme.id } }).success).toBe(true);
     expect(arrangementSchema.safeParse({ ...arrangement, themeRef: { kind: 'builtin', themeId: theme.id } }).success).toBe(false);
   });
+
+  it('aceita YouTube Playback sem criar um arquivo de áudio', () => {
+    const binding = { ...arrangement.audioBindings[0]!, id: '99999999-9999-4999-8999-999999999999', kind: 'youtube', assetId: null, youtubeUrl: 'https://www.youtube.com/watch?v=abcdefghijk', policy: 'independent', cues: [] };
+    expect(arrangementSchema.safeParse({ ...arrangement, audioBindings: [binding], selectedAudioBindingId: binding.id }).success).toBe(true);
+  });
 });
 
 describe('themeSchema', () => {

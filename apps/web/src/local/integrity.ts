@@ -81,7 +81,7 @@ export async function scanIntegrity(db: LocalDatabase, options: { verifyMedia: b
   const usedBy = new Map<Uuid, Set<Uuid>>();
   for (const arrangement of (await db.arrangements.toArray()) as Arrangement[]) {
     if (broken.has(`arrangement:${arrangement.id}`) || arrangement.deletedAt !== null) continue;
-    for (const binding of arrangement.audioBindings) usedBy.set(binding.assetId, (usedBy.get(binding.assetId) ?? new Set()).add(arrangement.songId));
+    for (const binding of arrangement.audioBindings) if (binding.assetId) usedBy.set(binding.assetId, (usedBy.get(binding.assetId) ?? new Set()).add(arrangement.songId));
   }
   const assets = ((await db.assets.toArray()) as Asset[]).filter((asset) => !broken.has(`asset:${asset.id}`) && asset.deletedAt === null && usedBy.has(asset.id));
   let done = 0;

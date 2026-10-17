@@ -134,7 +134,7 @@ export async function planImport(opened: OpenedPackage, target: ImportTarget): P
         ...(base as Arrangement),
         songId: idOf('song', source.songId),
         themeRef: themeRef(source.themeRef),
-        audioBindings: source.audioBindings.map((binding) => ({ ...binding, assetId: idOf('asset', binding.assetId) })),
+        audioBindings: source.audioBindings.map((binding) => ({ ...binding, assetId: binding.assetId ? idOf('asset', binding.assetId) : null })),
         basedOnSongRevision: null,
       };
       const rewired = next.songId !== source.songId || JSON.stringify(next.themeRef) !== JSON.stringify(source.themeRef) || next.audioBindings.some((binding, index) => binding.assetId !== source.audioBindings[index]?.assetId);

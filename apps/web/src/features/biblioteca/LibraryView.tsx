@@ -284,7 +284,7 @@ function Library({ session }: { session: LocalSession }) {
                           {AUDIO_KIND_TEXT[binding.kind]}
                           {binding.id === choosing.selectedId && <span className={pillClass('accent', 'px-2 py-0.5 text-[11px]')}>Padrão do arranjo</span>}
                         </span>
-                        <span className="mt-0.5 block text-[13px] leading-snug text-muted">{AUDIO_KIND_HELP[binding.kind]}</span>
+                        <span className="mt-0.5 block text-[13px] leading-snug text-muted">{binding.kind === 'youtube' ? 'O vídeo oficial toca online, sem baixar áudio.' : AUDIO_KIND_HELP[binding.kind]}</span>
                       </span>
                       <ChevronRightIcon size={16} className="shrink-0 text-muted transition-colors duration-150 group-hover:text-accent" />
                     </button>

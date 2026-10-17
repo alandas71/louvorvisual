@@ -27,7 +27,7 @@ export const COMMAND_FAILURE_TEXT: Record<CommandFailure, string> = {
   'invalid-timing': 'Os tempos revisados não cabem na gravação. Nada foi alterado.',
 };
 
-export const AUDIO_KIND_TEXT = { original: 'Áudio original', playback: 'Playback' } as const;
+export const AUDIO_KIND_TEXT = { original: 'Áudio original', playback: 'Playback', youtube: 'YouTube Playback' } as const;
 export const AUDIO_POLICY_TEXT = { independent: 'independente dos slides', linked: 'vinculada aos slides' } as const;
 
 export const SAVE_FIELD_TEXT: Record<SaveField['field'], string> = {
