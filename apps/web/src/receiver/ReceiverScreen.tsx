@@ -1,4 +1,5 @@
 'use client';
+import { normalizeYoutubeUrl } from '@louvorvisual/domain';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ChannelMessage } from '@louvorvisual/presentation';
 import { SlideView } from '@/components/SlideView';
@@ -116,6 +117,28 @@ function useReceiverAudio(connection: Connection | null, audio: RelayAudio | nul
 
   // Sem faixa publicada (sessão encerrada ou sem áudio), nada continua tocando.
   useEffect(() => { if (!audio) element.current?.pause(); }, [audio]);
+}
+
+/** Player oficial, visível no projetor, para a fonte online escolhida pelo operador. */
+function YoutubePlayback({ url, volume, playing }: { url: string; volume: number; playing: boolean }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  const normalized = normalizeYoutubeUrl(url);
+  const videoId = normalized ? new URL(normalized).searchParams.get('v') : null;
+
+  useEffect(() => {
+    if (!loaded || !frame.current?.contentWindow) return;
+    const send = (func: string, args: unknown[] = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), 'https://www.youtube.com');
+    send('setVolume', [Math.round(Math.min(1, Math.max(0, volume)) * 100)]);
+    send(playing ? 'playVideo' : 'pauseVideo');
+  }, [loaded, playing, volume]);
+
+  if (!videoId) return null;
+  return (
+    <section data-testid="receiver-youtube-playback" style={{ position: 'absolute', right: '2vw', bottom: '2vh', width: 'min(36vw, 640px)', aspectRatio: '16 / 9', zIndex: 2, overflow: 'hidden', borderRadius: 12, boxShadow: '0 0 24px rgba(0,0,0,.6)', background: '#000' }}>
+      <iframe ref={frame} title="YouTube Playback" src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0`} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" onLoad={() => setLoaded(true)} style={{ width: '100%', height: '100%', border: 0, display: 'block' }} />
+    </section>
+  );
 }
 
 function CodeScreen({ code, paired, error, kiosk, onFullscreen, onLeave }: { code: string | null; paired: boolean; error: string; kiosk: boolean; onFullscreen: () => void; onLeave?: () => void }) {
@@ -250,6 +273,7 @@ export function ReceiverScreen({ kiosk = false, onLeave }: { kiosk?: boolean; on
   const showCode = data !== null && (!paired || (code !== null && pairing));
   const hint = !showCode && !live && paired && code !== null;
   const frame = message?.state.frame;
+  const youtubePlayback = message?.info.youtubePlayback ?? null;
   const mode = showCode || !data ? 'code' : live && frame ? 'slide' : 'waiting';
   const [covered, setCovered] = useState(false);
   if (covered && mode !== 'slide') setCovered(false);
@@ -278,6 +302,7 @@ export function ReceiverScreen({ kiosk = false, onLeave }: { kiosk?: boolean; on
           <SlideView fit="fill" text={frame.slide.text} style={frame.slide.style} fontId={frame.slide.fontId} visualMode={frame.visualMode} rotation={0} cover={frame.cover} transitionKey={frameKey} />
         </div>
       )}
+      {mode === 'slide' && youtubePlayback && <YoutubePlayback url={youtubePlayback.url} volume={youtubePlayback.volume} playing={message?.state.controls.status === 'running'} />}
       {hint && <p data-testid="receiver-code-hint" style={{ position: 'absolute', right: '3vw', bottom: '3vh', margin: 0, fontSize: '2.2vh', color: 'rgba(255,255,255,0.4)' }}>Reconectar o celular: {code}</p>}
     </main>
   );

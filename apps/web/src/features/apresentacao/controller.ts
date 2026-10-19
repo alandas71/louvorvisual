@@ -132,7 +132,11 @@ export class SessionController {
     });
     this.lastRotation = this.engine.getView().rotation;
     this.lastAppearance = JSON.stringify(this.engine.getOverrides().song);
-    this.link = new ControllerLink(options.sessionId, options.generation, { title: options.snapshot.song.title, artist: options.snapshot.song.artist });
+    this.link = new ControllerLink(options.sessionId, options.generation, {
+      title: options.snapshot.song.title,
+      artist: options.snapshot.song.artist,
+      youtubePlayback: options.snapshot.youtubePlayback ? { url: options.snapshot.youtubePlayback.url, volume: options.snapshot.youtubePlayback.volume } : null,
+    });
     this.snapshot = this.read();
   }
 

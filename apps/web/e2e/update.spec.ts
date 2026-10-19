@@ -32,6 +32,7 @@ test('versão nova espera em cache separado, não entra com a projeção aberta 
   // A versão nova é baixada inteira, mas a janela continua na anterior.
   await page.getByRole('button', { name: 'Procurar versão nova' }).click();
   await expect(page.getByTestId('update-waiting')).toBeVisible();
+  await expect(page.getByTestId('update-toast')).toBeVisible();
   await expect(page.getByTestId('app-version')).toHaveText(currentVersion);
   expect((await cacheNames(page)).sort()).toEqual([`lv-precache-${currentVersion}`, `lv-precache-${nextVersion}`].sort());
   expect(page.url()).toBe(`${ORIGIN}/app?view=offline`);

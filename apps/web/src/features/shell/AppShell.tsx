@@ -18,6 +18,7 @@ import { EditorView } from '../editor/EditorView';
 import { FavoritesView } from '../favoritos/FavoritesView';
 import { TrashView } from '../lixeira/TrashView';
 import { OfflineView } from '../offline/OfflineView';
+import { UpdateToast } from '../offline/UpdateToast';
 import { SetlistsView } from '../repertorios/SetlistsView';
 import { SyncStatusChip } from '../sync/SyncStatusChip';
 import { SyncToast } from '../sync/SyncToast';
@@ -161,6 +162,7 @@ export function AppShell() {
     <>
       <SkipToContent />
       <ServiceWorkerRegistration />
+      <UpdateToast />
       <SyncToast />
       <div className="lv-stage flex min-h-dvh flex-col lg:pl-72">
         <DataNoticeBanner />

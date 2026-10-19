@@ -1,8 +1,10 @@
 import {
   bundledFont,
+  cuesInSequence,
   FONT_PACK_VERSION,
   isBundledFontId,
   isThemePresetId,
+  linkIssues,
   RECOVERY_FONT_ID,
   SAFETY_THEME_PRESET_ID,
   SYSTEM_FALLBACK_STACK,
@@ -154,13 +156,16 @@ export type PrepareInput = {
 export type PreparedAudio = { audio: SnapshotAudio; linkIssues: LinkIssue[] };
 
 /**
- * Resolve a faixa para a sessão. A reprodução é sempre independente dos slides.
+ * Resolve a faixa para a sessão. Um vínculo incompleto segue independente e
+ * informa os itens que precisam ser corrigidos.
  */
 export function prepareAudio(binding: AudioBinding, asset: Asset, occurrences: readonly SnapshotOccurrence[]): PreparedAudio | null {
   if (asset.durationMs === null || asset.durationMs <= 0) return null;
-  void occurrences;
+  const sequence = occurrences.map((occurrence, order) => ({ id: occurrence.id, order, durationMs: occurrence.durationMs }));
+  const issues = binding.policy === 'linked' ? linkIssues(sequence, binding.cues, asset.durationMs) : [];
+  const linked = binding.policy === 'linked' && issues.length === 0;
   return {
-    linkIssues: [],
+    linkIssues: issues,
     audio: {
       bindingId: binding.id,
       assetId: asset.id,
@@ -168,11 +173,11 @@ export function prepareAudio(binding: AudioBinding, asset: Asset, occurrences: r
       byteSize: asset.byteSize,
       filename: asset.filename,
       kind: binding.kind,
-      policy: 'independent',
+      policy: linked ? 'linked' : 'independent',
       volume: binding.volume,
       offsetMs: Math.max(0, binding.offsetMs),
       durationMs: asset.durationMs,
-      cues: [],
+      cues: linked ? (cuesInSequence(sequence.map((item) => item.id), binding.cues) as AudioCue[]) : [],
     },
   };
 }

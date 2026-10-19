@@ -16,7 +16,13 @@ export type VisualState = {
   controls: ControlsState;
 };
 
-export type SessionInfo = { title: string; artist: string | null };
+/** Metadados que a saída remota precisa além do quadro do slide. */
+export type SessionInfo = {
+  title: string;
+  artist: string | null;
+  /** Fonte online reproduzida pelo próprio projetor; não há arquivo para transferir. */
+  youtubePlayback?: { url: string; volume: number } | null;
+};
 
 type Envelope = { sessionId: Uuid; generation: number };
 

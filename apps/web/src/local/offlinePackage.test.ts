@@ -186,7 +186,7 @@ describe('preparação offline de um repertório', () => {
     expect((await prepareOfflinePackage(db, empty.id, deps())).problems).toEqual([{ code: 'empty' }]);
   });
 
-  it('faixa escolhida entra na cópia; a associação não selecionada pode faltar', async () => {
+  it('faixa vinculada entra na cópia com os intervalos; a associação não selecionada pode faltar', async () => {
     const { setlist, first, binding, asset } = await scenario();
     const timed = first.arrangement.occurrences.map((occurrence) => ({ ...occurrence, durationMs: 1000 }));
     const original = { id: crypto.randomUUID(), assetId: crypto.randomUUID(), kind: 'original' as const, policy: 'independent' as const, volume: 1, offsetMs: 0, cuesVersion: 0, cues: [] };
@@ -195,8 +195,8 @@ describe('preparação offline de um repertório', () => {
     const status = await prepareOfflinePackage(db, setlist.id, deps());
     expect(status.state).toBe('ready');
     const item = (await preparedItem(db, setlist.id, setlist.items[0]!.id))!.item;
-    expect(item.snapshot.audio).toMatchObject({ policy: 'independent', sha256: asset.sha256 });
-    expect(item.snapshot.audio?.cues).toEqual([]);
+    expect(item.snapshot.audio).toMatchObject({ policy: 'linked', sha256: asset.sha256 });
+    expect(item.snapshot.audio?.cues).toHaveLength(timed.length);
   });
 
   it('repertório preparado segura os bytes da faixa contra a limpeza', async () => {
