@@ -15,10 +15,15 @@ export function SyncStatusChip({ onNavigate }: { onNavigate?: () => void }) {
   const pending = status.summary?.pending ?? 0;
   const conflicts = status.summary?.conflicts ?? 0;
   const attention = conflicts > 0 || status.connection === 'revoked' || status.connection === 'identity-mismatch' || status.connection === 'auth-required';
-  const name = team ? team.workspaceName : 'Perfil pessoal';
+  // Um perfil pessoal não tem como receber alterações da equipe. Em vez de
+  // levar a pessoa a uma tela de sincronização sem ação útil, o cartão abre
+  // diretamente a tela que contém o formulário de entrada.
+  const targetView = team ? 'sync' : 'conta';
+  const name = team ? team.workspaceName : 'Conectar conta';
+  const summary = team ? connectionSummary(status.connection, pending, conflicts).short : 'Entre para sincronizar sua biblioteca';
   return (
     <a
-      href="/app?view=sync"
+      href={`/app?view=${targetView}`}
       data-testid="sync-chip"
       data-connection={status.connection}
       data-pending={status.summary ? pending : undefined}
@@ -27,7 +32,7 @@ export function SyncStatusChip({ onNavigate }: { onNavigate?: () => void }) {
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
         event.preventDefault();
-        setLocalQuery({ view: 'sync', song: null, arranjo: null, repertorio: null, item: null, conflito: null });
+        setLocalQuery({ view: targetView, song: null, arranjo: null, repertorio: null, item: null, conflito: null });
         onNavigate?.();
       }}
       className={cn(
@@ -40,7 +45,7 @@ export function SyncStatusChip({ onNavigate }: { onNavigate?: () => void }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
-        <span className="block truncate">{connectionSummary(status.connection, pending, conflicts).short}</span>
+        <span className="block truncate">{summary}</span>
         {team && pending > 0 && <span className="block">{pending === 1 ? '1 alteração pendente' : `${pending} alterações pendentes`}</span>}
         {conflicts > 0 && <span className="block font-semibold">{conflicts === 1 ? '1 conflito' : `${conflicts} conflitos`}</span>}
       </span>
