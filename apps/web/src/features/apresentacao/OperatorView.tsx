@@ -279,6 +279,13 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
   const [baseArrangement, setBaseArrangement] = useState(row.baseArrangement);
   const [saveResult, setSaveResult] = useState<SaveToArrangementResult | { error: string } | null>(null);
 
+  // A tela exclusiva do YouTube não tem o botão "Iniciar" da apresentação de
+  // slides. Publica a sessão assim que ela abre para o projetor sair da espera.
+  useEffect(() => {
+    if (!row.snapshot.youtubePlayback || state.status !== 'ready') return;
+    controller.execute({ type: 'start' });
+  }, [controller, row.snapshot.youtubePlayback, state.status]);
+
   const dispatch = useCallback(
     (command: OperatorCommand) => {
       const result = controller.execute(command);

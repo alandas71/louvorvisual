@@ -209,7 +209,7 @@ function Library({ session }: { session: LocalSession }) {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
-                    {canManageLibrary && <DownloadAudioButton session={session} songId={row.id} title={row.title} />}
+                    <DownloadAudioButton session={session} songId={row.id} title={row.title} />
                     <button type="button" className={buttonClass('secondary', 'sm', 'border-accent/40 bg-accent/10 text-accent hover:border-accent hover:bg-accent/15 max-sm:flex-1')} onClick={() => void onPresent(row)} aria-label={`Apresentar ${row.title}`}>
                       <PlayIcon size={14} />
                       Apresentar

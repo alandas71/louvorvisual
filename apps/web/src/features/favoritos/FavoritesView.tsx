@@ -7,6 +7,7 @@ import { EmptyState, Loading, PageHeader, rowClass } from '@/components/ui/PageH
 import { setLocalQuery } from '@/lib/localQuery';
 import { listArrangements, listFavoriteSongIndex, toggleFavoriteSong, useLocalSession, type LocalSession, type SongIndexRow } from '@/local';
 import { cn } from '@/lib/utils';
+import { DownloadAudioButton } from '../audio/DownloadAudioButton';
 
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -70,6 +71,7 @@ function Favorites({ session }: { session: LocalSession }) {
                   <p className="mt-0.5 truncate text-[13px] text-muted">{row.artist ?? 'Sem artista'} · editado em {dateFormat.format(new Date(row.updatedAt))}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+                  <DownloadAudioButton session={session} songId={row.id} title={row.title} />
                   <button type="button" className={buttonClass('secondary', 'sm', 'border-accent/40 bg-accent/10 text-accent hover:border-accent hover:bg-accent/15 max-sm:flex-1')} onClick={() => void present(row)} aria-label={`Apresentar ${row.title}`}>
                     <PlayIcon size={14} />
                     Apresentar
