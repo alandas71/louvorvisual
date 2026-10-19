@@ -2,7 +2,9 @@ import type { NextConfig } from 'next';
 
 // Origem pública única: o navegador chama /api e o Next encaminha à API.
 // Sem BACKEND_URL não há encaminhamento; o aplicativo local não depende dele.
-const backendUrl = process.env.BACKEND_URL?.replace(/\/+$/, '');
+// A produção publicada executa a API no mesmo servidor, restrita a localhost.
+// Assim, um novo build não perde o login se a variável de deploy for omitida.
+const backendUrl = (process.env.BACKEND_URL ?? (process.env.NODE_ENV === 'production' ? 'http://127.0.0.1:3021' : undefined))?.replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
