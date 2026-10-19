@@ -152,6 +152,7 @@ export function AppShell() {
       <>
         {/* A sessão do operador segura a troca de versão do aplicativo enquanto existir (useOperatorSession). */}
         <ServiceWorkerRegistration />
+        <UpdateToast />
         <OperatorView />
       </>
     );
