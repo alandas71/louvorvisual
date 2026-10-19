@@ -74,7 +74,8 @@ export type RemoteKeyEvent = z.infer<typeof remoteKeyEventSchema>;
 
 // ── biblioteca local (somente leitura) ──────────────────────────────────────
 
-export const audioAvailabilitySchema = z.enum(['none', 'ready', 'missing']);
+/** `online` é uma fonte YouTube: não há arquivo local para conferir. */
+export const audioAvailabilitySchema = z.enum(['none', 'ready', 'missing', 'online']);
 
 export const songSummarySchema = z.object({
   songId: uuidSchema,
@@ -83,7 +84,7 @@ export const songSummarySchema = z.object({
   title: z.string(),
   artist: z.string().nullable(),
   slideCount: count,
-  /** Faixa escolhida do arranjo: sem faixa, com os bytes conferidos neste aparelho, ou ausente. */
+  /** Faixa escolhida: local pronta/ausente, fonte YouTube online, ou nenhuma. */
   audio: audioAvailabilitySchema,
 });
 export type SongSummary = z.infer<typeof songSummarySchema>;

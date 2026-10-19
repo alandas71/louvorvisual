@@ -59,6 +59,7 @@ describe('migrações do banco local', () => {
       'assets',
       'editLeases',
       'entityStates',
+      'favoriteSongs',
       'importMap',
       'meta',
       'offlinePackages',
@@ -228,7 +229,7 @@ describe('migração v5 → v6 (pacotes e histórico)', () => {
     const { song, arrangement, state, profile, operation, checkpoint } = await createVersion5(name);
     const db = new LocalDatabase(name);
     await db.open();
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(LOCAL_DB_VERSION);
     expect(await db.songs.get(song.id)).toEqual(song);
     expect(await db.arrangements.get(arrangement.id)).toEqual(arrangement);
     expect(await db.entityStates.get(state.key)).toEqual(state);
@@ -275,8 +276,8 @@ describe('migração v5 → v6 (pacotes e histórico)', () => {
     // Reabrir com o código normal migra e continua de onde estava.
     const db = new LocalDatabase(name);
     await db.open();
-    expect(db.verno).toBe(6);
-    expect(await storedVersion(name)).toBe(6);
+    expect(db.verno).toBe(LOCAL_DB_VERSION);
+    expect(await storedVersion(name)).toBe(LOCAL_DB_VERSION);
     expect(await db.songs.get(song.id)).toEqual(song);
     expect(await db.entityStates.get(state.key)).toEqual(state);
     expect((await db.revisions.get('rev-sem'))!.workspaceId).toBe(song.workspaceId);
@@ -308,7 +309,7 @@ describe('migração v5 → v6 (pacotes e histórico)', () => {
 
     old.close();
     await opening;
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(LOCAL_DB_VERSION);
     expect(await db.songs.get(song.id)).toEqual(song);
     expect(await db.presentationCheckpoints.get('sessao')).toMatchObject({ savedAt: 'agora' });
     db.close();
@@ -330,7 +331,7 @@ describe('migração v5 → v6 (pacotes e histórico)', () => {
       await vi.advanceTimersByTimeAsync(SUPERSEDE_GRACE_MS);
       expect(old.isOpen()).toBe(false);
       await opening;
-      expect(db.verno).toBe(6);
+      expect(db.verno).toBe(LOCAL_DB_VERSION);
       db.close();
     } finally {
       vi.useRealTimers();

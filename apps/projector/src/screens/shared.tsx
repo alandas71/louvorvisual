@@ -59,6 +59,7 @@ export function hostErrorText(error: unknown): string {
 const AUDIO_TAG: Record<SongSummary['audio'], { text: string; className: string } | null> = {
   none: null,
   ready: { text: 'Áudio pronto', className: 'tag tag-ok' },
+  online: { text: 'YouTube online', className: 'tag tag-ok' },
   missing: { text: 'Áudio ausente', className: 'tag tag-warn' },
 };
 

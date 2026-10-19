@@ -1,6 +1,7 @@
 'use client';
 
 import { IDLE_PHONE_PRESENTATION } from '@louvorvisual/contracts';
+import { normalizeYoutubeUrl } from '@louvorvisual/domain';
 import { acknowledgePhone, phoneOperatorCommand, phoneSelection } from '@/phone/commands';
 import type { OperatorCommand } from '@louvorvisual/presentation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -129,12 +130,15 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
 
   const dispatch = useCallback(
     (command: OperatorCommand) => {
-      const result = session.execute(command);
+      const adjusted = opened.youtubePlayback && command.type === 'toggle' && !controls.capabilities.transport
+        ? view.state.status === 'ready' ? { type: 'start' as const } : view.state.status === 'running' ? { type: 'pause' as const } : view.state.status === 'paused' ? { type: 'resume' as const } : command
+        : command;
+      const result = session.execute(adjusted);
       if (result.ok) return;
       if (result.reason === 'at-limit' && (command.type === 'next' || command.type === 'previous')) say(command.type === 'next' ? 'Último slide' : 'Primeiro slide');
       else say(COMMAND_FAILURE_TEXT[result.reason]);
     },
-    [session, say],
+    [session, say, opened.youtubePlayback, controls.capabilities.transport, view.state.status],
   );
 
   const queue = request.kind === 'start' ? request.queue : [];
@@ -216,7 +220,7 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
           return true;
         case 'playPause':
           // Sem áudio nem tempo atual não há o que tocar ou pausar; a tecla não faz nada.
-          if (controls.capabilities.transport) dispatch({ type: 'toggle' });
+          if (controls.capabilities.transport || opened.youtubePlayback) dispatch({ type: 'toggle' });
           return true;
         case 'back':
           setExiting(true);
@@ -253,6 +257,7 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
       ) : (
         <SlideView text={output.slide.text} style={output.slide.style} fontId={output.slide.fontId} visualMode={output.visualMode} rotation={view.rotation} />
       )}
+      {opened.youtubePlayback && <YoutubePlayback url={opened.youtubePlayback.url} volume={opened.youtubePlayback.volume} playing={view.state.status === 'running'} />}
       <div className="stage-focus" tabIndex={-1} data-focusable="" data-autofocus="" data-testid="slide-focus" aria-label={`Slide ${controls.index + 1} de ${controls.total}`} />
 
       {clean && status && !leaving && !controlledByPhone && (
@@ -266,7 +271,7 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
         </p>
       )}
 
-      {overlay === 'controls' && !leaving && <QuickControls controls={controls} remaining={() => session.remainingMs()} dispatch={dispatch} onMenu={() => setOverlay('menu')} onClose={() => setOverlay('none')} />}
+      {overlay === 'controls' && !leaving && <QuickControls controls={controls} remaining={() => session.remainingMs()} dispatch={dispatch} hasYoutubePlayback={Boolean(opened.youtubePlayback)} onTogglePlayback={() => dispatch({ type: 'toggle' })} onMenu={() => setOverlay('menu')} onClose={() => setOverlay('none')} />}
 
       {overlay === 'menu' && !leaving && (
         <LiveMenu
@@ -343,5 +348,41 @@ function LiveStage({ opened, request }: { opened: OpenedSession; request: Presen
         />
       )}
     </main>
+  );
+}
+
+/**
+ * O YouTube é uma fonte online, portanto não usa o transporte nativo de arquivo.
+ * O iframe oficial fica fora da área visual do slide e acompanha iniciar/pausar a
+ * sessão. A letra continua sendo a única imagem projetada.
+ */
+function YoutubePlayback({ url, volume, playing }: { url: string; volume: number; playing: boolean }) {
+  const [loaded, setLoaded] = useState(false);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const normalized = normalizeYoutubeUrl(url);
+  const videoId = normalized ? new URL(normalized).searchParams.get('v') : null;
+
+  useEffect(() => {
+    if (!loaded || !frame.current?.contentWindow) return;
+    const send = (func: string, args: unknown[] = []) =>
+      frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), 'https://www.youtube.com');
+    send('setVolume', [Math.round(Math.min(1, Math.max(0, volume)) * 100)]);
+    send(playing ? 'playVideo' : 'pauseVideo');
+  }, [loaded, playing, volume]);
+
+  if (!videoId) return null;
+  return (
+    <iframe
+      ref={frame}
+      className="youtube-playback"
+      data-testid="youtube-playback"
+      src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0`}
+      title="YouTube Playback"
+      tabIndex={-1}
+      aria-hidden="true"
+      allow="autoplay; encrypted-media; picture-in-picture"
+      referrerPolicy="strict-origin-when-cross-origin"
+      onLoad={() => setLoaded(true)}
+    />
   );
 }

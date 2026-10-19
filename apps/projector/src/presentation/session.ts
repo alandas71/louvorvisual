@@ -226,6 +226,8 @@ export type OpenedSession = {
   audioUnavailable: boolean;
   context: SessionContext;
   recovered: boolean;
+  /** Player oficial que acompanha a apresentação; não passa pelo transporte de áudio local. */
+  youtubePlayback: SessionSnapshot['youtubePlayback'];
 };
 
 export type OpenResult = { ok: true; opened: OpenedSession } | { ok: false; failure: OpenFailure };
@@ -259,6 +261,7 @@ export async function openSession(common: Common, arrangementId: Uuid, context: 
   }
   // Notas são privadas do operador e esta tela é a projeção: não entram na sessão.
   const song = { ...presentable.song, notes: '' };
+  const selectedBinding = presentable.arrangement.audioBindings.find((binding) => binding.id === presentable.arrangement.selectedAudioBindingId) ?? null;
   const prepared = prepareSnapshot({
     id: newId(),
     now: new Date().toISOString(),
@@ -267,6 +270,7 @@ export async function openSession(common: Common, arrangementId: Uuid, context: 
     songGeneration: presentable.songGeneration,
     arrangementGeneration: presentable.arrangementGeneration,
     audio: presentable.audio,
+    youtubePlayback: selectedBinding?.kind === 'youtube' ? selectedBinding : null,
   });
   if (!prepared.ok) return { ok: false, failure: { kind: 'snapshot', issues: prepared.issues } };
   const { snapshot } = prepared;
@@ -281,7 +285,7 @@ export async function openSession(common: Common, arrangementId: Uuid, context: 
   const session = new ProjectorSession({ ...common, snapshot, sessionId, checkpoint: null, transport });
   return {
     ok: true,
-    opened: { session, title: song.title, artist: song.artist, warnings: prepared.warnings, audioUnavailable: presentable.audioMissing || (snapshot.audio !== null && transport === null), context, recovered: false },
+    opened: { session, title: song.title, artist: song.artist, warnings: prepared.warnings, audioUnavailable: presentable.audioMissing || (snapshot.audio !== null && transport === null), context, recovered: false, youtubePlayback: snapshot.youtubePlayback },
   };
 }
 
@@ -331,6 +335,6 @@ export async function recoverSession(common: Common, stored: RecoverableSession)
   const session = new ProjectorSession({ ...common, snapshot, sessionId: stored.sessionId, checkpoint, transport, rotation: checkpoint?.rotation ?? common.rotation });
   return {
     ok: true,
-    opened: { session, title: snapshot.song.title, artist: snapshot.song.artist, warnings: [], audioUnavailable: snapshot.audio !== null && transport === null, context: stored.context, recovered: true },
+    opened: { session, title: snapshot.song.title, artist: snapshot.song.artist, warnings: [], audioUnavailable: snapshot.audio !== null && transport === null, context: stored.context, recovered: true, youtubePlayback: snapshot.youtubePlayback },
   };
 }

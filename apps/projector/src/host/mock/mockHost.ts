@@ -141,6 +141,7 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
   const audioOf = (arrangement: Arrangement): SongSummary['audio'] => {
     const binding = arrangement.audioBindings.find((item) => item.id === arrangement.selectedAudioBindingId);
     if (!binding) return 'none';
+    if (binding.kind === 'youtube') return 'online';
     return !binding.assetId || library.missingAssets.has(binding.assetId) || !library.assets.has(binding.assetId) ? 'missing' : 'ready';
   };
   const summary = (arrangement: Arrangement): SongSummary => {
@@ -199,7 +200,7 @@ export function createMockHost(query: URLSearchParams): { port: HostPort; contro
       if (!arrangement || !song) throw new MockFailure('not-found');
       const binding = arrangement.audioBindings.find((item) => item.id === arrangement.selectedAudioBindingId);
       const asset = binding?.assetId ? library.assets.get(binding.assetId) : undefined;
-      const missing = Boolean(binding) && (!asset || library.missingAssets.has(asset.id));
+      const missing = Boolean(binding && binding.kind !== 'youtube') && (!asset || library.missingAssets.has(asset.id));
       return { song, arrangement, songGeneration: 1, arrangementGeneration: 1, audio: binding && asset && !missing ? { binding, asset } : null, audioMissing: missing };
     },
     'session.create': ({ sessionId, snapshot, context }: { sessionId: string; snapshot: Record<string, unknown>; context: RecoverableSession['context'] }) => {

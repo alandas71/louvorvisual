@@ -1,6 +1,6 @@
 'use client';
 
-import { formatTimerSeconds, OCCURRENCE_DURATION_MS, parseTimerSeconds, type Uuid } from '@louvorvisual/domain';
+import { formatTimerSeconds, normalizeYoutubeUrl, OCCURRENCE_DURATION_MS, parseTimerSeconds, type Uuid } from '@louvorvisual/domain';
 import type { AudioControls, EngineNotice, EngineView, ResolvedSlide, SnapshotAudio } from '@louvorvisual/presentation';
 import { useEffect, useReducer, useState, useSyncExternalStore } from 'react';
 import { remoteAudioStatus, subscribeRemoteAudio, type RemoteAudioStatus } from '@/receiver/client';
@@ -82,6 +82,7 @@ type AudioPanelProps = {
   dispatch: Dispatch;
   choices: AudioChoice[];
   selectedBindingId: Uuid | null;
+  youtubePlaybackUrl: string | null;
   onChoose: (bindingId: Uuid | null) => void;
 };
 
@@ -89,7 +90,7 @@ type AudioPanelProps = {
  * Faixa da sessão no painel do operador: o que está tocando, de onde, com que
  * política, e as falhas com a ação que resolve. O único player é o desta janela.
  */
-export function AudioPanel({ controller, view, dispatch, choices, selectedBindingId, onChoose }: AudioPanelProps) {
+export function AudioPanel({ controller, view, dispatch, choices, selectedBindingId, youtubePlaybackUrl, onChoose }: AudioPanelProps) {
   const { state, notice } = view;
   const audio = view.controls.audio;
   const ready = state.status === 'ready';
@@ -105,10 +106,6 @@ export function AudioPanel({ controller, view, dispatch, choices, selectedBindin
       {ready && choices.length > 0 && (
         <fieldset className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <legend className="sr-only">Faixa desta sessão</legend>
-          <label className="flex cursor-pointer items-center gap-1">
-            <input type="radio" name="faixa-sessao" className="accent-accent" checked={selectedBindingId === null} onChange={() => onChoose(null)} />
-            Sem áudio
-          </label>
           {choices.map((choice) => (
             <label key={choice.bindingId} className="flex cursor-pointer items-center gap-1">
               <input type="radio" name="faixa-sessao" className="accent-accent" checked={selectedBindingId === choice.bindingId} onChange={() => onChoose(choice.bindingId)} />
@@ -118,7 +115,9 @@ export function AudioPanel({ controller, view, dispatch, choices, selectedBindin
         </fieldset>
       )}
 
-      {!audio ? (
+      {youtubePlaybackUrl ? (
+        <YoutubePlayback url={youtubePlaybackUrl} />
+      ) : !audio ? (
         <p className="text-sm text-muted" data-testid="audio-none">
           Sem faixa nesta sessão.
         </p>
@@ -195,6 +194,28 @@ export function AudioPanel({ controller, view, dispatch, choices, selectedBindin
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+/** O player oficial ocupa o lugar dos controles da faixa local durante o playback do YouTube. */
+function YoutubePlayback({ url }: { url: string }) {
+  const normalized = normalizeYoutubeUrl(url);
+  const videoId = normalized ? new URL(normalized).searchParams.get('v') : null;
+  if (!videoId) return <p role="alert" className="text-sm text-danger">O vídeo do YouTube configurado não é válido.</p>;
+
+  return (
+    <section className="flex flex-col gap-2" data-testid="youtube-playback">
+      <p className="text-sm"><span className="font-semibold">YouTube Playback</span></p>
+      <iframe
+        className="aspect-video w-full rounded border border-border"
+        src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0`}
+        title="YouTube Playback"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerPolicy="strict-origin-when-cross-origin"
+        allowFullScreen
+      />
+      <p className="text-xs text-muted">Reprodução online pelo player oficial do YouTube. Os slides usam os tempos do arranjo; inicie o vídeo pelo próprio player.</p>
     </section>
   );
 }

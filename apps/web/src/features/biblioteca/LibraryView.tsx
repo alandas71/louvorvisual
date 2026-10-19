@@ -4,7 +4,7 @@ import { duplicateSong, findSimilarSongs, searchSongEntries, type AudioBinding, 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonClass } from '@/components/ui/buttonStyles';
-import { CheckIcon, ChevronRightIcon, CloseIcon, CopyIcon, LibraryIcon, MicIcon, PlayIcon, PlusIcon, SearchIcon, TrashIcon } from '@/components/ui/icons';
+import { CheckIcon, ChevronRightIcon, CloseIcon, CopyIcon, FavoriteIcon, LibraryIcon, MicIcon, PlayIcon, PlusIcon, SearchIcon, TrashIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { EmptyState, Loading, noticeClass, PageHeader, pillClass, rowClass } from '@/components/ui/PageHeader';
@@ -14,8 +14,10 @@ import {
   deleteSong,
   getSong,
   listArrangements,
+  listFavoriteSongIndex,
   listSongIndex,
   saveDocuments,
+  toggleFavoriteSong,
   useLocalSession,
   type LocalSession,
   type SongIndexRow,
@@ -47,6 +49,7 @@ export function LibraryView() {
 }
 
 function Library({ session }: { session: LocalSession }) {
+  const canManageLibrary = session.team?.role !== 'operator';
   const [rows, setRows] = useState<SongIndexRow[] | null>(null);
   const [query, setQuery] = useState('');
   const [confirming, setConfirming] = useState<Uuid | null>(null);
@@ -54,10 +57,14 @@ function Library({ session }: { session: LocalSession }) {
   const [choosing, setChoosing] = useState<{ row: SongIndexRow; arrangementId: Uuid; bindings: readonly AudioBinding[]; selectedId: Uuid | null } | null>(null);
   const firstChoice = useRef<HTMLButtonElement | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [favoriteIds, setFavoriteIds] = useState<Set<Uuid>>(new Set());
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(
-    () => listSongIndex(session.db, session.profile.workspaceId).then(setRows),
+    () => Promise.all([listSongIndex(session.db, session.profile.workspaceId), listFavoriteSongIndex(session.db, session.profile.workspaceId)]).then(([songs, favorites]) => {
+      setRows(songs);
+      setFavoriteIds(new Set(favorites.map((song) => song.id)));
+    }),
     [session],
   );
   // Recarrega também quando a sincronização traz ou retira louvores.
@@ -131,17 +138,22 @@ function Library({ session }: { session: LocalSession }) {
     }
   }
 
+  async function onToggleFavorite(row: SongIndexRow) {
+    await toggleFavoriteSong(session.db, session.profile.workspaceId, row.id);
+    await reload();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Biblioteca"
         description={<>{session.team ? `Biblioteca da equipe ${session.team.workspaceName} neste dispositivo.` : 'Louvores gravados neste dispositivo.'} Letras e arranjos funcionam sem conexão. Use o botão de baixar para ter o áudio offline.</>}
-        actions={
+        actions={canManageLibrary ? (
           <button type="button" className={buttonClass('primary')} onClick={() => setLocalQuery({ view: 'novo', song: null, arranjo: null })}>
             <PlusIcon />
             Novo louvor
           </button>
-        }
+        ) : undefined}
       />
 
       {(rows === null || rows.length > 0) && (
@@ -181,7 +193,7 @@ function Library({ session }: { session: LocalSession }) {
                     {row.title.trim().charAt(0) || '♪'}
                   </span>
                   <div className="min-w-0 flex-1 basis-48">
-                    <a
+                    {canManageLibrary ? <a
                       href={`/app?view=editor&song=${row.id}`}
                       onClick={(event) => {
                         if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
@@ -191,24 +203,27 @@ function Library({ session }: { session: LocalSession }) {
                       className="rounded text-base font-semibold leading-snug underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       {row.title}
-                    </a>
+                    </a> : <p className="text-base font-semibold leading-snug">{row.title}</p>}
                     <p className="mt-0.5 truncate text-[13px] text-muted">
                       {row.artist ?? 'Sem artista'} · editado em {dateFormat.format(new Date(row.updatedAt))}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
-                    <DownloadAudioButton session={session} songId={row.id} title={row.title} />
+                    {canManageLibrary && <DownloadAudioButton session={session} songId={row.id} title={row.title} />}
                     <button type="button" className={buttonClass('secondary', 'sm', 'border-accent/40 bg-accent/10 text-accent hover:border-accent hover:bg-accent/15 max-sm:flex-1')} onClick={() => void onPresent(row)} aria-label={`Apresentar ${row.title}`}>
                       <PlayIcon size={14} />
                       Apresentar
                     </button>
                     <span className="flex items-center gap-1 sm:ml-1 sm:border-l sm:border-border sm:pl-2">
-                      <button type="button" className={buttonClass('ghost', 'sm', ICON_BUTTON)} onClick={() => void onDuplicate(row)} aria-label={`Duplicar ${row.title}`} title="Duplicar">
+                      <button type="button" className={buttonClass('ghost', 'sm', cn(ICON_BUTTON, favoriteIds.has(row.id) && 'bg-accent/10 text-accent'))} onClick={() => void onToggleFavorite(row)} aria-label={favoriteIds.has(row.id) ? `Remover ${row.title} dos favoritos` : `Adicionar ${row.title} aos favoritos`} title={favoriteIds.has(row.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}>
+                        <FavoriteIcon size={16} />
+                      </button>
+                      {canManageLibrary && <button type="button" className={buttonClass('ghost', 'sm', ICON_BUTTON)} onClick={() => void onDuplicate(row)} aria-label={`Duplicar ${row.title}`} title="Duplicar">
                         <CopyIcon size={16} />
-                      </button>
-                      <button type="button" className={buttonClass('ghost', 'sm', cn(ICON_BUTTON, 'hover:bg-danger/10 hover:text-danger'))} onClick={() => setConfirming(row.id)} aria-label={`Excluir ${row.title}`} title="Excluir">
+                      </button>}
+                      {canManageLibrary && <button type="button" className={buttonClass('ghost', 'sm', cn(ICON_BUTTON, 'hover:bg-danger/10 hover:text-danger'))} onClick={() => setConfirming(row.id)} aria-label={`Excluir ${row.title}`} title="Excluir">
                         <TrashIcon size={16} />
-                      </button>
+                      </button>}
                     </span>
                   </div>
                 </div>

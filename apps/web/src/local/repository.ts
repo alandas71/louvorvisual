@@ -13,6 +13,8 @@ import type { Table } from 'dexie';
 import type { LocalDatabase } from './db';
 import {
   entityStateKey,
+  favoriteSongKey,
+  type FavoriteSongRow,
   type LocalDocument,
   type LocalEntityState,
   type LocalEntityType,
@@ -194,6 +196,37 @@ export async function ensureProfile(
 export async function listSongIndex(db: LocalDatabase, workspaceId: Uuid): Promise<SongIndexRow[]> {
   const rows = await db.songIndex.where('workspaceId').equals(workspaceId).toArray();
   return rows.filter((row) => row.deletedAt === null);
+}
+
+/** Favoritos ordenados pela última marcação; registros de louvores apagados são ignorados. */
+export async function listFavoriteSongIndex(db: LocalDatabase, workspaceId: Uuid): Promise<SongIndexRow[]> {
+  const favorites = await db.favoriteSongs.where('workspaceId').equals(workspaceId).toArray();
+  const songs = await listSongIndex(db, workspaceId);
+  const byId = new Map(songs.map((song) => [song.id, song]));
+  return favorites
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .flatMap((favorite) => {
+      const song = byId.get(favorite.songId);
+      return song ? [song] : [];
+    });
+}
+
+export function isFavoriteSong(db: LocalDatabase, workspaceId: Uuid, songId: Uuid): Promise<boolean> {
+  return db.favoriteSongs.get(favoriteSongKey(workspaceId, songId)).then(Boolean);
+}
+
+/** Alterna o atalho local sem modificar os dados do louvor ou da equipe. */
+export async function toggleFavoriteSong(db: LocalDatabase, workspaceId: Uuid, songId: Uuid, now = new Date().toISOString()): Promise<boolean> {
+  const key = favoriteSongKey(workspaceId, songId);
+  return db.transaction('rw', db.favoriteSongs, async () => {
+    if (await db.favoriteSongs.get(key)) {
+      await db.favoriteSongs.delete(key);
+      return false;
+    }
+    const row: FavoriteSongRow = { key, workspaceId, songId, createdAt: now };
+    await db.favoriteSongs.put(row);
+    return true;
+  });
 }
 
 export async function getSong(db: LocalDatabase, songId: Uuid): Promise<Song | null> {

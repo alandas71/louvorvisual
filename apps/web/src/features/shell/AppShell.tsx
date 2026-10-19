@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, type ComponentType, type MouseEvent } from 'react';
 import { buttonClass } from '@/components/ui/buttonStyles';
-import { AccountIcon, CloseIcon, InstallIcon, LibraryIcon, MoreIcon, OfflineIcon, SetlistIcon, SyncIcon, ThemesIcon, TrashIcon, WifiOffIcon } from '@/components/ui/icons';
+import { AccountIcon, CloseIcon, FavoriteIcon, InstallIcon, LibraryIcon, OfflineIcon, SetlistIcon, SyncIcon, ThemesIcon, TrashIcon, WifiOffIcon } from '@/components/ui/icons';
 import { SkipToContent } from '@/components/ui/SkipToContent';
 import { setLocalQuery, useLocalQuery } from '@/lib/localQuery';
+import { useLocalSession } from '@/local';
 import { cn } from '@/lib/utils';
 import { useInstallPrompt, useOnline } from '@/pwa/device';
 import { ServiceWorkerRegistration } from '@/pwa/ServiceWorkerRegistration';
@@ -14,6 +15,7 @@ import { AccountView } from '../conta/AccountView';
 import { LibraryView } from '../biblioteca/LibraryView';
 import { NewSongView } from '../cadastro/NewSongView';
 import { EditorView } from '../editor/EditorView';
+import { FavoritesView } from '../favoritos/FavoritesView';
 import { TrashView } from '../lixeira/TrashView';
 import { OfflineView } from '../offline/OfflineView';
 import { SetlistsView } from '../repertorios/SetlistsView';
@@ -31,6 +33,7 @@ type IconType = ComponentType<{ size?: number; className?: string }>;
 /** `hidden`: fora do menu e da barra inferior; a vista continua abrindo pelo endereço (`?view=`). */
 const VIEWS = [
   { id: 'biblioteca', label: 'Biblioteca', short: 'Biblioteca', group: 'culto', hidden: false, Icon: LibraryIcon as IconType, Component: LibraryView },
+  { id: 'favoritos', label: 'Favoritos', short: 'Favoritos', group: 'culto', hidden: false, Icon: FavoriteIcon as IconType, Component: FavoritesView },
   { id: 'repertorios', label: 'Repertórios', short: 'Repertórios', group: 'culto', hidden: true, Icon: SetlistIcon as IconType, Component: SetlistsView },
   { id: 'temas', label: 'Temas e fontes', short: 'Temas', group: 'culto', hidden: true, Icon: ThemesIcon as IconType, Component: ThemesView },
   { id: 'receptor', label: 'Projetor e celular', short: 'Projetor', group: 'dispositivo', hidden: false, Icon: InstallIcon as IconType, Component: ReceiverView },
@@ -48,7 +51,8 @@ const GROUPS = [
 ] as const;
 
 /** As áreas que cabem na barra inferior do celular; as demais ficam em "Mais". */
-const TAB_BAR = ['biblioteca', 'sync', 'conta'];
+const TAB_BAR = ['biblioteca', 'receptor', 'favoritos', 'conta'];
+const OPERATOR_VIEWS = new Set([...TAB_BAR, 'apresentar']);
 
 /** Vistas abertas a partir da biblioteca; na navegação contam como parte dela. */
 const LIBRARY_VIEWS = [
@@ -78,6 +82,8 @@ const DEVICE_TEXT: Record<OfflineState['phase'], string | null> = {
 /** Shell local: as vistas trocam pela query (`?view=`), sem ida ao servidor. */
 export function AppShell() {
   const query = useLocalQuery();
+  const local = useLocalSession();
+  const isOperator = local.status === 'ready' && local.session.team?.role === 'operator';
   useEffect(() => {
     try { if (!window.location.search && localStorage.getItem(RECEIVER_PREFERENCE) === '1') setLocalQuery({ view: 'receptor' }); } catch { /* Manual choice remains available. */ }
   }, []);
@@ -103,6 +109,7 @@ export function AppShell() {
   const current = VIEWS.find((view) => view.id === query.get('view')) ?? VIEWS[0];
   const Content = detail?.Component ?? current.Component;
   const viewId = query.get('view') === 'apresentar' ? 'apresentar' : (detail?.id ?? current.id);
+  const blockedForOperator = isOperator && !OPERATOR_VIEWS.has(viewId);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -150,8 +157,6 @@ export function AppShell() {
   }
 
   const deviceText = DEVICE_TEXT[offline.phase];
-  const inTabBar = TAB_BAR.includes(current.id);
-
   return (
     <>
       <SkipToContent />
@@ -201,7 +206,7 @@ export function AppShell() {
               <div key={group.id} className="flex flex-col gap-1">
                 <p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">{group.label}</p>
                 <ul className="flex flex-col gap-0.5">
-                  {MENU_VIEWS.filter((view) => view.group === group.id).map((view) => {
+                  {(isOperator ? VIEWS.filter((view) => TAB_BAR.includes(view.id)) : MENU_VIEWS).filter((view) => view.group === group.id).map((view) => {
                     const active = view.id === current.id;
                     return (
                       <li key={view.id}>
@@ -259,13 +264,13 @@ export function AppShell() {
           data-view={detail?.id ?? current.id}
         >
           <div key={viewId} className="animate-rise">
-            <Content />
+            {blockedForOperator ? <OperatorOnlyNotice /> : <Content />}
           </div>
         </main>
 
         <nav aria-label="Navegação rápida" className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface-raised/95 pb-safe backdrop-blur-md lg:hidden">
           <ul className="mx-auto grid max-w-lg grid-cols-4">
-            {MENU_VIEWS.filter((view) => TAB_BAR.includes(view.id)).map((view) => {
+            {VIEWS.filter((view) => TAB_BAR.includes(view.id)).map((view) => {
               const active = view.id === current.id;
               return (
                 <li key={view.id}>
@@ -286,29 +291,22 @@ export function AppShell() {
                 </li>
               );
             })}
-            <li>
-              <button
-                ref={menuButton}
-                type="button"
-                aria-expanded={menuOpen}
-                aria-controls="lv-menu"
-                onClick={() => setMenuOpen(true)}
-                className={cn(
-                  'relative flex h-16 w-full cursor-pointer flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent',
-                  inTabBar ? 'text-muted' : 'text-accent',
-                )}
-              >
-                <span className={cn('flex h-7 w-14 items-center justify-center rounded-full transition-colors', !inTabBar && 'bg-accent/15')}>
-                  <MoreIcon size={21} />
-                </span>
-                {inTabBar ? 'Mais' : current.short}
-                {offline.updateWaiting && <span aria-hidden="true" className="absolute right-[calc(50%-1.5rem)] top-2.5 h-2.5 w-2.5 rounded-full border-2 border-surface-raised bg-accent" />}
-              </button>
-            </li>
           </ul>
         </nav>
       </div>
     </>
+  );
+}
+
+function OperatorOnlyNotice() {
+  return (
+    <section className="mx-auto flex max-w-xl flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-6 shadow-card">
+      <h1 className="text-2xl font-bold">Área restrita ao operador</h1>
+      <p className="text-muted">Este perfil pode escolher favoritos e iniciar apresentações, mas não cria, edita nem exclui louvores.</p>
+      <button type="button" className={buttonClass('primary', 'md', 'self-start')} onClick={() => setLocalQuery({ view: 'biblioteca', song: null, arranjo: null })}>
+        Voltar à Biblioteca
+      </button>
+    </section>
   );
 }
 

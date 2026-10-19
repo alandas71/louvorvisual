@@ -358,6 +358,16 @@ button {
   box-shadow: none;
 }
 
+/* O player oficial fornece o áudio; a projeção continua mostrando somente a letra. */
+.youtube-playback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
 .pill {
   position: absolute;
   left: 50%;

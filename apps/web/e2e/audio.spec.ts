@@ -56,12 +56,7 @@ test('AT-07 (independente), AT-08 e AT-28: player único, sem seek ao trocar de 
   await openOperator(page);
   await expect(operator(page)).toHaveAttribute('data-audio-policy', 'independent');
   await expect(page.getByTestId('audio-panel')).toContainText('playback-uniao.wav');
-  // Antes de iniciar, o operador escolhe a faixa da sessão: sem áudio não há player; de volta ao playback, há um só.
-  await page.getByTestId('audio-panel').getByLabel('Sem áudio').check();
-  await expect(operator(page)).toHaveAttribute('data-audio-policy', 'none');
-  await expect(page.getByTestId('audio-none')).toBeVisible();
-  expect(await mediaElements(page)).toBe(0);
-  await page.getByTestId('audio-panel').getByLabel('Playback').check();
+  // Antes de iniciar, a faixa configurada já é o único player da sessão.
   await expect(operator(page)).toHaveAttribute('data-audio-policy', 'independent');
   await expect(operator(page)).toHaveAttribute('data-status', 'ready');
   await watchAudio(page);

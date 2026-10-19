@@ -43,7 +43,22 @@ async function loadAccount(): Promise<{ profiles: TeamProfile[]; account: Accoun
 export function AccountView() {
   const current = useSyncEngine();
   if (!current) return <Loading>Abrindo os dados deste dispositivo…</Loading>;
+  if (current.session.team?.role === 'operator') return <OperatorAccount teamName={current.session.team.workspaceName} />;
   return <Account session={current.session} engine={current.engine} />;
+}
+
+function OperatorAccount({ teamName }: { teamName: string }) {
+  return (
+    <div className="flex flex-col gap-8" data-testid="account-view">
+      <header>
+        <h1 className="text-[1.75rem] font-bold leading-tight md:text-3xl">Conta e equipe</h1>
+      </header>
+      <section className={sectionClass}>
+        <h2 className="text-lg font-bold">Perfil de operador</h2>
+        <p className="text-muted">Você está na equipe <strong>{teamName}</strong>. Este perfil pode escolher louvores, favoritos e iniciar apresentações.</p>
+      </section>
+    </div>
+  );
 }
 
 function Account({ session, engine }: { session: LocalSession; engine: SyncEngine }) {

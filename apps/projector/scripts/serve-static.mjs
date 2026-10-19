@@ -22,7 +22,7 @@ const TYPES = {
   '.ico': 'image/x-icon',
   '.png': 'image/png',
 };
-const CSP = ["default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'", "font-src 'self'", "img-src 'self' data:", "connect-src 'self'", "object-src 'none'", "frame-src 'none'", "base-uri 'none'", "form-action 'none'"].join('; ');
+const CSP = ["default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'", "font-src 'self'", "img-src 'self' data:", "connect-src 'self'", "object-src 'none'", "frame-src https://www.youtube.com", "base-uri 'none'", "form-action 'none'"].join('; ');
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');

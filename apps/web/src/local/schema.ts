@@ -5,7 +5,7 @@ import type { ArchiveReason, ConflictRecord, EntityState, QueuedOperation, Stage
 /** Nome fixo: IndexedDB pertence à origem, e trocar o nome abandonaria a biblioteca. */
 export const LOCAL_DB_NAME = 'louvorvisual';
 /** Versão atual do banco local; cada mudança de estrutura ganha uma versão e uma migração. */
-export const LOCAL_DB_VERSION = 6;
+export const LOCAL_DB_VERSION = 7;
 
 /** Tipos de documento gravados nesta etapa. */
 export type LocalEntityType = 'song' | 'arrangement' | 'setlist' | 'asset';
@@ -72,6 +72,19 @@ export type LocalProfile = {
 };
 
 export type SongIndexRow = SongSearchEntry;
+
+/** Um louvor marcado para acesso rápido neste perfil e espaço de trabalho. */
+export type FavoriteSongRow = {
+  /** Chave composta para que o mesmo louvor não possa ser marcado duas vezes. */
+  key: string;
+  workspaceId: Uuid;
+  songId: Uuid;
+  createdAt: IsoInstant;
+};
+
+export function favoriteSongKey(workspaceId: Uuid, songId: Uuid): string {
+  return `${workspaceId}:${songId}`;
+}
 
 export function entityStateKey(entityType: SyncEntityType, entityId: Uuid): string {
   return `${entityType}:${entityId}`;

@@ -238,6 +238,7 @@ export class SyncEngine {
   async downloadAssets(assetIds: readonly string[]): Promise<void> {
     const { db, profile, team } = this.session;
     if (!team) throw new Error('Este perfil não está conectado a uma equipe.');
+    let transferShown = false;
     const coordinator = new SyncCoordinator({
       storage: this.storage,
       transport: new HttpSyncTransport({ workspaceId: team.workspaceId, userId: team.userId }),
@@ -246,10 +247,30 @@ export class SyncEngine {
       now: () => new Date().toISOString(),
       newId: () => crypto.randomUUID(),
       isPresenting,
+      onProgress: (progress) => {
+        if (!progress || !visibleProgress(progress)) return;
+        transferShown = true;
+        if (this.resultTimer) clearTimeout(this.resultTimer);
+        this.setStatus({ progress, transferResult: null });
+      },
     });
-    const report = await coordinator.requestDownloads(assetIds);
-    if (report.downloaded > 0) this.announceLibraryChange();
-    if (report.downloadsDeferred > 0) throw new Error('Encerre a apresentação e clique em baixar novamente.');
+    try {
+      const report = await coordinator.requestDownloads(assetIds);
+      if (report.downloaded > 0) this.announceLibraryChange();
+      if (report.downloadsDeferred > 0) throw new Error('Encerre a apresentação e clique em baixar novamente.');
+      this.finishManualDownloadToast(transferShown, 'done');
+    } catch (error) {
+      this.finishManualDownloadToast(transferShown, 'failed');
+      throw error;
+    }
+  }
+
+  private finishManualDownloadToast(wasShown: boolean, result: 'done' | 'failed'): void {
+    if (!wasShown) return;
+    this.resultTimer = setTimeout(() => {
+      if (!this.stopped) this.setStatus({ transferResult: null });
+    }, RESULT_VISIBLE_MS[result]);
+    this.setStatus({ progress: null, transferResult: result });
   }
 
   /** Ação manual "Sincronizar agora". */

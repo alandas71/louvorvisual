@@ -11,6 +11,9 @@ type Props = {
   /** Tempo restante lido do motor; `null` sem contagem. */
   remaining: () => number | null;
   dispatch: (command: OperatorCommand) => void;
+  /** A fonte YouTube acompanha o estado da sessão, mesmo sem transporte de arquivo local. */
+  hasYoutubePlayback?: boolean;
+  onTogglePlayback?: () => void;
   onMenu: () => void;
   onClose: () => void;
 };
@@ -50,7 +53,7 @@ function TimerIndicator({ controls, remaining }: Pick<Props, 'controls' | 'remai
  * Abrem com cima/baixo e ficam até Voltar: com o
  * controle remoto sempre há um botão em foco, então nada some por inatividade.
  */
-export function QuickControls({ controls, remaining, dispatch, onMenu, onClose }: Props) {
+export function QuickControls({ controls, remaining, dispatch, hasYoutubePlayback = false, onTogglePlayback, onMenu, onClose }: Props) {
   const ref = useFocusLayer({
     name: 'controls',
     level: 1,
@@ -62,13 +65,13 @@ export function QuickControls({ controls, remaining, dispatch, onMenu, onClose }
         return true;
       }
       if (key === 'playPause') {
-        if (controls.capabilities.transport) dispatch({ type: 'toggle' });
+        if (controls.capabilities.transport || hasYoutubePlayback) onTogglePlayback?.();
         return true;
       }
       return false;
     },
   });
-  const { transport } = controls.capabilities;
+  const transport = controls.capabilities.transport || hasYoutubePlayback;
 
   return (
     <div ref={ref} data-layer="controls" data-testid="quick-controls" data-rotation={controls.rotation}>
@@ -100,8 +103,8 @@ export function QuickControls({ controls, remaining, dispatch, onMenu, onClose }
           <LargerIcon />
         </Control>
         {transport && (
-          <Control label={controls.playing ? 'Pausar' : 'Tocar'} testId="control-transport" autoFocus onSelect={() => dispatch({ type: 'toggle' })}>
-            {controls.playing ? <PauseIcon /> : <PlayIcon />}
+          <Control label={(hasYoutubePlayback ? controls.status === 'running' : controls.playing) ? 'Pausar' : 'Tocar'} testId="control-transport" autoFocus onSelect={() => onTogglePlayback?.()}>
+            {(hasYoutubePlayback ? controls.status === 'running' : controls.playing) ? <PauseIcon /> : <PlayIcon />}
           </Control>
         )}
         <Control label="Próximo slide" testId="control-next" onSelect={() => dispatch({ type: 'next' })}>

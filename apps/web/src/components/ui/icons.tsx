@@ -20,6 +20,7 @@ export const TrashIcon = make(<><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 
 export const OfflineIcon = make(<><path d="M12 3v11M7.5 10.5 12 15l4.5-4.5" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></>);
 export const SyncIcon = make(<><path d="M20 11a8 8 0 0 0-14.3-4.3L4 8.5" /><path d="M4 4v4.5h4.5M4 13a8 8 0 0 0 14.3 4.3L20 15.5" /><path d="M20 20v-4.5h-4.5" /></>);
 export const AccountIcon = make(<><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.300A6.5 6.5 0 0 1 21.5 20" /></>);
+export const FavoriteIcon = make(<path d="M12 20.5S3.5 15.1 3.5 8.8A4.8 4.8 0 0 1 12 5.7a4.8 4.8 0 0 1 8.5 3.1C20.5 15.1 12 20.5 12 20.5Z" />);
 export const MoreIcon = make(<><path d="M4 7h16M4 12h16M4 17h16" /></>);
 export const PlayIcon = make(<path d="M7.5 4.5v15l12-7.500-12-7.500Z" />);
 export const MicIcon = make(<><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.500V21" /></>);

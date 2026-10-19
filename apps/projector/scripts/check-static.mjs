@@ -30,6 +30,9 @@ const INERT_HOSTS = new Set([
   'json-schema.org',
 ]);
 
+/** Origem remota revisada, restrita ao player oficial do YouTube. */
+const ALLOWED_REMOTE_HOSTS = new Set(['www.youtube.com']);
+
 /** Sinais de recursos que não podem existir no bundle embarcado. */
 const FORBIDDEN = [
   ['fonts.googleapis.com', 'fonte remota'],
@@ -88,7 +91,7 @@ export async function checkBundle(dist) {
   }
   for (const [host, path] of hosts) {
     // A origem virtual do WebView é a única "externa" que o bundle conhece, e é ele mesmo.
-    if (host === 'appassets.androidplatform.net' || INERT_HOSTS.has(host)) continue;
+    if (host === 'appassets.androidplatform.net' || INERT_HOSTS.has(host) || ALLOWED_REMOTE_HOSTS.has(host)) continue;
     problems.push(`${path}: endereço de outra origem no JavaScript: ${host}`);
   }
 
@@ -145,7 +148,7 @@ export async function checkBundle(dist) {
     fontFiles,
     mockChunks,
     inertHosts: [...hosts.keys()].sort(),
-    summary: `Bundle íntegro: ${paths.length} arquivos, ${scripts.length} scripts, ${fontFiles} fontes locais conferidas; nenhuma referência fora de ${BASE}.`,
+    summary: `Bundle íntegro: ${paths.length} arquivos, ${scripts.length} scripts, ${fontFiles} fontes locais conferidas; referências locais sob ${BASE} e, quando usado, o player oficial do YouTube.`,
   };
 }
 

@@ -119,7 +119,7 @@ for (const size of SIZES) {
   });
 }
 
-test('celular: barra inferior, menu "Mais" e manifesto do aplicativo instalável', async () => {
+test('celular: barra inferior do operador e manifesto do aplicativo instalável', async () => {
   const context = await profile.open();
   const page = await context.newPage();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -130,6 +130,8 @@ test('celular: barra inferior, menu "Mais" e manifesto do aplicativo instalável
   const bar = page.getByRole('navigation', { name: 'Navegação rápida' });
   await expect(bar).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Áreas do aplicativo' })).toBeHidden();
+  await expect(bar.getByRole('link')).toHaveCount(4);
+  for (const name of ['Biblioteca', 'Projetor', 'Favoritos', 'Conta']) await expect(bar.getByRole('link', { name })).toBeVisible();
   for (const target of await bar.locator('a, button').all()) {
     const box = (await target.boundingBox())!;
     expect(Math.min(box.width, box.height), 'alvo de toque da barra inferior').toBeGreaterThanOrEqual(44);
@@ -141,27 +143,9 @@ test('celular: barra inferior, menu "Mais" e manifesto do aplicativo instalável
   await bar.getByRole('link', { name: 'Conta' }).click();
   await expect(page.locator('main')).toHaveAttribute('data-view', 'conta');
   await expect(bar.getByRole('link', { name: 'Conta' })).toHaveAttribute('aria-current', 'page');
-  // Repertórios e temas estão ocultos: fora da barra e do menu, mas abrem pelo endereço.
+  // Repertórios e temas ficam fora da barra, mas continuam abrindo pelo endereço.
   await expect(bar.getByRole('link', { name: 'Repertórios' })).toHaveCount(0);
-
-  // "Mais" abre o menu completo, com foco dentro dele; Esc fecha e devolve o foco.
-  const more = bar.getByRole('button', { name: 'Mais' });
-  await more.click();
-  const menu = page.getByRole('navigation', { name: 'Áreas do aplicativo' });
-  await expect(menu).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Fechar o menu' })).toBeFocused();
-  await page.waitForTimeout(250);
-  await page.screenshot({ path: join(SHOTS, 'mobile-20-menu.png') });
-  await page.keyboard.press('Escape');
-  await expect(menu).toBeHidden();
-  await expect(more).toBeFocused();
-
-  await more.click();
-  await menu.getByRole('link', { name: 'Disponível offline' }).click();
-  await expect(page.locator('main')).toHaveAttribute('data-view', 'offline');
-  await expect(menu).toBeHidden();
-  // Fora das três áreas da barra, o último botão mostra onde a pessoa está.
-  await expect(bar.getByRole('button', { name: 'Offline' })).toBeVisible();
+  await expect(bar.getByRole('button')).toHaveCount(0);
 
   // Manifesto: instalável, com atalhos e ícones que existem.
   const manifest = await (await context.request.get(`${ORIGIN}/manifest.webmanifest`)).json();

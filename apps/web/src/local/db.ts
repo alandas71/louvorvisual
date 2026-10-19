@@ -4,6 +4,7 @@ import {
   LOCAL_DB_NAME,
   type AssetBlobRow,
   type EditLeaseRow,
+  type FavoriteSongRow,
   type ImportMapRow,
   type LocalEntityState,
   type LocalProfile,
@@ -73,6 +74,7 @@ export class LocalDatabase extends Dexie {
   syncStaging!: Table<SyncStagingRow, string>;
   editLeases!: Table<EditLeaseRow, string>;
   importMap!: Table<ImportMapRow, string>;
+  favoriteSongs!: Table<FavoriteSongRow, string>;
 
   /** `upgrades` só é trocado nos testes, para interromper uma migração no meio. */
   constructor(name: string = LOCAL_DB_NAME, upgrades: typeof UPGRADES = UPGRADES) {
@@ -134,6 +136,12 @@ export class LocalDatabase extends Dexie {
         revisions: 'id, [entityType+entityId], workspaceId',
       })
       .upgrade(upgrade(6));
+
+    // v7 — favoritos pertencem ao perfil local: são atalhos do operador e não
+    // alteram o louvor nem entram na sincronização da equipe.
+    this.version(7).stores({
+      favoriteSongs: 'key, workspaceId, [workspaceId+songId]',
+    });
   }
 }
 
