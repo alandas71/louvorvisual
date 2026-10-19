@@ -13,7 +13,6 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -43,7 +42,6 @@ class MainActivity : ComponentActivity() {
             settings.allowFileAccess = false; settings.allowContentAccess = false
             // A faixa começa pelo comando do celular, sem toque nesta tela.
             settings.mediaPlaybackRequiresUserGesture = false
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             webViewClient = ReceiverClient()
         }
         setContentView(webView); hideSystemBars()
@@ -61,7 +59,6 @@ class MainActivity : ComponentActivity() {
         private val allowedHost = Uri.parse(BuildConfig.API_BASE_URL).host
         /** O aplicativo fica preso ao receptor: nenhum link leva a outra página. */
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-            if (!request.isForMainFrame) return false
             val uri = request.url
             return uri.scheme != "https" || uri.host != allowedHost || uri.path?.trimEnd('/') != "/receptor"
         }

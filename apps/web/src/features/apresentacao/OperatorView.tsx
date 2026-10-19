@@ -13,7 +13,7 @@ import { readAssetBlob, saveDocuments, useLocalSession, type LocalSession, type 
 import { useFontFace, useSlideFit } from '@/presentation/measure';
 import { remoteAudioStatus, subscribeRemoteAudio } from '@/receiver/client';
 import { firstVoiceMs } from '../audio/firstVoice';
-import { AudioPanel, LinkedTiming } from './AudioPanel';
+import { AudioPanel, LinkedTiming, YoutubePlayback } from './AudioPanel';
 import type { SessionController } from './controller';
 import { CloseIcon, ExpandIcon, MenuIcon, PreviousIcon } from './icons';
 import { InteractiveStage } from './InteractiveStage';
@@ -432,6 +432,18 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
     'data-wake-lock': wakeLock,
   };
 
+  // YouTube não é uma faixa local: esta apresentação é dedicada ao player
+  // oficial, sem prévia de letra, slider ou seletor de faixas da sessão.
+  if (row.snapshot.youtubePlayback) {
+    return (
+      <main id="main-content" className="flex min-h-dvh items-center justify-center bg-black p-3 sm:p-6" data-view="apresentar-youtube" {...rootAttributes}>
+        <section className="w-full max-w-6xl" data-testid="youtube-playback-page">
+          <YoutubePlayback url={row.snapshot.youtubePlayback.url} />
+        </section>
+      </main>
+    );
+  }
+
   if (interactive) {
     return (
       <main id="main-content" className="h-dvh w-full bg-black" data-view="apresentar" {...rootAttributes}>
@@ -611,7 +623,7 @@ function OperatorPanel({ local, controller, row, warnings, audioChoices, onChoos
               ✓ Padrão automático preparado com os tempos deste ensaio.
             </p>
           )}
-          <AudioPanel controller={controller} view={view} dispatch={dispatch} choices={audioChoices} selectedBindingId={row.snapshot.audio?.bindingId ?? row.snapshot.youtubePlayback?.bindingId ?? null} youtubePlaybackUrl={row.snapshot.youtubePlayback?.url ?? null} onChoose={onChooseAudio} />
+          <AudioPanel controller={controller} view={view} dispatch={dispatch} choices={audioChoices} selectedBindingId={row.snapshot.audio?.bindingId ?? null} youtubePlaybackUrl={null} onChoose={onChooseAudio} />
         </section>
 
         {/* No celular o slide do centro já é o que o público vê; sobram só as notas privadas. */}

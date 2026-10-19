@@ -1,6 +1,7 @@
 'use client';
 
 import { HEARTBEAT_INTERVAL_MS, ProjectionReceiver, shortcutCommand, type OperatorCommand, type ReceiverState, type ResolvedSlide } from '@louvorvisual/presentation';
+import { normalizeYoutubeUrl } from '@louvorvisual/domain';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SlideView } from '@/components/SlideView';
 import { buttonClass } from '@/components/ui/buttonStyles';
@@ -62,6 +63,24 @@ function WaitingScreen() {
       <p>Abra a projeção pelo painel do operador, em &ldquo;Abrir janela de projeção&rdquo;.</p>
     </main>
   );
+}
+
+/** O YouTube ocupa toda a saída pública quando for a fonte escolhida da sessão. */
+function YoutubeProjection({ url, volume, playing }: { url: string; volume: number; playing: boolean }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  const normalized = normalizeYoutubeUrl(url);
+  const videoId = normalized ? new URL(normalized).searchParams.get('v') : null;
+
+  useEffect(() => {
+    if (!loaded || !frame.current?.contentWindow) return;
+    const send = (func: string, args: unknown[] = []) => frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), 'https://www.youtube.com');
+    send('setVolume', [Math.round(Math.min(1, Math.max(0, volume)) * 100)]);
+    send(playing ? 'playVideo' : 'pauseVideo');
+  }, [loaded, playing, volume]);
+
+  if (!videoId) return null;
+  return <iframe ref={frame} data-testid="projection-youtube-playback" className="absolute inset-0 h-full w-full border-0" title="YouTube Playback" src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&playsinline=1&rel=0`} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen onLoad={() => setLoaded(true)} />;
 }
 
 function PublicOutput({ sessionId }: { sessionId: string }) {
@@ -139,6 +158,7 @@ function PublicOutput({ sessionId }: { sessionId: string }) {
 
   const visual = state.visual;
   const live = state.status === 'live' && visual !== null;
+  const youtubePlayback = state.info?.youtubePlayback ?? null;
   const interactive = armed && live && showControls && !controllerLost;
 
   // Atalhos permitidos são encaminhados ao controlador; nada é decidido aqui.
@@ -200,12 +220,13 @@ function PublicOutput({ sessionId }: { sessionId: string }) {
     <main className="relative h-dvh w-full overflow-hidden bg-black" {...attributes}>
       {live && <FontReport slide={visual.frame.slide} onResult={reportFont} />}
       {/* Sem dados ou com a sessão encerrada, a saída fica preta. */}
-      {armed && live && !interactive && (
+      {armed && live && youtubePlayback && <YoutubeProjection url={youtubePlayback.url} volume={youtubePlayback.volume} playing={visual.controls.status === 'running'} />}
+      {armed && live && !youtubePlayback && !interactive && (
         <div className="h-full w-full cursor-none">
           <SlideView fit="fill" text={visual.frame.slide.text} style={visual.frame.slide.style} fontId={visual.frame.slide.fontId} visualMode={visual.frame.visualMode} rotation={visual.rotation} cover={visual.frame.cover} transitionKey={`${visual.frame.occurrenceId}:${visual.frame.cover ? 'abertura' : 'letra'}`} />
         </div>
       )}
-      {interactive && <InteractiveStage frame={visual.frame} rotation={visual.rotation} controls={visual.controls} dispatch={dispatch} onHideOutputControls={() => chooseControls(false)} />}
+      {interactive && !youtubePlayback && <InteractiveStage frame={visual.frame} rotation={visual.rotation} controls={visual.controls} dispatch={dispatch} onHideOutputControls={() => chooseControls(false)} />}
 
       {(!armed || preparing) && (
         <section aria-labelledby="preparo" data-testid="projection-setup" className="absolute inset-0 flex items-center justify-center bg-black/90 p-6">

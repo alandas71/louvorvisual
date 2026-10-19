@@ -199,7 +199,7 @@ export function AudioPanel({ controller, view, dispatch, choices, selectedBindin
 }
 
 /** O player oficial ocupa o lugar dos controles da faixa local durante o playback do YouTube. */
-function YoutubePlayback({ url }: { url: string }) {
+export function YoutubePlayback({ url }: { url: string }) {
   const normalized = normalizeYoutubeUrl(url);
   const videoId = normalized ? new URL(normalized).searchParams.get('v') : null;
   if (!videoId) return <p role="alert" className="text-sm text-danger">O vídeo do YouTube configurado não é válido.</p>;
